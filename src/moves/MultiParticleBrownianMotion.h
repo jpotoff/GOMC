@@ -168,7 +168,8 @@ inline uint MultiParticleBrownian::Prep(const double subDraw, const double movPe
   if(allTranslate) {
     moveType = mp::MPDISPLACE;
   } else {
-    moveType = prng.randIntExc(mp::MPTOTALTYPES);
+    moveType = r123Wrapper.GetRandomNumber(moleculeIndex.size()+1)*mp::MPTOTALTYPES;
+    //moveType = prng.randIntExc(mp::MPTOTALTYPES);
   }
 
   SetMolInBox(bPick);
@@ -224,7 +225,8 @@ inline uint MultiParticleBrownian::PrepNEMTMC(const uint box, const uint midx, c
   if(allTranslate) {
     moveType = mp::MPDISPLACE;
   } else {
-    moveType = prng.randIntExc(mp::MPTOTALTYPES);
+    moveType = r123Wrapper.GetRandomNumber(moleculeIndex.size()+2)*mp::MPTOTALTYPES;
+    //moveType = prng.randIntExc(mp::MPTOTALTYPES);
   }
 
   SetMolInBox(bPick);
@@ -439,7 +441,8 @@ inline void MultiParticleBrownian::Accept(const uint rejectState, const ulong st
   // accept or reject the move
   double MPCoeff = GetCoeff();
   double accept = exp(-BETA * (sysPotNew.Total() - sysPotRef.Total()) + MPCoeff);
-  bool result = (rejectState == mv::fail_state::NO_FAIL) && prng() < accept;
+  double pr=r123Wrapper.GetRandomNumber(moleculeIndex.size());
+  bool result = (rejectState == mv::fail_state::NO_FAIL) && pr < accept;
   if(result) {
     sysPotRef = sysPotNew;
     swap(coordCurrRef, newMolsPos);
