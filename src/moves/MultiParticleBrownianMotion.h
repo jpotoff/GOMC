@@ -12,6 +12,7 @@ along with this program, also can be found at <http://www.gnu.org/licenses/>.
 #include "StaticVals.h"
 #include <cmath>
 #include "Random123Wrapper.h"
+#include "RNGIdentifiers.h"
 #ifdef GOMC_CUDA
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -20,6 +21,7 @@ along with this program, also can be found at <http://www.gnu.org/licenses/>.
 #include "VariablesCUDA.cuh"
 #endif
 
+//Using moleculeIndex.size()+1, 2, 3, etc as the counter for random123 calls.
 class MultiParticleBrownian : public MoveBase
 {
 public:
@@ -156,12 +158,13 @@ inline uint MultiParticleBrownian::Prep(const double subDraw, const double movPe
 {
   GOMC_EVENT_START(1, GomcProfileEvent::PREP_MULTIPARTICLE_BM);
   uint state = mv::fail_state::NO_FAIL;
+//for single box simulation bPick is always 0  
 #if ENSEMBLE == GCMC
   bPick = mv::BOX0;
 #else
   r123Wrapper.PickBox123(bPick, subDraw, movPerc);
-  std::cout <<"bPick = "<<bPick<<std::endl;
   //prng.PickBox(bPick, subDraw, movPerc);
+
 #endif
 
   // In each step, we perform either:
@@ -171,8 +174,8 @@ inline uint MultiParticleBrownian::Prep(const double subDraw, const double movPe
   if(allTranslate) {
     moveType = mp::MPDISPLACE;
   } else {
-    moveType = r123Wrapper.GetRandomNumber(moleculeIndex.size()+1)*mp::MPTOTALTYPES;
-    std::cout <<"moveType=" <<moveType<<std::endl;
+    moveType = r123Wrapper.GetRandomNumber(RNGIdentifier::MPBrownian_moveType)*mp::MPTOTALTYPES;
+    //std::cout <<"moveType=" <<moveType<<std::endl;
 
     //moveType = prng.randIntExc(mp::MPTOTALTYPES);
   }
@@ -230,7 +233,7 @@ inline uint MultiParticleBrownian::PrepNEMTMC(const uint box, const uint midx, c
   if(allTranslate) {
     moveType = mp::MPDISPLACE;
   } else {
-    moveType = r123Wrapper.GetRandomNumber(moleculeIndex.size()+2)*mp::MPTOTALTYPES;
+    moveType = r123Wrapper.GetRandomNumber(RNGIdentifier::MPBrownian_moveTypeNEMTMC)*mp::MPTOTALTYPES;
     //moveType = prng.randIntExc(mp::MPTOTALTYPES);
   }
 
@@ -446,7 +449,7 @@ inline void MultiParticleBrownian::Accept(const uint rejectState, const ulong st
   // accept or reject the move
   double MPCoeff = GetCoeff();
   double accept = exp(-BETA * (sysPotNew.Total() - sysPotRef.Total()) + MPCoeff);
-  double pr=r123Wrapper.GetRandomNumber(moleculeIndex.size());
+  double pr=r123Wrapper.GetRandomNumber(RNGIdentifier::MPBrownian_AcceptMove);
   bool result = (rejectState == mv::fail_state::NO_FAIL) && pr < accept;
   if(result) {
     sysPotRef = sysPotNew;

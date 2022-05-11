@@ -36,6 +36,7 @@ along with this program, also can be found at <https://opensource.org/licenses/M
 #include "NeMTMC.h"
 #include "TargetedSwap.h"
 #include "GOMCEventsProfile.h"
+#include "RNGIdentifiers.h"
 
 System::System(StaticVals& statics, 
                Setup & set,
@@ -279,8 +280,13 @@ void System::ChooseAndRunMove(const ulong step)
 }
 void System::PickMove(uint & kind, double & draw)
 {
-  prng.PickArbDist(kind, draw, statV.movePerc, statV.totalPerc,
-                   mv::MOVE_KINDS_TOTAL);
+  
+  //update this to use random123 5/11/2022 jpotoff
+  r123Wrapper.PickArbDist123(kind, draw, statV.movePerc, statV.totalPerc,
+                   mv::MOVE_KINDS_TOTAL, RNGIdentifier::System_PickMove);
+
+  //prng.PickArbDist(kind, draw, statV.movePerc, statV.totalPerc,
+   //                mv::MOVE_KINDS_TOTAL);
 }
 
 void System::RunMove(uint majKind, double draw, const ulong step)

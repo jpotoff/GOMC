@@ -9,6 +9,7 @@ along with this program, also can be found at <https://opensource.org/licenses/M
 
 #include "MoveBase.h"
 #include "Rotation.h"
+#include "RNGIdentifiers.h"
 
 class Rotate;
 
@@ -54,6 +55,9 @@ inline uint Translate::ReplaceRot(Rotate const& other)
 inline uint Translate::Prep(const double subDraw, const double movPerc)
 {
   GOMC_EVENT_START(1, GomcProfileEvent::PREP_DISPLACE);
+
+  //double pr=r123Wrapper.GetRandomNumber(RNGIdentifier::Translate_Prep);
+//pr was prng 5/11/2022 jpotoff
   uint state = GetBoxAndMol(prng, molRef, subDraw, movPerc);
   GOMC_EVENT_STOP(1, GomcProfileEvent::PREP_DISPLACE);
   return state;
@@ -117,7 +121,9 @@ inline void Translate::Accept(const uint rejectState, const ulong step)
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_DISPLACE);
   bool res = false;
   if (rejectState == mv::fail_state::NO_FAIL) {
-    double pr = prng();
+    //double pr = prng();
+    double pr=r123Wrapper.GetRandomNumber(RNGIdentifier::Translate_AcceptMove);
+
     res = pr < exp(-BETA * (inter_LJ.energy + inter_Real.energy +
                             recip.energy));
   }
