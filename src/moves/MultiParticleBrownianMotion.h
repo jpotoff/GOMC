@@ -159,16 +159,21 @@ inline uint MultiParticleBrownian::Prep(const double subDraw, const double movPe
 #if ENSEMBLE == GCMC
   bPick = mv::BOX0;
 #else
-  prng.PickBox(bPick, subDraw, movPerc);
+  r123Wrapper.PickBox123(bPick, subDraw, movPerc);
+  std::cout <<"bPick = "<<bPick<<std::endl;
+  //prng.PickBox(bPick, subDraw, movPerc);
 #endif
 
   // In each step, we perform either:
-  // 1- All displacement move.
-  // 2- All rotation move.
+  // 0- All displacement move.
+  // 1- All rotation move.
+  //allTranslate will be true for single atom molecules
   if(allTranslate) {
     moveType = mp::MPDISPLACE;
   } else {
     moveType = r123Wrapper.GetRandomNumber(moleculeIndex.size()+1)*mp::MPTOTALTYPES;
+    std::cout <<"moveType=" <<moveType<<std::endl;
+
     //moveType = prng.randIntExc(mp::MPTOTALTYPES);
   }
 

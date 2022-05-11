@@ -29,6 +29,13 @@ public:
   double GetGaussianNumber(unsigned int counter, double mean, double stdDev);
   XYZ GetGaussianCoords(unsigned int counter, double mean, double stdDev);
 
+  void PickArbDist123(unsigned int & pick, double & subDraw,
+                   double const*const w, const double Wt, const uint len,
+                   unsigned int counter);
+  
+  void PickBox123(uint &b, const double subDraw, const double movPerc) const;
+  void PickBox123(uint &b, double &subDraw, double &boxDiv,
+               const double movPerc) const;
 private:
   inline RNG::ctr_type getRNG(unsigned int counter);
 

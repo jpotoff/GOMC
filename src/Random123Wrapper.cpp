@@ -1,6 +1,8 @@
 #include "Random123Wrapper.h"
 #include "Random123/boxmuller.hpp"
 #include "Random123/uniform.hpp"
+#include "BoxDimensions.h"
+#include "BoxDimensionsNonOrth.h"
 
 Random123Wrapper::Random123Wrapper()
 {
@@ -88,6 +90,7 @@ XYZ Random123Wrapper::GetSymRandomCoords(unsigned int counter, double bound)
 }
 
 //Returns a uniformly random point on the unit sphere
+//Takes place of XYZ PickOnUnitSphere() in PRNG.h
 XYZ Random123Wrapper::GetRandomCoordsOnSphere(unsigned int counter)
 {
   RNG::ctr_type r = getRNG(counter);
@@ -101,6 +104,55 @@ XYZ Random123Wrapper::GetRandomCoordsOnSphere(unsigned int counter)
   double rootTerm = sqrt(1.0 - u * u);
   return XYZ(rootTerm * cos(theta), rootTerm * sin(theta), u);
 }
+
+//added 5/10/2022 by jpotoff
+ //Pick using array of prob. -- used to pick move, weighted selection, etc.
+ //have to add the counter to the end of the variable list
+void Random123Wrapper::PickArbDist123(uint & pick, double & subDraw,
+                   double const*const w, const double Wt, const uint len, 
+                   unsigned int counter)
+  {
+      //rand(Wt)=Generate a double on a [0,Wt]
+
+    double sum = 0.0, prevSum = 0.0;
+    //5/10/2022 need to check this carefully
+    double draw = GetRandomNumber(counter)*Wt;
+    pick = 0;
+    for (; pick < len && sum < draw; ++pick) {
+      prevSum = sum;
+      sum += w[pick];
+    }
+    if (pick != 0)
+      --pick;
+    subDraw = draw - prevSum;
+  }
+
+void Random123Wrapper::PickBox123(uint &b, const double subDraw, const double movPerc) const
+  {
+    //Calculate "chunk" of move for each box.
+    double boxDiv = movPerc / BOX_TOTAL;
+    //Which chunk was our draw in...
+    b = (uint)(subDraw / boxDiv);
+    //FIXME: Hack to prevent picking invalid boxes, may violate balance
+    if (b >= BOX_TOTAL)
+      b--;
+  }
+
+void Random123Wrapper::PickBox123(uint &b, double &subDraw, double &boxDiv,
+               const double movPerc) const
+  {
+    //Calculate "chunk" of move for each box.
+    boxDiv = movPerc / BOX_TOTAL;
+    //Which chunk was our draw in...
+    b = (uint)(subDraw / boxDiv);
+    //clamp if some rand err.
+    //FIXME: Hack to prevent picking invalid boxes, may violate balance
+    if (b >= BOX_TOTAL)
+      b--;
+    //Get draw down to box we picked, then calculate the size of
+    //each molecule kind's chunk.
+    subDraw -= b * boxDiv;
+  }
 
 double Random123Wrapper::GetGaussian(unsigned int counter)
 {
