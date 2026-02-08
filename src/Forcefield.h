@@ -8,6 +8,8 @@ along with this program, also can be found at
 #ifndef FORCEFIELD_H
 #define FORCEFIELD_H
 
+#include <string>
+
 // Member classes
 #include "FFAngles.h"
 #include "FFBonds.h"
@@ -67,6 +69,9 @@ public:
   uint vdwKind;             // To define VdW type, standard, shift or switch
   uint exckind;             // To define  exclude kind, 1-2, 1-3, 1-4
   uint sc_power;            // Free energy parameter
+  std::string tabulatedPotentialFile; // File name for tabulated potential
+  std::string interpolationType; // Interpolation type for tabulated potential
+  bool isCHARMM;            // Whether using CHARMM parameter format
 #if ENSEMBLE == GCMC
   bool isFugacity; // To check if we are using fugacity instead of chemical
                    // potential

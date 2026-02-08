@@ -78,6 +78,7 @@ ConfigSetup::ConfigSetup(void) {
   sys.ff.cutoff = DBL_MAX;
   sys.ff.cutoffLow = DBL_MAX;
   sys.ff.vdwGeometricSigma = false;
+  sys.ff.interpolationType = "linear";
   sys.moves.displace = DBL_MAX;
   sys.moves.rotate = DBL_MAX;
   sys.moves.intraSwap = DBL_MAX;
@@ -273,6 +274,15 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       if (line.size() > 1) {
         in.files.param.push_back(config_setup::FileName(line[1], true));
       }
+    } else if (CheckString(line[0], "TabulatedEnergiesFile")) {
+      if (line.size() > 1) {
+        in.files.tabulated_potential.push_back(config_setup::FileName(line[1], true));
+      }
+    } else if (CheckString(line[0], "tableInterpType")) {
+      if (line.size() > 1) {
+        sys.ff.interpolationType = line[1];
+        printf("%-40s %-s \n", "Info: Tabulated interpolation", line[1].c_str());
+      } 
     } else if (CheckString(line[0], "Coordinates")) {
       uint boxnum = stringtoi(line[1]);
       if (boxnum >= BOX_TOTAL) {
@@ -409,7 +419,7 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
     } else if (CheckString(line[0], "Potential")) {
       if (CheckString(line[1], "VDW")) {
         sys.ff.VDW_KIND = sys.ff.VDW_STD_KIND;
-        printf("%-40s %-s \n", "Info: Non-truncated potential", "Active");
+        printf("%-40s %-s \n", "Info: SHIFT/SWITCH", "Inactive");
       } else if (CheckString(line[1], "SHIFT")) {
         sys.ff.VDW_KIND = sys.ff.VDW_SHIFT_KIND;
         printf("%-40s %-s \n", "Info: Shift truncated potential", "Active");
@@ -418,8 +428,15 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
         printf("%-40s %-s \n", "Info: Switch truncated potential", "Active");
       } else if (CheckString(line[1], "EXP6")) {
         sys.ff.VDW_KIND = sys.ff.VDW_EXP6_KIND;
-        printf("%-40s %-s \n", "Info: Exp-6 Non-truncated potential", "Active");
+        printf("%-40s %-s \n", "Info: Exp-6 potential", "Active");
+      } else if (CheckString(line[1], "TABULATED")) {
+        sys.ff.VDW_KIND = sys.ff.VDW_TABULATED_KIND;
+        printf("%-40s %-s \n", "Info: Tabulated potential", "Active");
       }
+    } else if (CheckString(line[0], "TableInterpType")) {
+      sys.ff.interpolationType = line[1];
+      std::cout << "Info: Interpolation Type set to " << sys.ff.interpolationType << std::endl;
+      printf("%-40s %-s \n", "Info: Interpolation Type", line[1].c_str());
     } else if (CheckString(line[0], "LRC")) {
       sys.ff.doTailCorr = checkBool(line[1]);
       if (sys.ff.doTailCorr)
@@ -435,6 +452,7 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
     } else if (CheckString(line[0], "Rswitch")) {
       sys.ff.rswitch = stringtod(line[1]);
       printf("%-40s %-4.4f \n", "Info: Switch distance", sys.ff.rswitch);
+
     } else if (CheckString(line[0], "SubVolumeBox")) {
       if (line.size() == 3) {
         int idx = stringtoi(line[1]);
@@ -1880,14 +1898,20 @@ void ConfigSetup::verifyInputs(void) {
   }
   if (in.ffKind.isEXOTIC &&
       (sys.exclude.EXCLUDE_KIND == sys.exclude.EXC_ONETWO_KIND)) {
-    std::cout << "Warning: Exclude 1-2 is set for EXOTIC type parameter.\n";
+    std::cout << "Warning: Exclude 1-2 is set for MIE type parameter.\n";
   }
   if (in.ffKind.isEXOTIC &&
       (sys.exclude.EXCLUDE_KIND == sys.exclude.EXC_ONETHREE_KIND)) {
-    std::cout << "Warning: Exclude 1-3 is set for EXOTIC type parameter.\n";
+    std::cout << "Warning: Exclude 1-3 is set for MIE type parameter.\n";
   }
   if (!in.files.param.size()) {
     std::cout << "ERROR: Parameter file name is not specified!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (sys.ff.VDW_KIND == sys.ff.VDW_TABULATED_KIND &&
+      !in.files.tabulated_potential.size()) {
+    std::cout << "ERROR: Tabulated potential file name is not specified!"
+              << std::endl;
     exit(EXIT_FAILURE);
   }
   if (sys.ff.VDW_KIND == UINT_MAX) {
@@ -2158,7 +2182,8 @@ void ConfigSetup::verifyInputs(void) {
   }
   if (((sys.ff.VDW_KIND == sys.ff.VDW_STD_KIND) ||
        (sys.ff.VDW_KIND == sys.ff.VDW_SHIFT_KIND) ||
-       (sys.ff.VDW_KIND == sys.ff.VDW_EXP6_KIND)) &&
+       (sys.ff.VDW_KIND == sys.ff.VDW_EXP6_KIND) ||
+       ( sys.ff.VDW_KIND == sys.ff.VDW_TABULATED_KIND)) &&
       sys.ff.rswitch != DBL_MAX) {
     std::cout << "Warning: Switch distance set, but will be ignored."
               << std::endl;
@@ -2728,6 +2753,7 @@ const std::string config_setup::FFValues::VDW = "VDW";
 const std::string config_setup::FFValues::VDW_SHIFT = "VDW_SHIFT";
 const std::string config_setup::FFValues::VDW_EXP6 = "VDW_EXP6";
 const std::string config_setup::FFValues::VDW_SWITCH = "VDW_SWITCH";
+const std::string config_setup::FFValues::VDW_TABULATED = "VDW_TABULATED";
 const std::string config_setup::Exclude::EXC_ONETWO = "1-2";
 const std::string config_setup::Exclude::EXC_ONETHREE = "1-3";
 const std::string config_setup::Exclude::EXC_ONEFOUR = "1-4";
@@ -2736,6 +2762,7 @@ const uint config_setup::FFValues::VDW_STD_KIND = 0;
 const uint config_setup::FFValues::VDW_SHIFT_KIND = 1;
 const uint config_setup::FFValues::VDW_SWITCH_KIND = 2;
 const uint config_setup::FFValues::VDW_EXP6_KIND = 3;
+const uint config_setup::FFValues::VDW_TABULATED_KIND = 4;
 const uint config_setup::Exclude::EXC_ONETWO_KIND = 0;
 const uint config_setup::Exclude::EXC_ONETHREE_KIND = 1;
 const uint config_setup::Exclude::EXC_ONEFOUR_KIND = 2;
