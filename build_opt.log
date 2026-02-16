@@ -1,0 +1,24 @@
+Ensembles To Compile: NVT NPT GCMC GEMC 
+CMake Warning at CMakeLists.txt:149 (message):
+  No CUDA support for this compiler
+
+
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/ai8111/tabulated/GOMC/bin
+Consolidate compiler generated dependencies of target NVT
+[  0%] Building CXX object CMakeFiles/NVT.dir/src/Forcefield.cpp.o
+[  4%] Linking CXX executable GOMC_CPU_NVT
+[100%] Built target NVT
+Consolidate compiler generated dependencies of target NPT
+[  0%] Building CXX object CMakeFiles/NPT.dir/src/Forcefield.cpp.o
+[  4%] Linking CXX executable GOMC_CPU_NPT
+[100%] Built target NPT
+Consolidate compiler generated dependencies of target GCMC
+[  0%] Building CXX object CMakeFiles/GCMC.dir/src/Forcefield.cpp.o
+[  4%] Linking CXX executable GOMC_CPU_GCMC
+[100%] Built target GCMC
+Consolidate compiler generated dependencies of target GEMC
+[  0%] Building CXX object CMakeFiles/GEMC.dir/src/Forcefield.cpp.o
+[  4%] Linking CXX executable GOMC_CPU_GEMC
+[100%] Built target GEMC

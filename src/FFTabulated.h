@@ -59,6 +59,115 @@ struct TabulatedData {
       : rMin(0.0), rMax(0.0), dr(0.0), uniformSpacing(false), pairType("") {}
 };
 
+// Struct-of-Arrays (SoA) layout for better cache locality and GPU-readiness
+// This structure stores ALL pair types' data in contiguous flattened arrays
+class TabulatedDataSoA {
+public:
+  // Optimization: Consolidate metadata into a struct (AoS) for better cache
+  // locality during index lookup. Keeping data arrays flattened (SoA) for
+  // efficient access.
+  struct PairParameters {
+    double rMin;
+    double rMax;
+    double dr;
+    double invDr;       // Optimization: Pre-calculated 1.0/dr to avoid division
+    size_t tableOffset; // Index in flattened arrays
+    size_t tableSize;   // Number of points
+    bool uniformSpacing;
+    // Padding added automatically by compiler for alignment
+  };
+
+private:
+  // Flattened arrays containing data for ALL pair types
+  std::vector<double> allDistances; // All distance tables concatenated
+  std::vector<double> allEnergies;  // All energy tables concatenated
+  std::vector<double> allForces;    // All force tables concatenated
+
+  // Per-pair consolidated metadata
+  std::vector<PairParameters> pairParams;
+
+  // Per-pair type string (kept separate as it's not used in hot loop)
+  std::vector<std::string> pairType;
+
+  uint numPairTypes; // Total number of pair types (count²)
+
+public:
+  // Constructor
+  TabulatedDataSoA(uint count) : numPairTypes(count * count) {
+    pairParams.resize(numPairTypes);
+    // Initialize with default values
+    for (size_t i = 0; i < numPairTypes; ++i) {
+      pairParams[i].rMin = 0.0;
+      pairParams[i].rMax = 0.0;
+      pairParams[i].dr = 0.0;
+      pairParams[i].invDr = 0.0;
+      pairParams[i].tableOffset = 0;
+      pairParams[i].tableSize = 0;
+      pairParams[i].uniformSpacing = false;
+    }
+    pairType.resize(numPairTypes, "");
+  }
+
+  // Accessors for backward compatibility
+  inline const double *getDistances(uint pairIdx) const {
+    return allDistances.data() + pairParams[pairIdx].tableOffset;
+  }
+
+  inline const double *getEnergies(uint pairIdx) const {
+    return allEnergies.data() + pairParams[pairIdx].tableOffset;
+  }
+
+  inline const double *getForces(uint pairIdx) const {
+    return allForces.data() + pairParams[pairIdx].tableOffset;
+  }
+
+  inline size_t getTableSize(uint pairIdx) const {
+    return pairParams[pairIdx].tableSize;
+  }
+
+  // New optimized accessor for parameters
+  inline const PairParameters &getParams(uint pairIdx) const {
+    return pairParams[pairIdx];
+  }
+
+  inline double getRMin(uint pairIdx) const { return pairParams[pairIdx].rMin; }
+  inline double getRMax(uint pairIdx) const { return pairParams[pairIdx].rMax; }
+  inline double getDr(uint pairIdx) const { return pairParams[pairIdx].dr; }
+  inline double getInvDr(uint pairIdx) const {
+    return pairParams[pairIdx].invDr;
+  }
+  inline bool isUniformSpacing(uint pairIdx) const {
+    return pairParams[pairIdx].uniformSpacing;
+  }
+  inline const std::string &getPairType(uint pairIdx) const {
+    return pairType[pairIdx];
+  }
+
+  // Setter for initialization
+  void setPairData(uint pairIdx, const std::vector<double> &dist,
+                   const std::vector<double> &energy,
+                   const std::vector<double> &force, double rMinVal,
+                   double rMaxVal, double drVal, bool uniformSpace,
+                   const std::string &pairTypeVal) {
+    // Set metadata
+    pairParams[pairIdx].rMin = rMinVal;
+    pairParams[pairIdx].rMax = rMaxVal;
+    pairParams[pairIdx].dr = drVal;
+    pairParams[pairIdx].invDr = (drVal > 1e-10) ? (1.0 / drVal) : 0.0;
+    pairParams[pairIdx].uniformSpacing = uniformSpace;
+    pairType[pairIdx] = pairTypeVal;
+
+    // Set offset and size
+    pairParams[pairIdx].tableOffset = allDistances.size();
+    pairParams[pairIdx].tableSize = dist.size();
+
+    // Append data to flattened arrays
+    allDistances.insert(allDistances.end(), dist.begin(), dist.end());
+    allEnergies.insert(allEnergies.end(), energy.begin(), energy.end());
+    allForces.insert(allForces.end(), force.begin(), force.end());
+  }
+};
+
 struct FF_TABULATED : public FFParticle {
 public:
   FF_TABULATED(Forcefield &ff)
@@ -66,8 +175,8 @@ public:
         nbtableData(NULL) {}
 
   virtual ~FF_TABULATED() {
-    delete[] tableData;
-    delete[] tableData_1_4;
+    delete tableData;
+    delete tableData_1_4;
   }
 
   virtual void Init(ff_setup::Particle const &mie,
@@ -87,6 +196,7 @@ public:
   // Uses the provided mie particle name list to resolve atom type strings to
   // kind indices. This avoids assuming NBtable entries are in the same
   // sequential order as the internal FlatIndex ordering.
+  // OPTIMIZATION: Uses hash map for O(1) lookup instead of O(n) nested loop
   void BuildPairTypeMap(const ff_setup::Particle &mie) {
     pairTypeMap.clear();
 
@@ -102,9 +212,10 @@ public:
     std::cout << "Total NBtable entries: " << nbtableData->GetPairCount()
               << std::endl;
 
-    // Print mie particle type names for debugging
-    // std::cout << "Particle names (count=" << mie.getnamecnt() << "): ";
+    // Build reverse lookup map for O(1) access - OPTIMIZATION
+    std::map<std::string, uint> nameToKind;
     for (uint k = 0; k < mie.getnamecnt(); ++k) {
+      nameToKind[mie.getname(k)] = k;
       std::cout << "'" << mie.getname(k) << "'";
       if (k + 1 < mie.getnamecnt())
         std::cout << ", ";
@@ -116,7 +227,7 @@ public:
                                "the tabulated potential file.");
     }
 
-    // For each NBtable entry, find the matching kind indices from mie.getname()
+    // Now iterate with O(1) lookups instead of O(n²)
     for (size_t t = 0; t < nbtableData->GetPairCount(); ++t) {
       std::string atom1 = nbtableData->GetAtomType1(t);
       std::string atom2 = nbtableData->GetAtomType2(t);
@@ -125,18 +236,11 @@ public:
       std::cout << "NBtable entry " << t << ": atoms=('" << atom1 << "','"
                 << atom2 << "') -> pairType='" << pairType << "'" << std::endl;
 
-      // Find kind indices for atom1 and atom2 in mie.getname list
-      int kindA = -1, kindB = -1;
-      for (uint k = 0; k < mie.getnamecnt(); ++k) {
-        if (mie.getname(k) == atom1)
-          kindA = static_cast<int>(k);
-        if (mie.getname(k) == atom2)
-          kindB = static_cast<int>(k);
-        if (kindA != -1 && kindB != -1)
-          break;
-      }
+      // Use hash map lookup instead of nested loop - O(1) instead of O(n)
+      std::map<std::string, uint>::const_iterator it1 = nameToKind.find(atom1);
+      std::map<std::string, uint>::const_iterator it2 = nameToKind.find(atom2);
 
-      if (kindA == -1 || kindB == -1) {
+      if (it1 == nameToKind.end() || it2 == nameToKind.end()) {
         std::cout << "  (Available mie names: ";
         for (uint k = 0; k < mie.getnamecnt(); ++k) {
           std::cout << "'" << mie.getname(k) << "'";
@@ -149,10 +253,10 @@ public:
             atom2 + "' in particle type list (pairType: '" + pairType + "')");
       }
 
-      uint minKind =
-          std::min(static_cast<uint>(kindA), static_cast<uint>(kindB));
-      uint maxKind =
-          std::max(static_cast<uint>(kindA), static_cast<uint>(kindB));
+      uint kindA = it1->second;
+      uint kindB = it2->second;
+      uint minKind = std::min(kindA, kindB);
+      uint maxKind = std::max(kindA, kindB);
 
       std::stringstream key;
       key << minKind << "_" << maxKind;
@@ -264,16 +368,16 @@ protected:
                                 uint b) const;
 
   // Helper functions for tabulated potential
-  void ReadTabulatedFile(const std::string &filename,
-                         TabulatedData &potentialTable, const bool isCHARMM);
-  double InterpolateEnergy(const TabulatedData &data, const double dist) const;
-  double InterpolateForce(const TabulatedData &data, const double dist) const;
-  uint FindTableIndex(const TabulatedData &data, const double dist) const;
+  void ReadTabulatedFile(const std::string &filename, uint pairIndex,
+                         const std::string &pairTypeStr, const bool isCHARMM);
+  double InterpolateEnergy(uint pairIndex, const double dist) const;
+  double InterpolateForce(uint pairIndex, const double dist) const;
+  uint FindTableIndex(uint pairIndex, const double dist) const;
   std::string GetPairTypeString(const uint kind1, const uint kind2) const;
 
   // Storage for tabulated data
-  TabulatedData *tableData;     // Tabulated data for each pair type
-  TabulatedData *tableData_1_4; // Tabulated data for 1-4 interactions
+  TabulatedDataSoA *tableData;     // Tabulated data for each pair type
+  TabulatedDataSoA *tableData_1_4; // Tabulated data for 1-4 interactions
 
   // Map to store per-pair tabulated potential file names
   // Key format: "type1_type2" where type1 <= type2
@@ -289,15 +393,16 @@ protected:
 /**
  * @brief Read tabulated potential data from a file
  * @param filename Name of the file to read
- * @param potentialTable TabulatedData object to store the data
+ * @param pairIndex Index of the pair in the SoA structure
+ * @param pairTypeStr String identifier for the pair type
  * @param isCHARMM Whether the data is in CHARMM format
  * @note This function reads all tabulated potential data from a file (even if
  * not needed).
- * @note The data is stored "potentialTable.distance", "potentialTable.energy",
- * and "potentialTable.force".
+ * @note The data is stored in the SoA structure via setPairData.
  */
 inline void FF_TABULATED::ReadTabulatedFile(const std::string &filename,
-                                            TabulatedData &potentialTable,
+                                            uint pairIndex,
+                                            const std::string &pairTypeStr,
                                             const bool isCHARMM) {
   std::ifstream file(filename.c_str());
   if (!file.is_open()) {
@@ -311,10 +416,10 @@ inline void FF_TABULATED::ReadTabulatedFile(const std::string &filename,
   bool foundPair = false;
   int dbgPrinted = 0;
 
-  // Clear previous data
-  potentialTable.distance.clear();
-  potentialTable.energy.clear();
-  potentialTable.force.clear();
+  // Temporary vectors to hold data before storing in SoA
+  std::vector<double> tempDistance;
+  std::vector<double> tempEnergy;
+  std::vector<double> tempForce;
 
   // Unit conversion factor for CHARMM format
   // Energy: kcal/mol -> K, Force: kcal/mol/Å -> K/Å
@@ -340,7 +445,7 @@ inline void FF_TABULATED::ReadTabulatedFile(const std::string &filename,
     // Check for TYPE keyword
     if (line.substr(0, 4) == "TYPE") {
       // If we were already reading data and now found a new TYPE, stop
-      if (foundPair && !potentialTable.distance.empty()) {
+      if (foundPair && !tempDistance.empty()) {
         break;
       }
 
@@ -350,11 +455,10 @@ inline void FF_TABULATED::ReadTabulatedFile(const std::string &filename,
       typeStream >> typeKeyword >> typeStr;
 
       // std::cout << "DEBUG: Found TYPE keyword with pair: '" << typeStr << "'"
-      //           << " (looking for '" << potentialTable.pairType << "')" <<
-      //           std::endl;
+      //           << " (looking for '" << pairTypeStr << "')" << std::endl;
 
       // Check if this is the pair type we're looking for
-      if (typeStr == potentialTable.pairType) {
+      if (typeStr == pairTypeStr) {
         foundPair = true;
         //  std::cout << "Found pair type: " << typeStr << std::endl;
         continue;
@@ -376,75 +480,101 @@ inline void FF_TABULATED::ReadTabulatedFile(const std::string &filename,
     // Try to read three numbers: distance, energy, force
     std::istringstream iss(line);
     if (iss >> r >> e >> f) {
-      potentialTable.distance.push_back(r);
+      tempDistance.push_back(r);
       // Convert energy from kcal/mol to K if CHARMM format
-      potentialTable.energy.push_back(e * energyConversion);
+      tempEnergy.push_back(e * energyConversion);
       // Convert force from kcal/mol/Å to K/Å if CHARMM format
-      potentialTable.force.push_back(f * forceConversion);
+      tempForce.push_back(f * forceConversion);
     }
   }
 
   file.close();
 
   if (!foundPair) {
-    std::cout << "ERROR: Pair type '" << potentialTable.pairType
-              << "' not found in "
+    std::cout << "ERROR: Pair type '" << pairTypeStr << "' not found in "
               << "tabulated potential file: " << filename << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  if (potentialTable.distance.empty()) {
-    std::cout << "ERROR: No valid data found for pair type '"
-              << potentialTable.pairType
+  if (tempDistance.empty()) {
+    std::cout << "ERROR: No valid data found for pair type '" << pairTypeStr
               << "' in tabulated potential file: " << filename << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  // Find min and max distances
-  potentialTable.rMin = *std::min_element(potentialTable.distance.begin(),
-                                          potentialTable.distance.end());
-  potentialTable.rMax = *std::max_element(potentialTable.distance.begin(),
-                                          potentialTable.distance.end());
+  // Find min and max distances using OpenMP parallelization
+  // OPTIMIZATION: Parallelize min/max finding for large tables
+  double localMin = std::numeric_limits<double>::max();
+  double localMax = std::numeric_limits<double>::lowest();
+
+#ifdef _OPENMP
+#pragma omp parallel for reduction(min : localMin) reduction(max : localMax)
+#endif
+  for (size_t i = 0; i < tempDistance.size(); i++) {
+    if (tempDistance[i] < localMin)
+      localMin = tempDistance[i];
+    if (tempDistance[i] > localMax)
+      localMax = tempDistance[i];
+  }
+
+  double rMin = localMin;
+  double rMax = localMax;
 
   // Check if spacing is uniform
-  if (potentialTable.distance.size() > 1) {
-    potentialTable.dr = potentialTable.distance[1] - potentialTable.distance[0];
-    potentialTable.uniformSpacing = true;
-    for (size_t i = 2; i < potentialTable.distance.size(); i++) {
-      double expected = potentialTable.distance[0] + i * potentialTable.dr;
-      if (std::fabs(potentialTable.distance[i] - expected) > 1.0e-6) {
-        potentialTable.uniformSpacing = false;
-        break;
+  // OPTIMIZATION: Use SIMD-friendly loop for uniform spacing check
+  double dr = 0.0;
+  bool uniformSpacing = false;
+  if (tempDistance.size() > 1) {
+    dr = tempDistance[1] - tempDistance[0];
+    uniformSpacing = true;
+
+    // Note: Attempted SIMD optimization here, but conditional logic prevents
+    // vectorization
+    for (size_t i = 2; i < tempDistance.size(); i++) {
+      double expected = tempDistance[0] + i * dr;
+      if (std::fabs(tempDistance[i] - expected) > 1.0e-6) {
+        uniformSpacing = false;
+        break; // Early exit when non-uniform spacing detected
       }
     }
   }
 
   std::string unitStr = isCHARMM ? "kcal/mol (converted to K)" : "K";
-  std::cout << "Info: Loaded tabulated potential for pair type '"
-            << potentialTable.pairType << "' from " << filename << " with "
-            << potentialTable.distance.size() << " points, range ["
-            << potentialTable.rMin << ", " << potentialTable.rMax
+  std::cout << "Info: Loaded tabulated potential for pair type '" << pairTypeStr
+            << "' from " << filename << " with " << tempDistance.size()
+            << " points, range [" << rMin << ", " << rMax
             << "] Angstrom, energy units: " << unitStr << std::endl;
+
+  // Store data in SoA structure
+  tableData->setPairData(pairIndex, tempDistance, tempEnergy, tempForce, rMin,
+                         rMax, dr, uniformSpacing, pairTypeStr);
 }
 
-inline uint FF_TABULATED::FindTableIndex(const TabulatedData &data,
+inline uint FF_TABULATED::FindTableIndex(uint pairIndex,
                                          const double dist) const {
-  if (dist <= data.rMin)
+  // Optimization: Access all metadata from a single struct to minimize cache
+  // misses
+  const TabulatedDataSoA::PairParameters &params =
+      tableData->getParams(pairIndex);
+
+  if (dist <= params.rMin)
     return 0;
-  if (dist >= data.rMax)
-    return data.distance.size() - 2; // Return second-to-last for interpolation
+  if (dist >= params.rMax)
+    return params.tableSize - 2; // Return second-to-last for interpolation
 
   // Binary search for non-uniform spacing, or direct calculation for uniform
-  if (data.uniformSpacing) {
-    uint idx = static_cast<uint>((dist - data.rMin) / data.dr);
-    return std::min(idx, static_cast<uint>(data.distance.size() - 2));
+  if (params.uniformSpacing) {
+    // Optimization: Use multiplication by inverse dr instead of division
+    uint idx = static_cast<uint>((dist - params.rMin) * params.invDr);
+    return std::min(idx, static_cast<uint>(params.tableSize - 2));
   } else {
     // Binary search
+    const double *distances = tableData->getDistances(pairIndex);
     uint left = 0;
-    uint right = data.distance.size() - 1;
+    uint right = params.tableSize - 1;
     while (right - left > 1) {
       uint mid = (left + right) / 2;
-      if (data.distance[mid] <= dist)
+      if (distances[mid] <= dist)
         left = mid;
       else
         right = mid;
@@ -453,39 +583,46 @@ inline uint FF_TABULATED::FindTableIndex(const TabulatedData &data,
   }
 }
 
-inline double FF_TABULATED::InterpolateEnergy(const TabulatedData &data,
+inline double FF_TABULATED::InterpolateEnergy(uint pairIndex,
                                               const double dist) const {
+  const TabulatedDataSoA::PairParameters &params =
+      tableData->getParams(pairIndex);
+
   // Safety check: if table is empty, return zero energy
-  if (data.distance.empty()) {
+  if (params.tableSize == 0) {
     throw std::runtime_error(
         "Fatal Error: InterpolateEnergy called with empty "
         "table for pair type '" +
-        data.pairType + "'. Check force field file for missing NBTable entry.");
+        tableData->getPairType(pairIndex) +
+        "'. Check force field file for missing NBTable entry.");
   }
 
-  if (dist <= data.rMin)
-    return data.energy[0];
-  if (dist >= data.rMax)
-    return data.energy[data.energy.size() - 1];
+  const double *distances = tableData->getDistances(pairIndex);
+  const double *energies = tableData->getEnergies(pairIndex);
 
-  uint idx = FindTableIndex(data, dist);
-  double r1 = data.distance[idx];
-  double r2 = data.distance[idx + 1];
-  double e1 = data.energy[idx];
-  double e2 = data.energy[idx + 1];
+  if (dist <= params.rMin)
+    return energies[0];
+  if (dist >= params.rMax)
+    return energies[params.tableSize - 1];
+
+  uint idx = FindTableIndex(pairIndex, dist);
+  double r1 = distances[idx];
+  double r2 = distances[idx + 1];
+  double e1 = energies[idx];
+  double e2 = energies[idx + 1];
 
   // Check interpolation type
   if (forcefield.interpolationType == "cubic" && idx >= 1 &&
-      idx + 2 < data.distance.size()) {
+      idx + 2 < params.tableSize) {
     // Cubic interpolation using 4 points: idx-1, idx, idx+1, idx+2
-    double x0 = data.distance[idx - 1];
+    double x0 = distances[idx - 1];
     double x1 = r1;
     double x2 = r2;
-    double x3 = data.distance[idx + 2];
-    double y0 = data.energy[idx - 1];
+    double x3 = distances[idx + 2];
+    double y0 = energies[idx - 1];
     double y1 = e1;
     double y2 = e2;
-    double y3 = data.energy[idx + 2];
+    double y3 = energies[idx + 2];
 
     // Lagrange interpolation
     double term0 = y0 * (dist - x1) * (dist - x2) * (dist - x3) /
@@ -505,39 +642,45 @@ inline double FF_TABULATED::InterpolateEnergy(const TabulatedData &data,
   }
 }
 
-inline double FF_TABULATED::InterpolateForce(const TabulatedData &data,
+inline double FF_TABULATED::InterpolateForce(uint pairIndex,
                                              const double dist) const {
+  const TabulatedDataSoA::PairParameters &params =
+      tableData->getParams(pairIndex);
+
   // Safety check: if table is empty, return zero force
-  if (data.distance.empty()) {
+  if (params.tableSize == 0) {
     std::cout
         << "WARNING: InterpolateForce called with empty table for pair type '"
-        << data.pairType << "'" << std::endl;
+        << tableData->getPairType(pairIndex) << "'" << std::endl;
     return 0.0;
   }
 
-  if (dist <= data.rMin)
-    return data.force[0];
-  if (dist >= data.rMax)
-    return data.force[data.force.size() - 1];
+  const double *distances = tableData->getDistances(pairIndex);
+  const double *forces = tableData->getForces(pairIndex);
 
-  uint idx = FindTableIndex(data, dist);
-  double r1 = data.distance[idx];
-  double r2 = data.distance[idx + 1];
-  double f1 = data.force[idx];
-  double f2 = data.force[idx + 1];
+  if (dist <= params.rMin)
+    return forces[0];
+  if (dist >= params.rMax)
+    return forces[params.tableSize - 1];
+
+  uint idx = FindTableIndex(pairIndex, dist);
+  double r1 = distances[idx];
+  double r2 = distances[idx + 1];
+  double f1 = forces[idx];
+  double f2 = forces[idx + 1];
 
   // Check interpolation type
   if (forcefield.interpolationType == "cubic" && idx >= 1 &&
-      idx + 2 < data.distance.size()) {
+      idx + 2 < params.tableSize) {
     // Cubic interpolation using 4 points: idx-1, idx, idx+1, idx+2
-    double x0 = data.distance[idx - 1];
+    double x0 = distances[idx - 1];
     double x1 = r1;
     double x2 = r2;
-    double x3 = data.distance[idx + 2];
-    double y0 = data.force[idx - 1];
+    double x3 = distances[idx + 2];
+    double y0 = forces[idx - 1];
     double y1 = f1;
     double y2 = f2;
-    double y3 = data.force[idx + 2];
+    double y3 = forces[idx + 2];
 
     // Lagrange interpolation
     double term0 = y0 * (dist - x1) * (dist - x2) * (dist - x3) /
@@ -569,9 +712,9 @@ inline void FF_TABULATED::Init(ff_setup::Particle const &mie,
     std::cout << "WARNING: nbtableData is NULL in Init()" << std::endl;
   }
 
-  uint size = num::Sq(count);
-  tableData = new TabulatedData[size];
-  tableData_1_4 = new TabulatedData[size];
+  // NEW: Allocate SoA structures
+  tableData = new TabulatedDataSoA(count);
+  tableData_1_4 = new TabulatedDataSoA(count);
 
   // Check if tabulated potential file is specified
   if (forcefield.tabulatedPotentialFile.empty()) {
@@ -583,6 +726,10 @@ inline void FF_TABULATED::Init(ff_setup::Particle const &mie,
   // For each pair type (i, j), get the corresponding table from the
   // consolidated file Note: We iterate ALL pairs (i,j) and use the symmetric
   // mapping since FlatIndex(i,j) can be called with any order during runtime.
+  // OPTIMIZATION: Parallelize with OpenMP for multicore performance
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(dynamic)
+#endif
   for (uint i = 0; i < count; i++) {
     for (uint j = 0; j < count; j++) {
       uint index = FlatIndex(i, j);
@@ -597,33 +744,62 @@ inline void FF_TABULATED::Init(ff_setup::Particle const &mie,
       std::map<std::string, std::string>::const_iterator it =
           pairTypeMap.find(key);
       if (it == pairTypeMap.end()) {
-        std::cout << "Warning: Pair (" << i << ", " << j << ") [key '" << key
-                  << "'] not found in pairTypeMap; skipping table load"
-                  << std::endl;
-        // Initialize with descriptive name to aid debugging if accessed
-        tableData[index].pairType =
+#ifdef _OPENMP
+#pragma omp critical(console_output)
+#endif
+        {
+          std::cout << "Warning: Pair (" << i << ", " << j << ") [key '" << key
+                    << "'] not found in pairTypeMap; skipping table load"
+                    << std::endl;
+        }
+        // For unknown pairs, set empty data (will be handled by setPairData
+        // with empty vectors)
+        std::vector<double> empty;
+        std::string unknownPairType =
             "UnknownPair: " + mie.getname(i) + "_" + mie.getname(j);
-        tableData[index].rMin = 0.0;
-        tableData[index].rMax = 0.0;
-        tableData[index].uniformSpacing = false;
-        tableData_1_4[index] = tableData[index];
+#ifdef _OPENMP
+#pragma omp critical(file_reading)
+#endif
+        {
+          tableData->setPairData(index, empty, empty, empty, 0.0, 0.0, 0.0,
+                                 false, unknownPairType);
+          tableData_1_4->setPairData(index, empty, empty, empty, 0.0, 0.0, 0.0,
+                                     false, unknownPairType);
+        }
         continue;
       }
 
       // Construct the pair type string (e.g., "OO", "CH", etc.)
       // This should match the TYPE keyword in the tabulated file
       std::string pairType = it->second;
-      tableData[index].pairType = pairType;
 
       // Read the tabulated potential data for this pair from the consolidated
       // file Only read once (check if already loaded to avoid re-reading)
-      if (tableData[index].distance.empty()) {
-        ReadTabulatedFile(forcefield.tabulatedPotentialFile, tableData[index],
-                          forcefield.isCHARMM);
+      // Critical section to ensure thread-safe file I/O
+#ifdef _OPENMP
+#pragma omp critical(file_reading)
+#endif
+      {
+        if (tableData->getTableSize(index) == 0) {
+          ReadTabulatedFile(forcefield.tabulatedPotentialFile, index, pairType,
+                            forcefield.isCHARMM);
+          // Copy to 1-4 table (same data for now)
+          tableData_1_4->setPairData(
+              index,
+              std::vector<double>(tableData->getDistances(index),
+                                  tableData->getDistances(index) +
+                                      tableData->getTableSize(index)),
+              std::vector<double>(tableData->getEnergies(index),
+                                  tableData->getEnergies(index) +
+                                      tableData->getTableSize(index)),
+              std::vector<double>(tableData->getForces(index),
+                                  tableData->getForces(index) +
+                                      tableData->getTableSize(index)),
+              tableData->getRMin(index), tableData->getRMax(index),
+              tableData->getDr(index), tableData->isUniformSpacing(index),
+              pairType);
+        }
       }
-
-      // For 1-4 interactions, use the same table as regular interactions
-      tableData_1_4[index] = tableData[index];
     }
   }
 }
@@ -680,7 +856,8 @@ inline double FF_TABULATED::CalcEn(const double distSq, const uint kind1,
     return CalcEn(distSq, index);
   }
 
-  // For lambda scaling, use soft-core approach similar to other force fields
+  // For lambda scaling, use soft-core approach
+  // similar to other force fields
   double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
   sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
   double dist6 = distSq * distSq * distSq;
@@ -690,14 +867,14 @@ inline double FF_TABULATED::CalcEn(const double distSq, const uint kind1,
   double softRsq = cbrt(softDist6);
   double dist = sqrt(softRsq);
 
-  double en = InterpolateEnergy(tableData[index], dist);
+  double en = InterpolateEnergy(index, dist);
   return lambda * en;
 }
 
 inline double FF_TABULATED::CalcEn(const double distSq,
                                    const uint index) const {
   double dist = sqrt(distSq);
-  return InterpolateEnergy(tableData[index], dist);
+  return InterpolateEnergy(index, dist);
 }
 
 inline double FF_TABULATED::CalcVir(const double distSq, const uint kind1,
@@ -722,9 +899,10 @@ inline double FF_TABULATED::CalcVir(const double distSq, const uint kind1,
   double dist = sqrt(softRsq);
   double correction = distSq / softRsq;
 
-  double force = InterpolateForce(tableData[index], dist);
-  // Use the same soft-core scaling as other forcefields: scale the per-index
-  // virial (which is F/r) by correction^2 and lambda
+  double force = InterpolateForce(index, dist);
+  // Use the same soft-core scaling as other
+  // forcefields: scale the per-index virial (which
+  // is F/r) by correction^2 and lambda
   double vir = lambda * correction * correction * CalcVir(softRsq, index);
   return vir;
 }
@@ -732,10 +910,11 @@ inline double FF_TABULATED::CalcVir(const double distSq, const uint kind1,
 inline double FF_TABULATED::CalcVir(const double distSq,
                                     const uint index) const {
   double dist = sqrt(distSq);
-  double force = InterpolateForce(tableData[index], dist);
-  // CalcVir should return the scalar Wij = (-dE/dr)/r so that
-  // r_vector * Wij = force vector. Since InterpolateForce returns
-  // F = -dE/dr, we return Wij = F / r.
+  double force = InterpolateForce(index, dist);
+  // CalcVir should return the scalar Wij =
+  // (-dE/dr)/r so that r_vector * Wij = force
+  // vector. Since InterpolateForce returns F =
+  // -dE/dr, we return Wij = F / r.
   if (dist > 0.0)
     return force / dist;
   else
@@ -750,7 +929,7 @@ inline void FF_TABULATED::CalcAdd_1_4(double &en, const double distSq,
 
   uint index = FlatIndex(kind1, kind2);
   double dist = sqrt(distSq);
-  en += InterpolateEnergy(tableData_1_4[index], dist);
+  en += InterpolateEnergy(index, dist);
 }
 
 inline double FF_TABULATED::CalcCoulomb(const double distSq, const uint kind1,
@@ -873,9 +1052,10 @@ inline double FF_TABULATED::CalcdEndL(const double distSq, const uint kind1,
   fCoef *= pow(1.0 - lambda, forcefield.sc_power - 1.0) * sigma6 /
            (softRsq * softRsq);
 
-  double en = InterpolateEnergy(tableData[index], dist);
-  double force = InterpolateForce(tableData[index], dist);
-  // CalcVir(index) returns Wij = F/r, so use vir = Wij
+  double en = InterpolateEnergy(index, dist);
+  double force = InterpolateForce(index, dist);
+  // CalcVir(index) returns Wij = F/r, so use vir =
+  // Wij
   double vir = 0.0;
   if (dist > 0.0)
     vir = force / dist;
