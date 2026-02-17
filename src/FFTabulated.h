@@ -21,6 +21,10 @@ along with this program, also can be found at
 #include <stdexcept>
 #include <vector>
 
+#ifdef GOMC_CUDA
+#include "ConstantDefinitionsCUDAKernel.cuh"
+#endif
+
 #ifndef M_2_SQRTPI
 #define M_2_SQRTPI (2.0 / sqrt(M_PI))
 #endif
@@ -175,6 +179,11 @@ public:
         nbtableData(NULL) {}
 
   virtual ~FF_TABULATED() {
+#ifdef GOMC_CUDA
+    if (varCUDA != NULL) {
+      DestroyTabulatedCUDAVars(varCUDA);
+    }
+#endif
     delete tableData;
     delete tableData_1_4;
   }
@@ -802,6 +811,55 @@ inline void FF_TABULATED::Init(ff_setup::Particle const &mie,
       }
     }
   }
+
+#ifdef GOMC_CUDA
+  // Initialize GPU data for tabulated potentials
+  if (varCUDA != NULL) {
+    uint numPairs = count * count;
+    std::vector<float> energyTables;
+    std::vector<float> forceTables;
+    std::vector<int> tableSizes(numPairs);
+    std::vector<float> rMinVals(numPairs);
+    std::vector<float> invRangeVals(numPairs);
+
+    // Reserve approximate memory to avoid reallocations
+    // Assuming average table size is standard, e.g. 1000 points per pair
+    energyTables.reserve(numPairs * 1000);
+    forceTables.reserve(numPairs * 1000);
+
+    for (uint i = 0; i < count; i++) {
+      for (uint j = 0; j < count; j++) {
+        uint idx = FlatIndex(i, j);
+        const double *energies = tableData->getEnergies(idx);
+        const double *forces = tableData->getForces(idx);
+        uint size = tableData->getTableSize(idx);
+        double rMin = tableData->getRMin(idx);
+        double rMax = tableData->getRMax(idx);
+
+        tableSizes[idx] = (int)size;
+        rMinVals[idx] = (float)rMin;
+
+        // Calculate invRange for texture coordinate normalization
+        // The kernel uses: t = (dist - rMin) * invRange * (size - 1) + 0.5
+        // So invRange needs to be 1.0 / (rMax - rMin)
+        if (size > 1 && rMax > rMin) {
+          invRangeVals[idx] = (float)(1.0 / (rMax - rMin));
+        } else {
+          invRangeVals[idx] = 0.0f;
+        }
+
+        for (uint k = 0; k < size; ++k) {
+          energyTables.push_back((float)energies[k]);
+          forceTables.push_back((float)forces[k]);
+        }
+      }
+    }
+
+    InitTabulatedCUDA(varCUDA, numPairs, energyTables.data(),
+                      forceTables.data(), tableSizes.data(), rMinVals.data(),
+                      invRangeVals.data());
+  }
+#endif
 }
 
 // Helper function to get the pair type string from atom type indices

@@ -132,7 +132,8 @@ void CallBoxInterForceGPU(
       vars->gpu_Invcell_z[box], vars->gpu_nonOrth, sc_coul, sc_sigma_6,
       sc_alpha, sc_power, vars->gpu_rMin, vars->gpu_rMaxSq, vars->gpu_expConst,
       vars->gpu_molIndex, vars->gpu_lambdaVDW, vars->gpu_lambdaCoulomb,
-      vars->gpu_isFraction, box);
+      vars->gpu_isFraction, box, vars->gpu_tabEnergyDev, vars->gpu_tabForceDev,
+      vars->gpu_tabRMin, vars->gpu_tabInvRange, vars->gpu_tabSize);
   checkLastErrorCUDA(__FILE__, __LINE__);
   cudaDeviceSynchronize();
   // ReduceSum // Virial of LJ
@@ -311,7 +312,9 @@ void CallBoxForceGPU(VariablesCUDA *vars, const std::vector<int> &cellVector,
       vars->gpu_aForcez, vars->gpu_mForcex, vars->gpu_mForcey,
       vars->gpu_mForcez, sc_coul, sc_sigma_6, sc_alpha, sc_power,
       vars->gpu_rMin, vars->gpu_rMaxSq, vars->gpu_expConst, vars->gpu_molIndex,
-      vars->gpu_lambdaVDW, vars->gpu_lambdaCoulomb, vars->gpu_isFraction, box);
+      vars->gpu_lambdaVDW, vars->gpu_lambdaCoulomb, vars->gpu_isFraction, box,
+      vars->gpu_tabEnergyDev, vars->gpu_tabForceDev, vars->gpu_tabRMin,
+      vars->gpu_tabInvRange, vars->gpu_tabSize);
   cudaDeviceSynchronize();
   checkLastErrorCUDA(__FILE__, __LINE__);
   // LJ ReduceSum
@@ -476,7 +479,9 @@ __global__ void BoxInterForceGPU(
     double *gpu_Invcell_z, int *gpu_nonOrth, bool sc_coul, double sc_sigma_6,
     double sc_alpha, uint sc_power, double *gpu_rMin, double *gpu_rMaxSq,
     double *gpu_expConst, int *gpu_molIndex, double *gpu_lambdaVDW,
-    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box) {
+    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box,
+    cudaTextureObject_t *gpu_tabEnergyDev, cudaTextureObject_t *gpu_tabForceDev,
+    float *gpu_tabRMin, float *gpu_tabInvRange, int *gpu_tabSize) {
   double distSq;
   double3 virComponents;
 
@@ -551,11 +556,18 @@ __global__ void BoxInterForceGPU(
         else
           diff_com = MinImageGPU(diff_com, axis, halfAx);
 
-        double pVF = CalcEnForceGPU(
-            distSq, kA, kB, gpu_sigmaSq, gpu_n, gpu_epsilon_Cn, gpu_rCut[0],
-            gpu_rOn[0], gpu_isMartini[0], gpu_VDW_Kind[0], gpu_count[0],
-            lambdaVDW, sc_sigma_6, sc_alpha, sc_power, gpu_rMin, gpu_rMaxSq,
-            gpu_expConst);
+        double pVF;
+        if (gpu_VDW_Kind[0] == GPU_VDW_TABULATED_KIND) {
+          int tabIdx = FlatIndexGPU(kA, kB, gpu_count[0]);
+          pVF = CalcVirTabulatedGPU(distSq, tabIdx, gpu_tabForceDev,
+                                    gpu_tabRMin, gpu_tabInvRange, gpu_tabSize);
+        } else {
+          pVF = CalcEnForceGPU(distSq, kA, kB, gpu_sigmaSq, gpu_n,
+                               gpu_epsilon_Cn, gpu_rCut[0], gpu_rOn[0],
+                               gpu_isMartini[0], gpu_VDW_Kind[0], gpu_count[0],
+                               lambdaVDW, sc_sigma_6, sc_alpha, sc_power,
+                               gpu_rMin, gpu_rMaxSq, gpu_expConst);
+        }
 
         gpu_vT11[threadID] += pVF * (virComponents.x * diff_com.x);
         gpu_vT22[threadID] += pVF * (virComponents.y * diff_com.y);
@@ -617,7 +629,9 @@ __global__ void BoxForceGPU(
     double *gpu_mForcey, double *gpu_mForcez, bool sc_coul, double sc_sigma_6,
     double sc_alpha, uint sc_power, double *gpu_rMin, double *gpu_rMaxSq,
     double *gpu_expConst, int *gpu_molIndex, double *gpu_lambdaVDW,
-    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box) {
+    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box,
+    cudaTextureObject_t *gpu_tabEnergyDev, cudaTextureObject_t *gpu_tabForceDev,
+    float *gpu_tabRMin, float *gpu_tabInvRange, int *gpu_tabSize) {
   __shared__ double shr_cutoff;
   __shared__ int shr_particlesInsideCurrentCell, shr_numberOfPairs;
   __shared__ int shr_currentCellStartIndex, shr_neighborCellStartIndex;
@@ -683,15 +697,26 @@ __global__ void BoxForceGPU(
 
         int kA = gpu_particleKind[currentParticle];
         int kB = gpu_particleKind[neighborParticle];
-        LJEn += CalcEnGPU(
-            distSq, kA, kB, gpu_sigmaSq, gpu_n, gpu_epsilon_Cn, gpu_VDW_Kind[0],
-            gpu_isMartini[0], gpu_rCut[0], gpu_rOn[0], gpu_count[0], lambdaVDW,
-            sc_sigma_6, sc_alpha, sc_power, gpu_rMin, gpu_rMaxSq, gpu_expConst);
-        double forces = CalcEnForceGPU(
-            distSq, kA, kB, gpu_sigmaSq, gpu_n, gpu_epsilon_Cn, gpu_rCut[0],
-            gpu_rOn[0], gpu_isMartini[0], gpu_VDW_Kind[0], gpu_count[0],
-            lambdaVDW, sc_sigma_6, sc_alpha, sc_power, gpu_rMin, gpu_rMaxSq,
-            gpu_expConst);
+        double forces;
+        if (gpu_VDW_Kind[0] == GPU_VDW_TABULATED_KIND) {
+          int tabIdx = FlatIndexGPU(kA, kB, gpu_count[0]);
+          LJEn += CalcEnTabulatedGPU(distSq, tabIdx, gpu_tabEnergyDev,
+                                     gpu_tabRMin, gpu_tabInvRange, gpu_tabSize);
+          forces =
+              CalcVirTabulatedGPU(distSq, tabIdx, gpu_tabForceDev, gpu_tabRMin,
+                                  gpu_tabInvRange, gpu_tabSize);
+        } else {
+          LJEn +=
+              CalcEnGPU(distSq, kA, kB, gpu_sigmaSq, gpu_n, gpu_epsilon_Cn,
+                        gpu_VDW_Kind[0], gpu_isMartini[0], gpu_rCut[0],
+                        gpu_rOn[0], gpu_count[0], lambdaVDW, sc_sigma_6,
+                        sc_alpha, sc_power, gpu_rMin, gpu_rMaxSq, gpu_expConst);
+          forces = CalcEnForceGPU(distSq, kA, kB, gpu_sigmaSq, gpu_n,
+                                  gpu_epsilon_Cn, gpu_rCut[0], gpu_rOn[0],
+                                  gpu_isMartini[0], gpu_VDW_Kind[0],
+                                  gpu_count[0], lambdaVDW, sc_sigma_6, sc_alpha,
+                                  sc_power, gpu_rMin, gpu_rMaxSq, gpu_expConst);
+        }
 
         if (electrostatic) {
           double qi_qj_fact = gpu_particleCharge[currentParticle] *

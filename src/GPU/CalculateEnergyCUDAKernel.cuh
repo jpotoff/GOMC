@@ -27,23 +27,24 @@ void CallBoxInterGPU(VariablesCUDA *vars, const std::vector<int> &cellVector,
                      double &LJEn, bool sc_coul, double sc_sigma_6,
                      double sc_alpha, uint sc_power, uint const box);
 
-__global__ void
-BoxInterGPU(int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
-            int numberOfCells, double *gpu_x, double *gpu_y, double *gpu_z,
-            double3 axis, double3 halfAx, bool electrostatic,
-            double *gpu_particleCharge, int *gpu_particleKind,
-            int *gpu_particleMol, double *gpu_REn, double *gpu_LJEn,
-            double *gpu_sigmaSq, double *gpu_epsilon_Cn, double *gpu_n,
-            int *gpu_VDW_Kind, int *gpu_isMartini, int *gpu_count,
-            double *gpu_rCut, double *gpu_rCutCoulomb, double *gpu_rCutLow,
-            double *gpu_rOn, double *gpu_alpha, int *gpu_ewald,
-            double *gpu_diElectric_1, int *gpu_nonOrth, double *gpu_cell_x,
-            double *gpu_cell_y, double *gpu_cell_z, double *gpu_Invcell_x,
-            double *gpu_Invcell_y, double *gpu_Invcell_z, bool sc_coul,
-            double sc_sigma_6, double sc_alpha, uint sc_power, double *gpu_rMin,
-            double *gpu_rMaxSq, double *gpu_expConst, int *gpu_molIndex,
-            double *gpu_lambdaVDW, double *gpu_lambdaCoulomb,
-            bool *gpu_isFraction, int box);
+__global__ void BoxInterGPU(
+    int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
+    int numberOfCells, double *gpu_x, double *gpu_y, double *gpu_z,
+    double3 axis, double3 halfAx, bool electrostatic,
+    double *gpu_particleCharge, int *gpu_particleKind, int *gpu_particleMol,
+    double *gpu_REn, double *gpu_LJEn, double *gpu_sigmaSq,
+    double *gpu_epsilon_Cn, double *gpu_n, int *gpu_VDW_Kind,
+    int *gpu_isMartini, int *gpu_count, double *gpu_rCut,
+    double *gpu_rCutCoulomb, double *gpu_rCutLow, double *gpu_rOn,
+    double *gpu_alpha, int *gpu_ewald, double *gpu_diElectric_1,
+    int *gpu_nonOrth, double *gpu_cell_x, double *gpu_cell_y,
+    double *gpu_cell_z, double *gpu_Invcell_x, double *gpu_Invcell_y,
+    double *gpu_Invcell_z, bool sc_coul, double sc_sigma_6, double sc_alpha,
+    uint sc_power, double *gpu_rMin, double *gpu_rMaxSq, double *gpu_expConst,
+    int *gpu_molIndex, double *gpu_lambdaVDW, double *gpu_lambdaCoulomb,
+    bool *gpu_isFraction, int box, cudaTextureObject_t *gpu_tabEnergyDev,
+    cudaTextureObject_t *gpu_tabForceDev, float *gpu_tabRMin,
+    float *gpu_tabInvRange, int *gpu_tabSize);
 
 __device__ double
 CalcCoulombGPU(double distSq, int kind1, int kind2, double qi_qj_fact,
@@ -158,6 +159,16 @@ __device__ double CalcEnSwitchGPUNoLambda(double distSq, int index,
                                           double *gpu_sigmaSq, double *gpu_n,
                                           double *gpu_epsilon_Cn,
                                           double gpu_rCut, double gpu_rOn);
+
+// Tabulated VDW Calculations
+__device__ double CalcEnTabulatedGPU(double distSq, int index,
+                                     cudaTextureObject_t *gpu_tabEnergyDev,
+                                     float *gpu_tabRMin, float *gpu_tabInvRange,
+                                     int *gpu_tabSize);
+__device__ double CalcVirTabulatedGPU(double distSq, int index,
+                                      cudaTextureObject_t *gpu_tabForceDev,
+                                      float *gpu_tabRMin,
+                                      float *gpu_tabInvRange, int *gpu_tabSize);
 
 #endif /*GOMC_CUDA*/
 #endif /*CALCULATE_ENERGY_CUDA_KERNEL_H*/

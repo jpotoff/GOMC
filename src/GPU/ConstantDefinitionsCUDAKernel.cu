@@ -402,4 +402,130 @@ void DestroyCUDAVars(VariablesCUDA *vars) {
   delete[] vars->gpu_Invcell_z;
 }
 
+void InitTabulatedCUDA(VariablesCUDA *vars, int numPairTypes,
+                       const float *energyTables, const float *forceTables,
+                       const int *tableSizes, const float *rMinVals,
+                       const float *invRangeVals) {
+  vars->gpu_tabNumPairs = numPairTypes;
+
+  // Allocate host-side arrays for texture objects and CUDA arrays
+  vars->gpu_tabEnergy = new cudaTextureObject_t[numPairTypes];
+  vars->gpu_tabForce = new cudaTextureObject_t[numPairTypes];
+  vars->gpu_tabEnergyArray = new cudaArray_t[numPairTypes];
+  vars->gpu_tabForceArray = new cudaArray_t[numPairTypes];
+
+  // Upload per-pair metadata to GPU
+  CUMALLOC((void **)&vars->gpu_tabRMin, numPairTypes * sizeof(float));
+  CUMALLOC((void **)&vars->gpu_tabInvRange, numPairTypes * sizeof(float));
+  CUMALLOC((void **)&vars->gpu_tabSize, numPairTypes * sizeof(int));
+
+  cudaMemcpy(vars->gpu_tabRMin, rMinVals, numPairTypes * sizeof(float),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(vars->gpu_tabInvRange, invRangeVals, numPairTypes * sizeof(float),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(vars->gpu_tabSize, tableSizes, numPairTypes * sizeof(int),
+             cudaMemcpyHostToDevice);
+
+  // Create texture objects for each pair type
+  // energyTables and forceTables are contiguous: pair0 data, pair1 data, ...
+  int offset = 0;
+  for (int p = 0; p < numPairTypes; p++) {
+    int size = tableSizes[p];
+
+    if (size == 0) {
+      // Empty table (unused pair) — create a dummy 1-element texture
+      vars->gpu_tabEnergy[p] = 0;
+      vars->gpu_tabForce[p] = 0;
+      vars->gpu_tabEnergyArray[p] = NULL;
+      vars->gpu_tabForceArray[p] = NULL;
+      continue;
+    }
+
+    cudaChannelFormatDesc channelDesc =
+        cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+
+    // --- Energy texture ---
+    cudaMallocArray(&vars->gpu_tabEnergyArray[p], &channelDesc, size, 0);
+    cudaMemcpy2DToArray(vars->gpu_tabEnergyArray[p], 0, 0,
+                        energyTables + offset, 0, size * sizeof(float), 1,
+                        cudaMemcpyHostToDevice);
+
+    cudaResourceDesc resDescE;
+    memset(&resDescE, 0, sizeof(resDescE));
+    resDescE.resType = cudaResourceTypeArray;
+    resDescE.res.array.array = vars->gpu_tabEnergyArray[p];
+
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.addressMode[0] = cudaAddressModeClamp;
+    texDesc.filterMode = cudaFilterModeLinear;
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.normalizedCoords = 0; // Use unnormalized coordinates
+
+    cudaCreateTextureObject(&vars->gpu_tabEnergy[p], &resDescE, &texDesc, NULL);
+
+    // --- Force texture ---
+    cudaMallocArray(&vars->gpu_tabForceArray[p], &channelDesc, size, 0);
+    cudaMemcpy2DToArray(vars->gpu_tabForceArray[p], 0, 0, forceTables + offset,
+                        0, size * sizeof(float), 1, cudaMemcpyHostToDevice);
+
+    cudaResourceDesc resDescF;
+    memset(&resDescF, 0, sizeof(resDescF));
+    resDescF.resType = cudaResourceTypeArray;
+    resDescF.res.array.array = vars->gpu_tabForceArray[p];
+
+    cudaCreateTextureObject(&vars->gpu_tabForce[p], &resDescF, &texDesc, NULL);
+
+    offset += size;
+  }
+
+  checkLastErrorCUDA(__FILE__, __LINE__);
+  std::cout << "Info: Initialized " << numPairTypes
+            << " tabulated potential textures on GPU" << std::endl;
+
+  // Upload texture object handles to device memory for kernel access
+  CUMALLOC((void **)&vars->gpu_tabEnergyDev,
+           numPairTypes * sizeof(cudaTextureObject_t));
+  CUMALLOC((void **)&vars->gpu_tabForceDev,
+           numPairTypes * sizeof(cudaTextureObject_t));
+  cudaMemcpy(vars->gpu_tabEnergyDev, vars->gpu_tabEnergy,
+             numPairTypes * sizeof(cudaTextureObject_t),
+             cudaMemcpyHostToDevice);
+  cudaMemcpy(vars->gpu_tabForceDev, vars->gpu_tabForce,
+             numPairTypes * sizeof(cudaTextureObject_t),
+             cudaMemcpyHostToDevice);
+  checkLastErrorCUDA(__FILE__, __LINE__);
+}
+
+void DestroyTabulatedCUDAVars(VariablesCUDA *vars) {
+  if (vars->gpu_tabEnergy == NULL)
+    return;
+
+  for (int p = 0; p < vars->gpu_tabNumPairs; p++) {
+    if (vars->gpu_tabEnergy[p] != 0)
+      cudaDestroyTextureObject(vars->gpu_tabEnergy[p]);
+    if (vars->gpu_tabForce[p] != 0)
+      cudaDestroyTextureObject(vars->gpu_tabForce[p]);
+    if (vars->gpu_tabEnergyArray[p] != NULL)
+      cudaFreeArray(vars->gpu_tabEnergyArray[p]);
+    if (vars->gpu_tabForceArray[p] != NULL)
+      cudaFreeArray(vars->gpu_tabForceArray[p]);
+  }
+
+  delete[] vars->gpu_tabEnergy;
+  delete[] vars->gpu_tabForce;
+  delete[] vars->gpu_tabEnergyArray;
+  delete[] vars->gpu_tabForceArray;
+  vars->gpu_tabEnergy = NULL;
+  vars->gpu_tabForce = NULL;
+  vars->gpu_tabEnergyArray = NULL;
+  vars->gpu_tabForceArray = NULL;
+
+  CUFREE(vars->gpu_tabEnergyDev);
+  CUFREE(vars->gpu_tabForceDev);
+  CUFREE(vars->gpu_tabRMin);
+  CUFREE(vars->gpu_tabInvRange);
+  CUFREE(vars->gpu_tabSize);
+}
+
 #endif /*GOMC_CUDA*/

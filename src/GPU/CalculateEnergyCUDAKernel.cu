@@ -107,7 +107,9 @@ void CallBoxInterGPU(VariablesCUDA *vars, const std::vector<int> &cellVector,
       vars->gpu_Invcell_x[box], vars->gpu_Invcell_y[box],
       vars->gpu_Invcell_z[box], sc_coul, sc_sigma_6, sc_alpha, sc_power,
       vars->gpu_rMin, vars->gpu_rMaxSq, vars->gpu_expConst, vars->gpu_molIndex,
-      vars->gpu_lambdaVDW, vars->gpu_lambdaCoulomb, vars->gpu_isFraction, box);
+      vars->gpu_lambdaVDW, vars->gpu_lambdaCoulomb, vars->gpu_isFraction, box,
+      vars->gpu_tabEnergyDev, vars->gpu_tabForceDev, vars->gpu_tabRMin,
+      vars->gpu_tabInvRange, vars->gpu_tabSize);
   cudaDeviceSynchronize();
   checkLastErrorCUDA(__FILE__, __LINE__);
 
@@ -148,23 +150,24 @@ void CallBoxInterGPU(VariablesCUDA *vars, const std::vector<int> &cellVector,
   CUFREE(gpu_cellStartIndex);
 }
 
-__global__ void
-BoxInterGPU(int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
-            int numberOfCells, double *gpu_x, double *gpu_y, double *gpu_z,
-            double3 axis, double3 halfAx, bool electrostatic,
-            double *gpu_particleCharge, int *gpu_particleKind,
-            int *gpu_particleMol, double *gpu_REn, double *gpu_LJEn,
-            double *gpu_sigmaSq, double *gpu_epsilon_Cn, double *gpu_n,
-            int *gpu_VDW_Kind, int *gpu_isMartini, int *gpu_count,
-            double *gpu_rCut, double *gpu_rCutCoulomb, double *gpu_rCutLow,
-            double *gpu_rOn, double *gpu_alpha, int *gpu_ewald,
-            double *gpu_diElectric_1, int *gpu_nonOrth, double *gpu_cell_x,
-            double *gpu_cell_y, double *gpu_cell_z, double *gpu_Invcell_x,
-            double *gpu_Invcell_y, double *gpu_Invcell_z, bool sc_coul,
-            double sc_sigma_6, double sc_alpha, uint sc_power, double *gpu_rMin,
-            double *gpu_rMaxSq, double *gpu_expConst, int *gpu_molIndex,
-            double *gpu_lambdaVDW, double *gpu_lambdaCoulomb,
-            bool *gpu_isFraction, int box) {
+__global__ void BoxInterGPU(
+    int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
+    int numberOfCells, double *gpu_x, double *gpu_y, double *gpu_z,
+    double3 axis, double3 halfAx, bool electrostatic,
+    double *gpu_particleCharge, int *gpu_particleKind, int *gpu_particleMol,
+    double *gpu_REn, double *gpu_LJEn, double *gpu_sigmaSq,
+    double *gpu_epsilon_Cn, double *gpu_n, int *gpu_VDW_Kind,
+    int *gpu_isMartini, int *gpu_count, double *gpu_rCut,
+    double *gpu_rCutCoulomb, double *gpu_rCutLow, double *gpu_rOn,
+    double *gpu_alpha, int *gpu_ewald, double *gpu_diElectric_1,
+    int *gpu_nonOrth, double *gpu_cell_x, double *gpu_cell_y,
+    double *gpu_cell_z, double *gpu_Invcell_x, double *gpu_Invcell_y,
+    double *gpu_Invcell_z, bool sc_coul, double sc_sigma_6, double sc_alpha,
+    uint sc_power, double *gpu_rMin, double *gpu_rMaxSq, double *gpu_expConst,
+    int *gpu_molIndex, double *gpu_lambdaVDW, double *gpu_lambdaCoulomb,
+    bool *gpu_isFraction, int box, cudaTextureObject_t *gpu_tabEnergyDev,
+    cudaTextureObject_t *gpu_tabForceDev, float *gpu_tabRMin,
+    float *gpu_tabInvRange, int *gpu_tabSize) {
   int threadID = blockIdx.x * blockDim.x + threadIdx.x;
   double REn = 0.0, LJEn = 0.0;
   double cutoff = fmax(gpu_rCut[0], gpu_rCutCoulomb[box]);
@@ -212,10 +215,17 @@ BoxInterGPU(int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
 
         double lambdaVDW = DeviceGetLambdaVDW(mA, mB, box, gpu_isFraction,
                                               gpu_molIndex, gpu_lambdaVDW);
-        LJEn += CalcEnGPU(
-            distSq, kA, kB, gpu_sigmaSq, gpu_n, gpu_epsilon_Cn, gpu_VDW_Kind[0],
-            gpu_isMartini[0], gpu_rCut[0], gpu_rOn[0], gpu_count[0], lambdaVDW,
-            sc_sigma_6, sc_alpha, sc_power, gpu_rMin, gpu_rMaxSq, gpu_expConst);
+        if (gpu_VDW_Kind[0] == GPU_VDW_TABULATED_KIND) {
+          int tabIdx = FlatIndexGPU(kA, kB, gpu_count[0]);
+          LJEn += CalcEnTabulatedGPU(distSq, tabIdx, gpu_tabEnergyDev,
+                                     gpu_tabRMin, gpu_tabInvRange, gpu_tabSize);
+        } else {
+          LJEn +=
+              CalcEnGPU(distSq, kA, kB, gpu_sigmaSq, gpu_n, gpu_epsilon_Cn,
+                        gpu_VDW_Kind[0], gpu_isMartini[0], gpu_rCut[0],
+                        gpu_rOn[0], gpu_count[0], lambdaVDW, sc_sigma_6,
+                        sc_alpha, sc_power, gpu_rMin, gpu_rMaxSq, gpu_expConst);
+        }
 
         if (electrostatic) {
           double qi_qj_fact = gpu_particleCharge[currentParticle] *
@@ -240,6 +250,55 @@ BoxInterGPU(int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
   gpu_LJEn[threadID] = LJEn;
 }
 
+// Tabulated potential device functions
+//**************************************************************//
+__device__ double CalcEnTabulatedGPU(double distSq, int index,
+                                     cudaTextureObject_t *gpu_tabEnergyDev,
+                                     float *gpu_tabRMin, float *gpu_tabInvRange,
+                                     int *gpu_tabSize) {
+  float dist = sqrtf((float)distSq);
+  float rMin = gpu_tabRMin[index];
+  float invRange = gpu_tabInvRange[index];
+  int tableSize = gpu_tabSize[index];
+
+  // Compute texture coordinate (unnormalized)
+  // tex1D with linear filtering samples at position + 0.5
+  float t = (dist - rMin) * invRange * (float)(tableSize - 1) + 0.5f;
+
+  // Clamp to valid range
+  if (t < 0.5f)
+    t = 0.5f;
+  if (t > (float)tableSize - 0.5f)
+    t = (float)tableSize - 0.5f;
+
+  return (double)tex1D<float>(gpu_tabEnergyDev[index], t);
+}
+
+__device__ double CalcVirTabulatedGPU(double distSq, int index,
+                                      cudaTextureObject_t *gpu_tabForceDev,
+                                      float *gpu_tabRMin,
+                                      float *gpu_tabInvRange,
+                                      int *gpu_tabSize) {
+  float dist = sqrtf((float)distSq);
+  float rMin = gpu_tabRMin[index];
+  float invRange = gpu_tabInvRange[index];
+  int tableSize = gpu_tabSize[index];
+
+  // Compute texture coordinate (unnormalized)
+  float t = (dist - rMin) * invRange * (float)(tableSize - 1) + 0.5f;
+
+  // Clamp to valid range
+  if (t < 0.5f)
+    t = 0.5f;
+  if (t > (float)tableSize - 0.5f)
+    t = (float)tableSize - 0.5f;
+
+  // Force table stores -dU/dr; virial contribution is (-dU/dr) / r
+  // The CalcEnForceGPU convention returns force/distSq for virial calc
+  float force = tex1D<float>(gpu_tabForceDev[index], t);
+  return (double)force / dist;
+}
+
 __device__ double
 CalcCoulombGPU(double distSq, int kind1, int kind2, double qi_qj_fact,
                double gpu_rCutLow, int gpu_ewald, int gpu_VDW_Kind,
@@ -252,7 +311,8 @@ CalcCoulombGPU(double distSq, int kind1, int kind2, double qi_qj_fact,
   }
 
   int index = FlatIndexGPU(kind1, kind2, gpu_count);
-  if (gpu_VDW_Kind == GPU_VDW_STD_KIND) {
+  if (gpu_VDW_Kind == GPU_VDW_STD_KIND ||
+      gpu_VDW_Kind == GPU_VDW_TABULATED_KIND) {
     return CalcCoulombParticleGPU(distSq, index, qi_qj_fact, gpu_ewald,
                                   gpu_alpha, gpu_lambdaCoulomb, sc_coul,
                                   sc_sigma_6, sc_alpha, sc_power, gpu_sigmaSq);

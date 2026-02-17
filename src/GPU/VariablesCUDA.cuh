@@ -20,7 +20,9 @@ along with this program, also can be found at
 static const __device__ double qqFactGPU = num::qqFact;
 
 #define gpuErrchk(ans)                                                         \
-  { gpuAssert((ans), __FILE__, __LINE__); }
+  {                                                                            \
+    gpuAssert((ans), __FILE__, __LINE__);                                      \
+  }
 inline void gpuAssert(cudaError_t code, const char *file, int line,
                       bool abort = true) {
   if (code != cudaSuccess) {
@@ -90,6 +92,18 @@ public:
     gpu_lambdaVDW = NULL;
     gpu_lambdaCoulomb = NULL;
     gpu_isFraction = NULL;
+
+    // Tabulated potential pointers
+    gpu_tabEnergy = NULL;
+    gpu_tabForce = NULL;
+    gpu_tabEnergyDev = NULL;
+    gpu_tabForceDev = NULL;
+    gpu_tabEnergyArray = NULL;
+    gpu_tabForceArray = NULL;
+    gpu_tabRMin = NULL;
+    gpu_tabInvRange = NULL;
+    gpu_tabSize = NULL;
+    gpu_tabNumPairs = 0;
   }
   double *gpu_sigmaSq;
   double *gpu_epsilon_Cn;
@@ -139,6 +153,22 @@ public:
 
   // new pair interaction calculation done on GPU
   int *gpu_cellVector, *gpu_mapParticleToCell;
+
+  // Tabulated potential data (texture objects)
+  cudaTextureObject_t
+      *gpu_tabEnergy; // Host-side array of texture handles (for destroy)
+  cudaTextureObject_t
+      *gpu_tabForce; // Host-side array of texture handles (for destroy)
+  cudaTextureObject_t
+      *gpu_tabEnergyDev; // Device-side array of texture handles (for kernels)
+  cudaTextureObject_t
+      *gpu_tabForceDev; // Device-side array of texture handles (for kernels)
+  cudaArray_t *gpu_tabEnergyArray; // Backing CUDA arrays for energy textures
+  cudaArray_t *gpu_tabForceArray;  // Backing CUDA arrays for force textures
+  float *gpu_tabRMin;              // Per-pair rMin values (device)
+  float *gpu_tabInvRange;          // Per-pair 1/(rMax - rMin) values (device)
+  int *gpu_tabSize;                // Per-pair table sizes (device)
+  int gpu_tabNumPairs;             // Total number of pair types
 };
 #endif
 #endif /*VARIABLES_CUDA_H*/

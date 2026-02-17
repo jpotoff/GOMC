@@ -68,7 +68,9 @@ __global__ void BoxForceGPU(
     double *gpu_mForcey, double *gpu_mForcez, bool sc_coul, double sc_sigma_6,
     double sc_alpha, uint sc_power, double *gpu_rMin, double *gpu_rMaxSq,
     double *gpu_expConst, int *gpu_molIndex, double *gpu_lambdaVDW,
-    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box);
+    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box,
+    cudaTextureObject_t *gpu_tabEnergyDev, cudaTextureObject_t *gpu_tabForceDev,
+    float *gpu_tabRMin, float *gpu_tabInvRange, int *gpu_tabSize);
 
 __global__ void BoxInterForceGPU(
     int *gpu_cellStartIndex, int *gpu_cellVector, int *gpu_neighborList,
@@ -88,7 +90,9 @@ __global__ void BoxInterForceGPU(
     double *gpu_Invcell_z, int *gpu_nonOrth, bool sc_coul, double sc_sigma_6,
     double sc_alpha, uint sc_power, double *gpu_rMin, double *gpu_rMaxSq,
     double *gpu_expConst, int *gpu_molIndex, double *gpu_lambdaVDW,
-    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box);
+    double *gpu_lambdaCoulomb, bool *gpu_isFraction, int box,
+    cudaTextureObject_t *gpu_tabEnergyDev, cudaTextureObject_t *gpu_tabForceDev,
+    float *gpu_tabRMin, float *gpu_tabInvRange, int *gpu_tabSize);
 
 __global__ void VirialReciprocalGPU(
     double *gpu_x, double *gpu_y, double *gpu_z, double *gpu_comDx,
@@ -214,7 +218,8 @@ __device__ inline double CalcCoulombForceGPU(
   }
 
   int index = FlatIndexGPU(kind1, kind2, gpu_count);
-  if (gpu_VDW_Kind == GPU_VDW_STD_KIND) {
+  if (gpu_VDW_Kind == GPU_VDW_STD_KIND ||
+      gpu_VDW_Kind == GPU_VDW_TABULATED_KIND) {
     return CalcCoulombVirParticleGPU(distSq, qi_qj, gpu_ewald, gpu_alpha,
                                      gpu_alphaSq, index, gpu_sigmaSq[index],
                                      sc_coul, sc_sigma_6, sc_alpha, sc_power,

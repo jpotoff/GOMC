@@ -19,6 +19,7 @@ along with this program, also can be found at
 #define GPU_VDW_SHIFT_KIND 1
 #define GPU_VDW_SWITCH_KIND 2
 #define GPU_VDW_EXP6_KIND 3
+#define GPU_VDW_TABULATED_KIND 4
 #define MAX_PAIR_SIZE 10000000
 
 void UpdateGPULambda(VariablesCUDA *vars, int *molIndex, double *lambdaVDW,
@@ -46,6 +47,13 @@ void UpdateInvCellBasisCUDA(VariablesCUDA *vars, uint box,
 void DestroyEwaldCUDAVars(VariablesCUDA *vars);
 void DestroyExp6CUDAVars(VariablesCUDA *vars);
 void DestroyCUDAVars(VariablesCUDA *vars);
+
+// Tabulated potential GPU functions
+void InitTabulatedCUDA(VariablesCUDA *vars, int numPairTypes,
+                       const float *energyTables, const float *forceTables,
+                       const int *tableSizes, const float *rMinVals,
+                       const float *invRangeVals);
+void DestroyTabulatedCUDAVars(VariablesCUDA *vars);
 
 #endif /*GOMC_CUDA*/
 #endif /*CONSTANT_DEFINITIONS_CUDA_KERNEL_H*/
