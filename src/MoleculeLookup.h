@@ -1,10 +1,8 @@
-/*******************************************************************************
-GPU OPTIMIZED MONTE CARLO (GOMC) 2.75
-Copyright (C) 2022 GOMC Group
-A copy of the MIT License can be found in License.txt
-along with this program, also can be found at
+/******************************************************************************
+GPU OPTIMIZED MONTE CARLO (GOMC) Copyright (C) GOMC Group
+A copy of the MIT License can be found in License.txt with this program or at
 <https://opensource.org/licenses/MIT>.
-********************************************************************************/
+******************************************************************************/
 #ifndef MOLECULE_LOOKUP_H
 #define MOLECULE_LOOKUP_H
 
@@ -195,14 +193,14 @@ private:
   friend class cereal::access;
   template <class Archive>
   void serialize(Archive &ar, const unsigned int version) {
-    ar &molLookupCount;
-    ar &atomCount;
-    ar &boxAndKindStartLength;
-    ar &boxAndKindSwappableLength;
-    ar &numKinds;
-    ar &fixedMolecule;
-    ar &canSwapKind;
-    ar &canMoveKind;
+    ar & molLookupCount;
+    ar & atomCount;
+    ar & boxAndKindStartLength;
+    ar & boxAndKindSwappableLength;
+    ar & numKinds;
+    ar & fixedMolecule;
+    ar & canSwapKind;
+    ar & canMoveKind;
   }
 
   void AllocateMemory(int molLookupCount, int atomCount,
