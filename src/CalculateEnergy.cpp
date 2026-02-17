@@ -728,18 +728,17 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
     return;
 
   GOMC_EVENT_START(1, GomcProfileEvent::EN_CBMC_INTER);
-  double tempLJ, tempReal;
   MoleculeKind const &thisKind = mols.GetKind(molIndex);
   uint kindI = thisKind.AtomKind(partIndex);
   double kindICharge = thisKind.AtomCharge(partIndex);
-  std::vector<uint> nIndex;
 
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
     shared(cellList, currentAxes, currentCoords, en, forcefield,               \
                particleCharge, particleKind, particleMol, real, trialPos,      \
-               overlap) firstprivate(thisKind, kindI, kindICharge, box,        \
-                                         molIndex, num::qqFact, electrostatic)
+               overlap, thisKind)                                              \
+    firstprivate(kindI, kindICharge, box, molIndex, num::qqFact,               \
+                     electrostatic, trials)
 #endif
   for (uint t = 0; t < trials; ++t) {
     std::vector<uint> nIndex;
