@@ -10,8 +10,8 @@ along with this program, also can be found at
 #include "FFExp6.h"
 #include "FFShift.h"
 #include "FFSwitch.h"
-#include "FFTabulated.h"
 #include "FFSwitchMartini.h"
+#include "FFTabulated.h"
 #include "Setup.h"
 
 Forcefield::Forcefield() {
@@ -37,7 +37,7 @@ void Forcefield::Init(const Setup &set) {
   }
   // Store interpolation type for tabulated potential
   interpolationType = set.config.sys.ff.interpolationType;
-  
+
   // If using tabulated potentials, pass the NBtable data to particles->Init()
   if (vdwKind == set.config.sys.ff.VDW_TABULATED_KIND) {
     FF_TABULATED *tabParticles = dynamic_cast<FF_TABULATED *>(particles);
@@ -49,7 +49,7 @@ void Forcefield::Init(const Setup &set) {
     // For non-tabulated forcefields, use regular Init
     particles->Init(set.ff.mie, set.ff.nbfix);
   }
-  
+
   bonds.Init(set.ff.bond);
   angles->Init(set.ff.angle);
   dihedrals.Init(set.ff.dih);

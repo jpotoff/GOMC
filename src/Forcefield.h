@@ -71,7 +71,7 @@ public:
   uint sc_power;            // Free energy parameter
   std::string tabulatedPotentialFile; // File name for tabulated potential
   std::string interpolationType; // Interpolation type for tabulated potential
-  bool isCHARMM;            // Whether using CHARMM parameter format
+  bool isCHARMM;                 // Whether using CHARMM parameter format
 #if ENSEMBLE == GCMC
   bool isFugacity; // To check if we are using fugacity instead of chemical
                    // potential

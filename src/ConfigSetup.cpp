@@ -276,13 +276,15 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       }
     } else if (CheckString(line[0], "TabulatedEnergiesFile")) {
       if (line.size() > 1) {
-        in.files.tabulated_potential.push_back(config_setup::FileName(line[1], true));
+        in.files.tabulated_potential.push_back(
+            config_setup::FileName(line[1], true));
       }
     } else if (CheckString(line[0], "tableInterpType")) {
       if (line.size() > 1) {
         sys.ff.interpolationType = line[1];
-        printf("%-40s %-s \n", "Info: Tabulated interpolation", line[1].c_str());
-      } 
+        printf("%-40s %-s \n", "Info: Tabulated interpolation",
+               line[1].c_str());
+      }
     } else if (CheckString(line[0], "Coordinates")) {
       uint boxnum = stringtoi(line[1]);
       if (boxnum >= BOX_TOTAL) {
@@ -435,7 +437,8 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       }
     } else if (CheckString(line[0], "TableInterpType")) {
       sys.ff.interpolationType = line[1];
-      std::cout << "Info: Interpolation Type set to " << sys.ff.interpolationType << std::endl;
+      std::cout << "Info: Interpolation Type set to "
+                << sys.ff.interpolationType << std::endl;
       printf("%-40s %-s \n", "Info: Interpolation Type", line[1].c_str());
     } else if (CheckString(line[0], "LRC")) {
       sys.ff.doTailCorr = checkBool(line[1]);
@@ -2183,7 +2186,7 @@ void ConfigSetup::verifyInputs(void) {
   if (((sys.ff.VDW_KIND == sys.ff.VDW_STD_KIND) ||
        (sys.ff.VDW_KIND == sys.ff.VDW_SHIFT_KIND) ||
        (sys.ff.VDW_KIND == sys.ff.VDW_EXP6_KIND) ||
-       ( sys.ff.VDW_KIND == sys.ff.VDW_TABULATED_KIND)) &&
+       (sys.ff.VDW_KIND == sys.ff.VDW_TABULATED_KIND)) &&
       sys.ff.rswitch != DBL_MAX) {
     std::cout << "Warning: Switch distance set, but will be ignored."
               << std::endl;

@@ -8,9 +8,9 @@ along with this program, also can be found at
 #ifndef FF_SETUP_H
 #define FF_SETUP_H
 
+#include <iostream>
 #include <map> //for function handle storage.
 #include <sstream>
-#include <iostream>
 #include <string> //for var names, etc.
 #include <vector>
 
@@ -96,14 +96,14 @@ public:
   std::vector<double> sigma, epsilon, sigma_1_4, epsilon_1_4;
   std::vector<double> n, n_1_4;
 };
-//11/11/2025 New class for NBtable
+// 11/11/2025 New class for NBtable
 class NBtable : public ReadableBaseWithFirst, public FFBase {
 public:
   NBtable() : FFBase(2) {}
 
   virtual void Read(Reader &param, std::string const &firstVar);
   void Add(std::string atom1, std::string atom2, std::string table_pair_name);
-  
+
   // Get atom type names for a pair index
   std::string GetAtomType1(size_t idx) const {
     return (idx < atomType1.size()) ? atomType1[idx] : "";
@@ -117,9 +117,9 @@ public:
   size_t GetPairCount() const { return tableNames.size(); }
 
 private:
-  std::vector<std::string> atomType1;   // First atom type in pair
-  std::vector<std::string> atomType2;   // Second atom type in pair
-  std::vector<std::string> tableNames;  // Pair type names for tabulated file
+  std::vector<std::string> atomType1;  // First atom type in pair
+  std::vector<std::string> atomType2;  // Second atom type in pair
+  std::vector<std::string> tableNames; // Pair type names for tabulated file
 };
 
 class Bond : public ReadableBaseWithFirst, public FFBase {
