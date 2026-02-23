@@ -1,10 +1,8 @@
-/*******************************************************************************
-GPU OPTIMIZED MONTE CARLO (GOMC) 2.75
-Copyright (C) 2022 GOMC Group
-A copy of the MIT License can be found in License.txt
-along with this program, also can be found at
+/******************************************************************************
+GPU OPTIMIZED MONTE CARLO (GOMC) Copyright (C) GOMC Group
+A copy of the MIT License can be found in License.txt with this program or at
 <https://opensource.org/licenses/MIT>.
-********************************************************************************/
+******************************************************************************/
 #include "Simulation.h"
 
 #include <iomanip>
@@ -141,7 +139,7 @@ void Simulation::RunSimulation(void) {
                                system->molLookup);
       if (staticValues->forcefield.ewald) {
         for (int box = 0; box < BOX_TOTAL; box++) {
-          system->calcEwald->BoxReciprocalSums(box, system->coordinates, false);
+          system->calcEwald->BoxReciprocalSums(box, system->coordinates);
           system->potential.boxEnergy[box].recip =
               system->calcEwald->BoxReciprocal(box, false);
           system->calcEwald->UpdateRecip(box);
@@ -224,7 +222,8 @@ bool Simulation::RecalculateAndCheck(void) {
   return compare;
 }
 
-#if GOMC_GTEST
+#if GOMC_GTEST || GOMC_GTEST_MPI
+
 SystemPotential &Simulation::GetSystemEnergy(void) { return system->potential; }
 
 MoleculeLookup &Simulation::GetMolLookup() { return system->molLookup; }
