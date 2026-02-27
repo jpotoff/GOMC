@@ -419,7 +419,8 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
     } else if (CheckString(line[0], "Potential")) {
       if (CheckString(line[1], "VDW")) {
         sys.ff.VDW_KIND = sys.ff.VDW_STD_KIND;
-        printf("%-40s %-s \n", "Info: SHIFT/SWITCH", "Inactive");
+        printf("%-40s %-s \n", "Info: Standard Lennard-Jones potential",
+               "Active");
       } else if (CheckString(line[1], "SHIFT")) {
         sys.ff.VDW_KIND = sys.ff.VDW_SHIFT_KIND;
         printf("%-40s %-s \n", "Info: Shift truncated potential", "Active");
@@ -453,7 +454,6 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
     } else if (CheckString(line[0], "Rswitch")) {
       sys.ff.rswitch = stringtod(line[1]);
       printf("%-40s %-4.4f \n", "Info: Switch distance", sys.ff.rswitch);
-
     } else if (CheckString(line[0], "SubVolumeBox")) {
       if (line.size() == 3) {
         int idx = stringtoi(line[1]);
@@ -2179,6 +2179,12 @@ void ConfigSetup::verifyInputs(void) {
   }
   if (sys.ff.VDW_KIND == sys.ff.VDW_SWITCH_KIND && sys.ff.rswitch == DBL_MAX) {
     std::cout << "ERROR: Switch distance was not specified!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (sys.ff.VDW_KIND == sys.ff.VDW_TABULATED_KIND && sys.ff.doTailCorr) {
+    std::cout << "ERROR: Long range correction is not compatible with "
+                 "tabulated potential!"
+              << std::endl;
     exit(EXIT_FAILURE);
   }
   if (((sys.ff.VDW_KIND == sys.ff.VDW_STD_KIND) ||

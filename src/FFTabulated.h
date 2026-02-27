@@ -13,17 +13,10 @@ along with this program, also can be found at
 #include "FFParticle.h"
 #include "NumLib.h" //For Cb, Sq
 #include <algorithm>
-#include <cmath>
-#include <fstream>
 #include <iostream>
 #include <map>
 #include <sstream>
 #include <stdexcept>
-#include <vector>
-
-#ifndef M_2_SQRTPI
-#define M_2_SQRTPI (2.0 / sqrt(M_PI))
-#endif
 
 //////////////////////////////////////////////////////////////////////
 ////////////////////////// Tabulated Potential Style
@@ -193,7 +186,7 @@ public:
   }
 
   // Build mapping from (kind1, kind2) pairs to pair type names from NBtable
-  // Uses the provided mie particle name list to resolve atom type strings to
+  // Uses the provided Mie particle name list to resolve atom type strings to
   // kind indices. This avoids assuming NBtable entries are in the same
   // sequential order as the internal FlatIndex ordering.
   // OPTIMIZATION: Uses hash map for O(1) lookup instead of O(n) nested loop
@@ -263,24 +256,11 @@ public:
       std::string keyStr = key.str();
 
       pairTypeMap[keyStr] = pairType;
-
-      //  std::cout << "Mapping NBtable entry: atoms ('" << atom1 << "','"
-      //            << atom2 << "') -> kinds (" << minKind << "," << maxKind
-      //            << ") -> '" << pairType << "'" << std::endl;
     }
 
     std::cout << "Map Building Complete: " << pairTypeMap.size()
               << " entries in map" << std::endl;
     std::cout << std::endl;
-    // Dump map contents for extra visibility
-    // if (!pairTypeMap.empty()) {
-    //  std::cout << "PairTypeMap contents:" << std::endl;
-    //  for (auto &entry : pairTypeMap) {
-    //    std::cout << "  '" << entry.first << "' -> '" << entry.second << "'"
-    //              << std::endl;
-    //  }
-    //}
-    // std::cout << std::endl;
   }
 
   // Method to register tabulated potential file for a specific pair type
