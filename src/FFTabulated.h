@@ -9,9 +9,7 @@ along with this program, also can be found at
 #define FF_TABULATED_H
 
 #include "BasicTypes.h" //for uint
-#include "FFConst.h"    //constants related to particles.
 #include "FFParticle.h"
-#include "NumLib.h" //For Cb, Sq
 #include <algorithm>
 #include <iostream>
 #include <map>
