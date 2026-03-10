@@ -27,11 +27,9 @@ ConfigSetup::ConfigSetup(void) {
   in.prng.seed = UINT_MAX;
   in.prngParallelTempering.seed = UINT_MAX;
   sys.elect.readEwald = false;
-  sys.elect.readElect = false;
   sys.elect.readCache = false;
-  sys.elect.ewald = false;
+  sys.elect.readElect = false;
   sys.elect.enable = false;
-  sys.elect.cache = false;
   sys.elect.tolerance = DBL_MAX;
   sys.elect.oneFourScale = DBL_MAX;
   sys.elect.dielectric = DBL_MAX;
@@ -706,10 +704,46 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
         sys.exclude.EXCLUDE_KIND = sys.exclude.EXC_ONEFOUR_KIND;
         printf("%-40s %-s \n", "Info: Exclude", "ONE-FOUR");
       }
-    } else if (CheckString(line[0], "Ewald")) {
-      sys.elect.ewald = checkBool(line[1]);
+    } else if (CheckString(line[0], "ElectrostaticMethod")) {
+      sys.elect.method = line[1];
       sys.elect.readEwald = true;
-      if (sys.elect.ewald) {
+      if (sys.elect.method == "PME" || sys.elect.method == "Ewald" ||
+          sys.elect.method == "EwaldCached") {
+        printf("%-40s %-s \n", "Info: Electrostatic Method",
+               sys.elect.method.c_str());
+      } else if (sys.elect.method != "NoEwald") {
+        std::cout << "ERROR: Unknown ElectrostaticMethod: " << sys.elect.method
+                  << "\n";
+        exit(EXIT_FAILURE);
+      }
+    } else if (CheckString(line[0], "PMESplineOrder")) {
+      sys.elect.pmeSplineOrder = stringtoi(line[1]);
+      printf("%-40s %-d \n", "Info: PME B-Spline Order",
+             sys.elect.pmeSplineOrder);
+    } else if (CheckString(line[0], "PMEGridSpacing")) {
+      sys.elect.pmeGridSpacing = stringtod(line[1]);
+      printf("%-40s %-4.4f A\n", "Info: PME Grid Spacing",
+             sys.elect.pmeGridSpacing);
+    } else if (CheckString(line[0], "PMERefreshFreq")) {
+      sys.elect.pmeRefreshFreq = stringtoi(line[1]);
+      printf("%-40s %-d \n", "Info: PME Refresh Frequency",
+             sys.elect.pmeRefreshFreq);
+      if (sys.elect.pmeRefreshFreq == 0) {
+        std::cout << "ERROR: PMERefreshFreq cannot be 0!\n";
+        exit(EXIT_FAILURE);
+      }
+      if (sys.elect.pmeRefreshFreq < 10) {
+        printf("Warning: PMERefreshFreq is very low (%d). This may impact "
+               "performance.\n",
+               sys.elect.pmeRefreshFreq);
+      }
+    } else if (CheckString(line[0], "Ewald")) {
+      bool ewald = checkBool(line[1]);
+      sys.elect.readEwald = true;
+      if (ewald) {
+        sys.elect.method = "Ewald";
+        printf("Warning: 'Ewald' keyword is deprecated. Use "
+               "'ElectrostaticMethod Ewald' instead.\n");
         printf("%-40s %-s \n", "Info: Ewald Summation", "Active");
       }
     } else if (CheckString(line[0], "ElectroStatic")) {
@@ -734,9 +768,12 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
         }
       }
     } else if (CheckString(line[0], "CachedFourier")) {
-      sys.elect.cache = checkBool(line[1]);
+      bool cache = checkBool(line[1]);
       sys.elect.readCache = true;
-      if (sys.elect.cache) {
+      if (cache) {
+        sys.elect.method = "EwaldCached";
+        printf("Warning: 'CachedFourier' keyword is deprecated. Use "
+               "'ElectrostaticMethod EwaldCached' instead.\n");
         printf("%-40s %-s \n", "Info: Cache Ewald Fourier", "Active");
       } else {
         printf("%-40s %-s \n", "Info: Cache Ewald Fourier", "Inactive");
@@ -1465,7 +1502,7 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
 }
 
 void ConfigSetup::fillDefaults(void) {
-  if (sys.elect.ewald == true) {
+  if (sys.elect.method != "NoEwald") {
     sys.elect.enable = true;
   }
 
@@ -1692,12 +1729,14 @@ void ConfigSetup::fillDefaults(void) {
   }
 #endif
 
-  if (sys.elect.ewald == true && sys.elect.readCache == false) {
-    sys.elect.cache = false;
-    printf("%-40s %-s \n", "Default: Cache Ewald Fourier", "Inactive");
+  if (sys.elect.method != "NoEwald" && sys.elect.readCache == false) {
+    if (sys.elect.method == "EwaldCached") {
+      sys.elect.method = "Ewald";
+      printf("%-40s %-s \n", "Default: Cache Ewald Fourier", "Inactive");
+    }
   }
 
-  if (sys.elect.ewald == false && sys.elect.cache == true) {
+  if (sys.elect.method == "NoEwald" && sys.elect.readCache == true) {
     printf("Warning: Cache Ewald Fourier set, but will be ignored: Ewald "
            "method off.\n");
   }
@@ -1803,7 +1842,7 @@ void ConfigSetup::verifyInputs(void) {
     sys.elect.oneFourScale = 0.0;
   }
 
-  if (sys.elect.ewald == false && sys.elect.enable == true) {
+  if (sys.elect.method == "NoEwald" && sys.elect.enable == true) {
     printf("%-40s %-s \n",
            "Warning: Electrostatic calculation with Ewald method", "Inactive");
   }
@@ -1965,7 +2004,7 @@ void ConfigSetup::verifyInputs(void) {
     printf("Warning: RcutLow cannot be negative. Initializing to "
            "zero.\n");
   }
-  if (sys.elect.ewald && (sys.elect.tolerance == DBL_MAX)) {
+  if (sys.elect.method != "NoEwald" && (sys.elect.tolerance == DBL_MAX)) {
     std::cout << "ERROR: Tolerance is not specified!" << std::endl;
     exit(EXIT_FAILURE);
   }

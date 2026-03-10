@@ -18,7 +18,8 @@ function(add_ensemble_test name ENSEMBLE_ID ENSEMBLE_LABEL)
     )
 
     # Link to gtest and optionally MPI
-    target_link_libraries(${name} gtest_main)
+    target_link_libraries(${name} gtest_main ${FFTW3_LIBRARIES})
+    target_include_directories(${name} PRIVATE ${FFTW3_INCLUDE_DIRS})
     if(GOMC_GTEST_MPI)
       target_link_libraries(${name} MPI::MPI_CXX)
       target_compile_definitions(${name} PRIVATE USE_MPI)

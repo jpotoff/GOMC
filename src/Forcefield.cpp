@@ -70,10 +70,15 @@ void Forcefield::InitBasicVals(config_setup::SystemVals const &val,
   freeEnergy = val.freeEn.enable;
 
   electrostatic = val.elect.enable;
-  ewald = val.elect.ewald;
+  ewald = (val.elect.method == "Ewald" || val.elect.method == "EwaldCached" ||
+           val.elect.method == "PME");
   tolerance = val.elect.tolerance;
   rswitch = val.ff.rswitch;
   dielectric = val.elect.dielectric;
+  // PME params
+  pmeSplineOrder = val.elect.pmeSplineOrder;
+  pmeGridSpacing = val.elect.pmeGridSpacing;
+  pmeRefreshFreq = val.elect.pmeRefreshFreq;
 
   if (val.freeEn.enable) {
     sc_alpha = val.freeEn.scaleAlpha;

@@ -3,6 +3,7 @@ set(sources
    src/BondAdjacencyList.cpp
    src/BoxDimensions.cpp
    src/BoxDimensionsNonOrth.cpp
+   src/BSpline.cpp
    src/CalculateEnergy.cpp
    src/CBMC.cpp
    src/CellList.cpp
@@ -16,6 +17,7 @@ set(sources
    src/DCDlib.cpp
    src/EnPartCntSampleOutput.cpp
    src/Ewald.cpp
+   src/EwaldPME.cpp
    src/EwaldCached.cpp
    src/ExtendedSystem.cpp
    src/ExtendedSystemOutput.cpp
@@ -72,6 +74,7 @@ set(headers
    src/BondAdjacencyList.h
    src/BoxDimensions.h
    src/BoxDimensionsNonOrth.h
+   src/BSpline.h
    src/CalculateEnergy.h
    src/CBMC.h
    src/CellList.h
@@ -91,6 +94,7 @@ set(headers
    src/EnPartCntSampleOutput.h
    src/EnsemblePreprocessor.h
    src/Ewald.h
+   src/EwaldPME.h
    src/EwaldCached.h  
    src/ExtendedSystem.h
    src/ExtendedSystemOutput.h

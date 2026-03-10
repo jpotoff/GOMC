@@ -70,6 +70,10 @@ public:
   std::string tabulatedPotentialFile; // File name for tabulated potential
   std::string interpolationType; // Interpolation type for tabulated potential
   bool isCHARMM;                 // Whether using CHARMM parameter format
+  // PME-specific parameters
+  int pmeSplineOrder;    // B-spline order for PME
+  double pmeGridSpacing; // Target mesh spacing (Angstroms)
+  uint pmeRefreshFreq;   // Steps between full S_ref recomputes
 #if ENSEMBLE == GCMC
   bool isFugacity; // To check if we are using fugacity instead of chemical
                    // potential

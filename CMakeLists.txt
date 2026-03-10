@@ -150,3 +150,14 @@ endif()
 
 # Set up Serial version
 include(${PROJECT_SOURCE_DIR}/CMake/GOMCCPUSetup.cmake)
+
+# Find and link FFTW3
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFTW3 REQUIRED fftw3)
+
+foreach(target GOMC_CPU_NVT GOMC_CPU_NPT GOMC_CPU_GCMC GOMC_CPU_GEMC)
+  if(TARGET ${target})
+    target_include_directories(${target} PRIVATE ${FFTW3_INCLUDE_DIRS})
+    target_link_libraries(${target} PRIVATE ${FFTW3_LIBRARIES})
+  endif()
+endforeach()

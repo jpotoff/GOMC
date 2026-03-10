@@ -6,6 +6,7 @@ set(TestSources
     #test/src/PSFParserTest.cpp
     test/src/ConsistentTrajectoryTest.cpp
     test/src/CheckpointTest.cpp
+    test/src/TestBSpline.cpp
 )
 
 set(TestHeaders
@@ -17,6 +18,7 @@ set(GOMCSources
    src/BondAdjacencyList.cpp
    src/BoxDimensions.cpp
    src/BoxDimensionsNonOrth.cpp
+   src/BSpline.cpp
    src/CBMC.cpp
    src/CellList.cpp
    src/ConfigSetup.cpp
@@ -32,6 +34,7 @@ set(GOMCSources
    src/ExtendedSystem.cpp
    src/ExtendedSystemOutput.cpp
    src/Ewald.cpp
+   src/EwaldPME.cpp
    src/EwaldCached.cpp
    src/FFConst.cpp
    src/FFDihedrals.cpp
@@ -86,6 +89,7 @@ set(GOMCHeaders
    src/BondAdjacencyList.h
    src/BoxDimensions.h
    src/BoxDimensionsNonOrth.h
+   src/BSpline.h
    src/CalculateEnergy.h
    src/CBMC.h
    src/CellList.h
@@ -107,6 +111,7 @@ set(GOMCHeaders
    src/ExtendedSystem.h
    src/ExtendedSystemOutput.h
    src/Ewald.h
+   src/EwaldPME.h
    src/EwaldCached.h  
    src/FFAngles.h
    src/FFBonds.h

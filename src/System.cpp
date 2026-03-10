@@ -12,6 +12,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "EnsemblePreprocessor.h"
 #include "Ewald.h"
 #include "EwaldCached.h"
+#include "EwaldPME.h"
 #include "GOMCEventsProfile.h"
 #include "IntraMoleculeExchange1.h"
 #include "IntraMoleculeExchange2.h"
@@ -129,19 +130,24 @@ void System::Init(Setup &set) {
   cellList.SetCutoff();
   cellList.GridAll(boxDimRef, coordinates, molLookupRef);
 
-  // check if we have to use cached version of Ewald or not.
-  bool ewald = set.config.sys.elect.ewald;
+  std::string method = set.config.sys.elect.method;
 
 #ifdef GOMC_CUDA
-  if (ewald)
+  if (method == "Ewald") {
     calcEwald = new Ewald(statV, *this);
-  else
+  } else if (method == "EwaldCached" || method == "PME") {
+    std::cout << "Warning: " << method
+              << " not supported on CUDA, falling back to standard Ewald.\n";
+    calcEwald = new Ewald(statV, *this);
+  } else {
     calcEwald = new NoEwald(statV, *this);
+  }
 #else
-  bool cached = set.config.sys.elect.cache;
-  if (ewald && cached)
+  if (method == "PME")
+    calcEwald = new EwaldPME(statV, *this);
+  else if (method == "EwaldCached")
     calcEwald = new EwaldCached(statV, *this);
-  else if (ewald && !cached)
+  else if (method == "Ewald")
     calcEwald = new Ewald(statV, *this);
   else
     calcEwald = new NoEwald(statV, *this);
