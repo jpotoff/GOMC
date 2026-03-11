@@ -1,3 +1,8 @@
+#include <algorithm>
+#include <cmath>
+#include <utility>
+#include <vector>
+
 #include "EwaldPME.h"
 #include "BSpline.h"
 #include "BoxDimensions.h"
@@ -5,10 +10,6 @@
 #include "NumLib.h"
 #include "StaticVals.h"
 #include "System.h"
-#include <algorithm>
-#include <cmath>
-#include <utility>
-#include <vector>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -20,13 +21,15 @@ EwaldPME::EwaldPME(StaticVals &stat, System &sys) : Ewald(stat, sys) {
   // ff is the protected Forcefield& member inherited from Ewald
   pmeOrder = ff.pmeSplineOrder;
   refreshInterval = ff.pmeRefreshFreq;
+
+  S_ref = nullptr;
+  greenFunc = nullptr;
+  chargeMesh = nullptr;
+  S_trial = nullptr;
+  greenFunc_trial = nullptr;
+
   for (uint b = 0; b < BOX_TOTAL; b++) {
-    S_ref = nullptr;
-    greenFunc = nullptr;
-    chargeMesh = nullptr;
     fwdPlan[b] = nullptr;
-    S_trial = nullptr;
-    greenFunc_trial = nullptr;
     tempEnergyRecip[b] = 0.0;
     tempVirialRecip[b].Zero();
   }
@@ -226,86 +229,73 @@ void EwaldPME::ComputeChargeMesh(uint box, XYZArray const &molCoords) {
   if (box >= BOXES_WITH_U_NB)
     return;
 
-  int Kx = K[box][0];
-  int Ky = K[box][1];
-  int Kz = K[box][2];
-  int N = Kx * Ky * Kz;
+  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
+  double *mesh = chargeMesh[box];
+  std::fill(mesh, mesh + (Kx * Ky * Kz), 0.0);
 
-  for (int i = 0; i < N; ++i) {
-    chargeMesh[box][i] = 0.0;
+  std::vector<unsigned int> molIds;
+  for (auto it = molLookup.BoxBegin(box); it != molLookup.BoxEnd(box); ++it) {
+    molIds.push_back(*it);
   }
 
-  MoleculeLookup::box_iterator end = molLookup.BoxEnd(box);
-  MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
+#ifdef _OPENMP
+#pragma omp parallel for default(shared)
+#endif
+  for (int m = 0; m < (int)molIds.size(); ++m) {
+    AddMoleculeToMesh(box, molIds[m], molCoords, mesh);
+  }
+}
 
-  std::vector<double> bs_x(pmeOrder), bs_y(pmeOrder), bs_z(pmeOrder);
+void EwaldPME::AddMoleculeToMesh(uint box, uint molIndex,
+                                 XYZArray const &molCoords, double *mesh) {
+  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
+  MoleculeKind const &thisKind = mols.GetKind(molIndex);
+  uint startAtom = mols.MolStart(molIndex);
+  double lambdaCoef = GetLambdaCoef(molIndex, box);
+  double bs_x[20], bs_y[20], bs_z[20];
 
-  while (thisMol != end) {
-    uint molIndex = *thisMol;
-    MoleculeKind const &thisKind = mols.GetKind(molIndex);
-    uint startAtom = mols.MolStart(molIndex);
-    double lambdaCoef = GetLambdaCoef(molIndex, box);
+  for (uint i = 0; i < thisKind.NumAtoms(); ++i) {
+    uint atomIndex = startAtom + i;
+    if (particleHasNoCharge[atomIndex])
+      continue;
 
-    for (uint i = 0; i < thisKind.NumAtoms(); ++i) {
-      uint atomIndex = startAtom + i;
-      if (particleHasNoCharge[atomIndex])
-        continue;
+    double charge = thisKind.AtomCharge(i) * lambdaCoef;
+    XYZ r = molCoords.Get(atomIndex);
+    XYZ s = currentAxes.TransformUnSlant(r, box);
+    double sx = s.x / currentAxes.axis.Get(box).x;
+    double sy = s.y / currentAxes.axis.Get(box).y;
+    double sz = s.z / currentAxes.axis.Get(box).z;
 
-      double charge = thisKind.AtomCharge(i) * lambdaCoef;
+    sx -= std::floor(sx);
+    sy -= std::floor(sy);
+    sz -= std::floor(sz);
 
-      // Get fractional coordinates
-      double rx = molCoords.Get(atomIndex).x;
-      double ry = molCoords.Get(atomIndex).y;
-      double rz = molCoords.Get(atomIndex).z;
+    double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
+    bspline::EvalAll(pmeOrder, ux - std::floor(ux), bs_x);
+    bspline::EvalAll(pmeOrder, uy - std::floor(uy), bs_y);
+    bspline::EvalAll(pmeOrder, uz - std::floor(uz), bs_z);
 
-      XYZ r(rx, ry, rz);
-      XYZ s = currentAxes.TransformUnSlant(r, box);
-      double sx = s.x / currentAxes.axis.Get(box).x;
-      double sy = s.y / currentAxes.axis.Get(box).y;
-      double sz = s.z / currentAxes.axis.Get(box).z;
+    int nx = (int)std::floor(ux) - pmeOrder + 1;
+    int ny = (int)std::floor(uy) - pmeOrder + 1;
+    int nz = (int)std::floor(uz) - pmeOrder + 1;
 
-      // Shift to [0, 1) range
-      sx -= floor(sx);
-      sy -= floor(sy);
-      sz -= floor(sz);
-
-      // Scaled fractional coordinates
-      double ux = sx * Kx;
-      double uy = sy * Ky;
-      double uz = sz * Kz;
-
-      bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x.data());
-      bspline::EvalAll(pmeOrder, uy - floor(uy), bs_y.data());
-      bspline::EvalAll(pmeOrder, uz - floor(uz), bs_z.data());
-
-      int nx = (int)floor(ux) - pmeOrder + 1;
-      int ny = (int)floor(uy) - pmeOrder + 1;
-      int nz = (int)floor(uz) - pmeOrder + 1;
-
-      for (int ix = 0; ix < pmeOrder; ++ix) {
-        int gridX = (nx + ix) % Kx;
-        if (gridX < 0)
-          gridX += Kx;
-
-        for (int iy = 0; iy < pmeOrder; ++iy) {
-          int gridY = (ny + iy) % Ky;
-          if (gridY < 0)
-            gridY += Ky;
-
-          for (int iz = 0; iz < pmeOrder; ++iz) {
-            int gridZ = (nz + iz) % Kz;
-            if (gridZ < 0)
-              gridZ += Kz;
-
-            int idx = (gridX * Ky + gridY) * Kz + gridZ;
-            chargeMesh[box][idx] += charge * bs_x[pmeOrder - 1 - ix] *
-                                    bs_y[pmeOrder - 1 - iy] *
-                                    bs_z[pmeOrder - 1 - iz];
-          }
+    for (int ix = 0; ix < pmeOrder; ++ix) {
+      int gx = ((nx + ix) % Kx + Kx) % Kx;
+      double wx = bs_x[pmeOrder - 1 - ix];
+      for (int iy = 0; iy < pmeOrder; ++iy) {
+        int gy = ((ny + iy) % Ky + Ky) % Ky;
+        double wy = wx * bs_y[pmeOrder - 1 - iy];
+        for (int iz = 0; iz < pmeOrder; ++iz) {
+          int gz = ((nz + iz) % Kz + Kz) % Kz;
+          double w = charge * wy * bs_z[pmeOrder - 1 - iz];
+          int idx = (gx * Ky + gy) * Kz + gz;
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+          mesh[idx] += w;
         }
       }
     }
-    ++thisMol;
   }
 }
 void EwaldPME::ComputeGreenFunction(uint box) {
@@ -326,42 +316,35 @@ void EwaldPME::ComputeGreenFunction(uint box) {
 
   double alphaSq = ff.alphaSq[box];
 
-  for (int ix = 0; ix < Kx; ++ix) {
+  int halfKz = Kz / 2 + 1;
+  int nk = Kx * Ky * halfKz;
+  double *Gptr = greenFunc[box];
+
+#ifdef _OPENMP
+#pragma omp parallel for default(shared)
+#endif
+  for (int i = 0; i < nk; ++i) {
+    int iz = i % halfKz;
+    int iy_iz = i / halfKz;
+    int ix = iy_iz / Ky;
+    int iy = iy_iz % Ky;
+
     int kx_int = (ix <= Kx / 2) ? ix : ix - Kx;
+    int ky_int = (iy <= Ky / 2) ? iy : iy - Ky;
 
-    for (int iy = 0; iy < Ky; ++iy) {
-      int ky_int = (iy <= Ky / 2) ? iy : iy - Ky;
-
-      for (int iz = 0; iz <= Kz / 2; ++iz) {
-        int idx = (ix * Ky + iy) * (Kz / 2 + 1) + iz;
-
-        if (ix == 0 && iy == 0 && iz == 0) {
-          greenFunc[box][idx] = 0.0;
-          continue;
-        }
-
-        // Fractional m-vectors
-        double mx = kx_int;
-        double my = ky_int;
-        double mz = iz;
-
-        // Convert to Cartesian k-vectors
-        // For orthogonal boxes: k_i = 2π * m_i / L_i
-        // For non-orthogonal boxes: use the same formula as an approximation
-        // (a full treatment requires the reciprocal cell matrix from
-        // BoxDimensionsNonOrth).
-        double kx_cart = 2.0 * M_PI * mx / currentAxes.axis.Get(box).x;
-        double ky_cart = 2.0 * M_PI * my / currentAxes.axis.Get(box).y;
-        double kz_cart = 2.0 * M_PI * mz / currentAxes.axis.Get(box).z;
-
-        double kSq = kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
-
-        double BFunc = bx[ix] * by[iy] * bz[iz];
-
-        double expTerm = std::exp(-kSq / (4.0 * alphaSq));
-        greenFunc[box][idx] = BFunc * expTerm * fac / kSq;
-      }
+    if (ix == 0 && iy == 0 && iz == 0) {
+      Gptr[i] = 0.0;
+      continue;
     }
+
+    double kx_cart = 2.0 * M_PI * kx_int / currentAxes.axis.Get(box).x;
+    double ky_cart = 2.0 * M_PI * ky_int / currentAxes.axis.Get(box).y;
+    double kz_cart = 2.0 * M_PI * iz / currentAxes.axis.Get(box).z;
+    double kSq = kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
+
+    double BFunc = bx[ix] * by[iy] * bz[iz];
+    double expTerm = std::exp(-kSq / (4.0 * alphaSq));
+    Gptr[i] = BFunc * expTerm * fac / kSq;
   }
 }
 
@@ -378,43 +361,44 @@ double EwaldPME::SumMeshEnergy(uint box, const fftw_complex *S,
   double wT11 = 0.0, wT22 = 0.0, wT33 = 0.0;
   double constVal = 1.0 / (4.0 * ff.alphaSq[box]);
 
-  for (int ix = 0; ix < Kx; ++ix) {
-    int kx_int = (ix <= Kx / 2) ? ix : ix - Kx;
-    for (int iy = 0; iy < Ky; ++iy) {
+  int halfKz = (Kz / 2 + 1);
+  int nk = Kx * Ky * halfKz;
+  double *Gptr = greenFunc[box];
+
+#ifdef _OPENMP
+#pragma omp parallel for default(shared)                                       \
+    reduction(+ : energy, wT11, wT22, wT33)
+#endif
+  for (int i = 0; i < nk; ++i) {
+    int iz = i % halfKz;
+    int iy_iz = i / halfKz;
+    int ix = iy_iz / Ky;
+    int iy = iy_iz % Ky;
+
+    if (ix == 0 && iy == 0 && iz == 0)
+      continue;
+
+    double S_sq = S[i][0] * S[i][0] + S[i][1] * S[i][1];
+
+    // Multiply by 2.0 for everything except the iz=0 and iz=Kz/2 planes
+    double weight = (iz == 0 || (Kz % 2 == 0 && iz == Kz / 2)) ? 1.0 : 2.0;
+
+    double G = Gptr[i];
+    double term = 0.5 * weight * G * S_sq;
+    energy += term;
+
+    if (virial) {
+      int kx_int = (ix <= Kx / 2) ? ix : ix - Kx;
       int ky_int = (iy <= Ky / 2) ? iy : iy - Ky;
-      for (int iz = 0; iz <= Kz / 2; ++iz) {
-        int idx = (ix * Ky + iy) * (Kz / 2 + 1) + iz;
+      double kx_cart = 2.0 * M_PI * kx_int / currentAxes.axis.Get(box).x;
+      double ky_cart = 2.0 * M_PI * ky_int / currentAxes.axis.Get(box).y;
+      double kz_cart = 2.0 * M_PI * iz / currentAxes.axis.Get(box).z;
+      double kSq = kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
 
-        if (ix == 0 && iy == 0 && iz == 0)
-          continue;
-
-        double real_part = S[idx][0];
-        double imag_part = S[idx][1];
-        double S_sq = real_part * real_part + imag_part * imag_part;
-
-        // Multiply by 2.0 for everything except the iz=0 and iz=Kz/2 planes
-        double weight = (iz == 0 || (Kz % 2 == 0 && iz == Kz / 2)) ? 1.0 : 2.0;
-
-        double G = greenFunc[box][idx];
-        double term = 0.5 * weight * G * S_sq;
-        energy += term;
-
-        if (virial) {
-          double mx = kx_int;
-          double my = ky_int;
-          double mz = iz;
-          double kx_cart = 2.0 * M_PI * mx / currentAxes.axis.Get(box).x;
-          double ky_cart = 2.0 * M_PI * my / currentAxes.axis.Get(box).y;
-          double kz_cart = 2.0 * M_PI * mz / currentAxes.axis.Get(box).z;
-          double kSq =
-              kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
-
-          double common = 2.0 * (constVal + 1.0 / kSq);
-          wT11 += term * (1.0 - common * kx_cart * kx_cart);
-          wT22 += term * (1.0 - common * ky_cart * ky_cart);
-          wT33 += term * (1.0 - common * kz_cart * kz_cart);
-        }
-      }
+      double common = 2.0 * (constVal + 1.0 / kSq);
+      wT11 += term * (1.0 - common * kx_cart * kx_cart);
+      wT22 += term * (1.0 - common * ky_cart * ky_cart);
+      wT33 += term * (1.0 - common * kz_cart * kz_cart);
     }
   }
 
@@ -440,51 +424,68 @@ void EwaldPME::ComputeMolDeltaS(uint box, const XYZArray &coords,
   int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
   int halfKz = Kz / 2 + 1;
 
-  for (uint a = 0; a < nAtoms; ++a) {
-    double charge = sign * charges[a];
-    XYZ r = coords.Get(atomIdx[a]);
-    // Fractional coords
-    XYZ s = currentAxes.TransformUnSlant(r, box);
-    double sx = s.x / currentAxes.axis.Get(box).x;
-    double sy = s.y / currentAxes.axis.Get(box).y;
-    double sz = s.z / currentAxes.axis.Get(box).z;
-    sx -= std::floor(sx);
-    sy -= std::floor(sy);
-    sz -= std::floor(sz);
+#ifdef _OPENMP
+#pragma omp parallel for default(shared)
+#endif
+  for (int a = 0; a < (int)nAtoms; ++a) {
+    AddAtomToDeltaS(box, atomIdx[a], sign * charges[a], coords, dS);
+  }
+}
 
-    double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
-    std::vector<double> bs_x(pmeOrder), bs_y(pmeOrder), bs_z(pmeOrder);
-    bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x.data());
-    bspline::EvalAll(pmeOrder, uy - floor(uy), bs_y.data());
-    bspline::EvalAll(pmeOrder, uz - floor(uz), bs_z.data());
+void EwaldPME::AddAtomToDeltaS(uint box, uint atomIdx, double charge,
+                               const XYZArray &coords, fftw_complex *dS) const {
+  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
+  int halfKz = Kz / 2 + 1;
 
-    int nx = (int)floor(ux) - pmeOrder + 1;
-    int ny = (int)floor(uy) - pmeOrder + 1;
-    int nz = (int)floor(uz) - pmeOrder + 1;
+  XYZ r = coords.Get(atomIdx);
+  XYZ s = currentAxes.TransformUnSlant(r, box);
+  double sx = s.x / currentAxes.axis.Get(box).x;
+  double sy = s.y / currentAxes.axis.Get(box).y;
+  double sz = s.z / currentAxes.axis.Get(box).z;
+  sx -= std::floor(sx);
+  sy -= std::floor(sy);
+  sz -= std::floor(sz);
 
-    for (int ix = 0; ix < pmeOrder; ++ix) {
-      int gridX = ((nx + ix) % Kx + Kx) % Kx;
-      for (int iy = 0; iy < pmeOrder; ++iy) {
-        int gridY = ((ny + iy) % Ky + Ky) % Ky;
-        for (int iz = 0; iz < pmeOrder; ++iz) {
-          int gridZ = ((nz + iz) % Kz + Kz) % Kz;
+  double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
+  double bs_x[20], bs_y[20], bs_z[20];
+  bspline::EvalAll(pmeOrder, ux - std::floor(ux), bs_x);
+  bspline::EvalAll(pmeOrder, uy - std::floor(uy), bs_y);
+  bspline::EvalAll(pmeOrder, uz - std::floor(uz), bs_z);
 
-          double w = charge * bs_x[pmeOrder - 1 - ix] *
-                     bs_y[pmeOrder - 1 - iy] * bs_z[pmeOrder - 1 - iz];
+  int nx = (int)std::floor(ux) - pmeOrder + 1;
+  int ny = (int)std::floor(uy) - pmeOrder + 1;
+  int nz = (int)std::floor(uz) - pmeOrder + 1;
 
-          for (int kmx = 0; kmx < Kx; ++kmx) {
-            int kx_int = (kmx <= Kx / 2) ? kmx : kmx - Kx;
-            for (int kmy = 0; kmy < Ky; ++kmy) {
-              int ky_int = (kmy <= Ky / 2) ? kmy : kmy - Ky;
-              for (int kmz = 0; kmz <= Kz / 2; ++kmz) {
-                int kidx = (kmx * Ky + kmy) * halfKz + kmz;
-                double phase =
-                    -2.0 * M_PI *
-                    ((double)kx_int * gridX / Kx + (double)ky_int * gridY / Ky +
-                     (double)kmz * gridZ / Kz);
-                dS[kidx][0] += w * cos(phase);
-                dS[kidx][1] += w * sin(phase);
-              }
+  // Since this is incremental and only for 1 atom at a time in trials,
+  // we could use separability here too, but for one atom P^3 is small.
+  // However, dS is SHARED, so we need atomic updates.
+  for (int ix = 0; ix < pmeOrder; ++ix) {
+    int gx = ((nx + ix) % Kx + Kx) % Kx;
+    double wx = bs_x[pmeOrder - 1 - ix];
+    for (int iy = 0; iy < pmeOrder; ++iy) {
+      int gy = ((ny + iy) % Ky + Ky) % Ky;
+      double wy = wx * bs_y[pmeOrder - 1 - iy];
+      for (int iz = 0; iz < pmeOrder; ++iz) {
+        int gz = ((nz + iz) % Kz + Kz) % Kz;
+        double w = charge * wy * bs_z[pmeOrder - 1 - iz];
+
+        for (int kmx = 0; kmx < Kx; ++kmx) {
+          int kxi = (kmx <= Kx / 2) ? kmx : kmx - Kx;
+          double phx = -2.0 * M_PI * kxi * gx / Kx;
+          for (int kmy = 0; kmy < Ky; ++kmy) {
+            int kyi = (kmy <= Ky / 2) ? kmy : kmy - Ky;
+            double phy = phx - 2.0 * M_PI * kyi * gy / Ky;
+            for (int kmz = 0; kmz < halfKz; ++kmz) {
+              double phase = phy - 2.0 * M_PI * kmz * gz / Kz;
+              int kidx = (kmx * Ky + kmy) * halfKz + kmz;
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+              dS[kidx][0] += w * std::cos(phase);
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+              dS[kidx][1] += w * std::sin(phase);
             }
           }
         }
@@ -524,35 +525,40 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
     ComputeMolDeltaS(box, *oldCoords, atomIndices, charges, nAtoms, sign_old,
                      dS.data());
 
-  // ΔE = Σ_m C(m) · [Re(S*·ΔS) + ½|ΔS|²]  (half-space, with weight for
-  // iz=0/Kz/2)
   double dE = 0.0;
-  for (int kmx = 0; kmx < Kx; ++kmx) {
-    for (int kmy = 0; kmy < Ky; ++kmy) {
-      for (int kmz = 0; kmz <= Kz / 2; ++kmz) {
-        int kidx = (kmx * Ky + kmy) * halfKz + kmz;
-        if (kmx == 0 && kmy == 0 && kmz == 0)
-          continue;
+  double *G = greenFunc[box];
+  fftw_complex *stref = S_ref[box];
 
-        double C = greenFunc[box][kidx];
-        double Sre = S_ref[box][kidx][0], Sim = S_ref[box][kidx][1];
-        double dre = dS[kidx][0], dim = dS[kidx][1];
-        double dSsq = dre * dre + dim * dim;
-        // cross term: Re(S_ref * ΔS*) = Sre*dre + Sim*dim
-        double cross = Sre * dre + Sim * dim;
+#ifdef _OPENMP
+#pragma omp parallel for default(shared) reduction(+ : dE)
+#endif
+  for (int i = 0; i < nk; ++i) {
+    // Reconstruct kmz for weight calculation
+    int kmz = i % halfKz;
+    // Reconstruct kmx, kmy to check for origin skip
+    int kmy_kmz = i / halfKz;
+    int kmx = kmy_kmz / Ky;
+    int kmy = kmy_kmz % Ky;
 
-        double weight =
-            (kmz == 0 || (Kz % 2 == 0 && kmz == Kz / 2)) ? 1.0 : 2.0;
-        dE += weight * C * (cross + 0.5 * dSsq);
-      }
-    }
+    if (kmx == 0 && kmy == 0 && kmz == 0)
+      continue;
+
+    double dre = dS[i][0], dim = dS[i][1];
+    double dSsq = dre * dre + dim * dim;
+    double cross = stref[i][0] * dre + stref[i][1] * dim;
+
+    double weight = (kmz == 0 || (Kz % 2 == 0 && kmz == Kz / 2)) ? 1.0 : 2.0;
+    dE += weight * G[i] * (cross + 0.5 * dSsq);
   }
 
   // Optionally commit the update to S_ref (on move acceptance)
   if (updateSRef) {
+#ifdef _OPENMP
+#pragma omp parallel for default(shared)
+#endif
     for (int i = 0; i < nk; ++i) {
-      S_ref[box][i][0] += dS[i][0];
-      S_ref[box][i][1] += dS[i][1];
+      stref[i][0] += dS[i][0];
+      stref[i][1] += dS[i][1];
     }
   }
 

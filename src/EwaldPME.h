@@ -51,6 +51,8 @@ private:
   Virial tempVirialRecip[BOX_TOTAL];
 
   void ComputeChargeMesh(uint box, XYZArray const &molCoords);
+  void AddMoleculeToMesh(uint box, uint molIndex, XYZArray const &molCoords,
+                         double *mesh);
   void ComputeGreenFunction(uint box);
   double SumMeshEnergy(uint box, const fftw_complex *S,
                        Virial *virial = nullptr) const;
@@ -59,6 +61,9 @@ private:
   void ComputeMolDeltaS(uint box, const XYZArray &coords, const uint *atomIdx,
                         const double *charges, uint nAtoms, double sign,
                         fftw_complex *dS) const;
+
+  void AddAtomToDeltaS(uint box, uint atomIdx, double charge,
+                       const XYZArray &coords, fftw_complex *dS) const;
 
   double DeltaERecip(uint box, const XYZArray *newCoords, double sign_new,
                      const XYZArray *oldCoords, double sign_old,
