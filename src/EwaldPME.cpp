@@ -2,6 +2,7 @@
 #include <cmath>
 #include <utility>
 #include <vector>
+#include <cstring>
 
 #include "EwaldPME.h"
 #include "BSpline.h"
@@ -25,17 +26,43 @@ EwaldPME::EwaldPME(StaticVals &stat, System &sys) : Ewald(stat, sys) {
   S_ref = nullptr;
   greenFunc = nullptr;
   chargeMesh = nullptr;
+  potentialMesh = nullptr;
+  scratchMesh = nullptr;
+  S_delta = nullptr;
   S_trial = nullptr;
   greenFunc_trial = nullptr;
 
   for (uint b = 0; b < BOX_TOTAL; b++) {
     fwdPlan[b] = nullptr;
+    bwdPlan[b] = nullptr;
     tempEnergyRecip[b] = 0.0;
     tempVirialRecip[b].Zero();
   }
+
+  pendingUpdate = false;
+  forceFullUpdate = false;
+  cachedBox = 0;
+  cachedNAtoms = 0;
 }
 
-EwaldPME::~EwaldPME() {}
+EwaldPME::~EwaldPME() {
+  for (uint b = 0; b < BOX_TOTAL; b++) {
+    if (S_ref && S_ref[b]) fftw_free(S_ref[b]);
+    if (greenFunc && greenFunc[b]) delete[] greenFunc[b];
+    if (chargeMesh && chargeMesh[b]) fftw_free(chargeMesh[b]);
+    if (potentialMesh && potentialMesh[b]) fftw_free(potentialMesh[b]);
+    if (fwdPlan[b]) fftw_destroy_plan(fwdPlan[b]);
+    if (bwdPlan[b]) fftw_destroy_plan(bwdPlan[b]);
+    if (S_trial && S_trial[b]) fftw_free(S_trial[b]);
+    if (greenFunc_trial && greenFunc_trial[b]) delete[] greenFunc_trial[b];
+  }
+  delete[] S_ref;
+  delete[] greenFunc;
+  delete[] chargeMesh;
+  delete[] potentialMesh;
+  delete[] S_trial;
+  delete[] greenFunc_trial;
+}
 
 void EwaldPME::Init() {
   Ewald::Init(); // call base class initialization
@@ -48,6 +75,9 @@ void EwaldPME::AllocMem() {
   S_ref = new fftw_complex *[BOX_TOTAL];
   greenFunc = new double *[BOX_TOTAL];
   chargeMesh = new double *[BOX_TOTAL];
+  potentialMesh = new double *[BOX_TOTAL];
+  scratchMesh = new double *[BOX_TOTAL];
+  S_delta = new fftw_complex *[BOX_TOTAL];
   S_trial = new fftw_complex *[BOX_TOTAL];
   greenFunc_trial = new double *[BOX_TOTAL];
 
@@ -55,7 +85,12 @@ void EwaldPME::AllocMem() {
     S_ref[b] = nullptr;
     greenFunc[b] = nullptr;
     chargeMesh[b] = nullptr;
+    potentialMesh[b] = nullptr;
+    scratchMesh[b] = nullptr;
+    S_delta[b] = nullptr;
     fwdPlan[b] = nullptr;
+    bwdPlan[b] = nullptr;
+    scratchPlan[b] = nullptr;
     S_trial[b] = nullptr;
     greenFunc_trial[b] = nullptr;
     K[b][0] = K[b][1] = K[b][2] = 0;
@@ -88,89 +123,72 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
   int N = Kx * Ky * Kz;
   int N_complex = Kx * Ky * (Kz / 2 + 1);
 
-  // Use trial buffers
-  if (S_trial[box])
-    fftw_free(S_trial[box]);
-  if (greenFunc_trial[box])
-    delete[] greenFunc_trial[box];
-  if (chargeMesh[box])
-    fftw_free(chargeMesh[box]);
-  if (fwdPlan[box])
-    fftw_destroy_plan(fwdPlan[box]);
+  bool kChanged = (Kx != K[box][0] || Ky != K[box][1] || Kz != K[box][2]);
 
-  S_trial[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
-  greenFunc_trial[box] = new double[N_complex];
-  chargeMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
+  if (kChanged || fwdPlan[box] == nullptr) {
+    // Destroy old plans if they exist
+    if (fwdPlan[box]) fftw_destroy_plan(fwdPlan[box]);
+    if (bwdPlan[box]) fftw_destroy_plan(bwdPlan[box]);
+    if (scratchPlan[box]) fftw_destroy_plan(scratchPlan[box]);
 
-  fwdPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, chargeMesh[box], S_trial[box],
-                                      FFTW_ESTIMATE);
+    // Free old buffers if they exist
+    if (S_ref[box]) fftw_free(S_ref[box]);
+    if (S_trial[box]) fftw_free(S_trial[box]);
+    if (chargeMesh[box]) fftw_free(chargeMesh[box]);
+    if (potentialMesh[box]) fftw_free(potentialMesh[box]);
+    if (scratchMesh[box]) fftw_free(scratchMesh[box]);
+    if (S_delta[box]) fftw_free(S_delta[box]);
+    if (greenFunc[box]) delete[] greenFunc[box];
+    if (greenFunc_trial[box]) delete[] greenFunc_trial[box];
 
-  // Temporarily swap K and GreenFunc pointers so ComputeGreenFunction and
-  // SumMeshEnergy work on trial data
-  for (int i = 0; i < 3; ++i) {
-    int kt = K[box][i];
-    K[box][i] = K_trial[box][i];
-    K_trial[box][i] = kt;
+    // Allocate new buffers
+    S_ref[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
+    S_trial[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
+    chargeMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
+    potentialMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
+    scratchMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
+    S_delta[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
+    greenFunc[box] = new double[N_complex];
+    greenFunc_trial[box] = new double[N_complex];
+
+    // Create new plans bound to these specific buffers
+    fwdPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, chargeMesh[box], S_trial[box],
+                                        FFTW_ESTIMATE);
+    bwdPlan[box] = fftw_plan_dft_c2r_3d(Kx, Ky, Kz, S_trial[box], potentialMesh[box],
+                                        FFTW_ESTIMATE);
+    scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box], S_delta[box],
+                                            FFTW_ESTIMATE);
+    
+    // Sync permanent grid dimensions
+    K[box][0] = Kx; K[box][1] = Ky; K[box][2] = Kz;
   }
+
+  // Temporarily point greenFunc[box] to the trial buffer for calculation
   double *gt = greenFunc[box];
   greenFunc[box] = greenFunc_trial[box];
-  greenFunc_trial[box] = gt;
-
-  fftw_complex *st = S_ref[box];
-  S_ref[box] = S_trial[box];
-  S_trial[box] = st;
 
   ComputeGreenFunction(box);
   ComputeChargeMesh(box, molCoords);
-  fftw_execute(fwdPlan[box]);
+  fftw_execute(fwdPlan[box]); // writes to S_trial[box]
 
-  tempEnergyRecip[box] = SumMeshEnergy(box, S_ref[box], &tempVirialRecip[box]);
+  // Sum energy from S_trial
+  tempEnergyRecip[box] =
+      SumMeshEnergy(box, S_trial[box], &tempVirialRecip[box]);
 
-  // Swap back - UpdateRecipVec will do the final swap on acceptance
-  for (int i = 0; i < 3; ++i) {
-    int kt = K[box][i];
-    K[box][i] = K_trial[box][i];
-    K_trial[box][i] = kt;
-  }
-  gt = greenFunc[box];
-  greenFunc[box] = greenFunc_trial[box];
-  greenFunc_trial[box] = gt;
-
-  st = S_ref[box];
-  S_ref[box] = S_trial[box];
-  S_trial[box] = st;
+  // Restore greenFunc[box] pointer
+  greenFunc[box] = gt;
 }
 
 void EwaldPME::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
   if (box >= BOXES_WITH_U_NB)
     return;
-  // Use trial buffers as a scratch mesh to avoid overwriting S_ref prematurely
-  // during a full refresh.
-  ComputeChargeMesh(box, molCoords);
-  fftw_execute(fwdPlan[box]);
-
-  // Sum energy from S_trial (where fftw_execute wrote)
-  tempEnergyRecip[box] =
-      SumMeshEnergy(box, S_trial[box], &tempVirialRecip[box]);
-
-  // Update sysPotRef and S_ref
-  const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
-      tempEnergyRecip[box];
-  const_cast<SystemPotential &>(sysPotRef).boxVirial[box].recip =
-      tempVirialRecip[box].recip;
-  for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < 3; j++) {
-      const_cast<SystemPotential &>(sysPotRef).boxVirial[box].recipTens[i][j] =
-          tempVirialRecip[box].recipTens[i][j];
-    }
-  }
-
-  // Synchronize S_ref with S_trial
-  int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
-  for (int i = 0; i < nk; ++i) {
-    S_ref[box][i][0] = S_trial[box][i][0];
-    S_ref[box][i][1] = S_trial[box][i][1];
-  }
+  // This is a full refresh. Update trial axes and use Setup logic.
+  trialAxes[box] = currentAxes;
+  RecipInit(box, currentAxes);
+  BoxReciprocalSetup(box, molCoords);
+  
+  // Immediately accept results into reference
+  UpdateRecipVec(box);
 }
 
 double EwaldPME::BoxReciprocal(uint box, bool isNewVolume) const {
@@ -179,25 +197,23 @@ double EwaldPME::BoxReciprocal(uint box, bool isNewVolume) const {
   return isNewVolume ? tempEnergyRecip[box] : sysPotRef.boxEnergy[box].recip;
 }
 
+void EwaldPME::RecipInit(uint box, BoxDimensions const &axes) {
+  Ewald::RecipInit(box, axes);
+  trialAxes[box] = axes;
+}
+
 void EwaldPME::UpdateRecipVec(uint box) {
   if (box >= BOXES_WITH_U_NB)
     return;
 
-  // Swap K
-  for (int i = 0; i < 3; ++i) {
-    int kt = K[box][i];
-    K[box][i] = K_trial[box][i];
-    K_trial[box][i] = kt;
-  }
+  // We no longer swap pointers in the array.
+  // Instead we copy data from trial to reference.
+  int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
+  std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
+  std::memcpy(greenFunc[box], greenFunc_trial[box], sizeof(double) * nk);
 
-  // Swap pointers
-  fftw_complex *st = S_ref[box];
-  S_ref[box] = S_trial[box];
-  S_trial[box] = st;
-
-  double *gt = greenFunc[box];
-  greenFunc[box] = greenFunc_trial[box];
-  greenFunc_trial[box] = gt;
+  // Update green function factor for the current axes if needed
+  trialAxes[box] = currentAxes;
 
   // Update sysPotRef
   const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
@@ -210,6 +226,35 @@ void EwaldPME::UpdateRecipVec(uint box) {
           tempVirialRecip[box].recipTens[i][j];
     }
   }
+  
+  // Potential mesh must be recomputed for the new state
+  UpdatePotentialMesh(box);
+}
+
+void EwaldPME::UpdateRecip(uint box) {
+  if (box >= BOXES_WITH_U_NB || !pendingUpdate || box != cachedBox)
+    return;
+
+  if (forceFullUpdate) {
+    BoxReciprocalSetup(box, currentCoords);
+    int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
+    std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
+    UpdatePotentialMesh(box);
+  } else {
+    // Apply incremental update using DeltaERecip with updateSRef = true
+    const XYZArray *pNew = (cachedSignNew != 0.0) ? &cachedNewCoords : nullptr;
+    const XYZArray *pOld = (cachedSignOld != 0.0) ? &cachedOldCoords : nullptr;
+    DeltaERecip(box, pNew, cachedSignNew, pOld, cachedSignOld,
+                cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms,
+                true);
+  }
+
+  // NOTE: We INTENTIONALLY DO NOT overwrite sysPotRef.boxEnergy[box].recip
+  // because GOMC accumulated dE correctly into it. Overwriting it with
+  // currentEnergyRecip (which is unmaintained in PME) destroys the tracker.
+
+  pendingUpdate = false;
+  forceFullUpdate = false;
 }
 
 Virial EwaldPME::VirialReciprocal(Virial &virial, uint box) const {
@@ -261,10 +306,10 @@ void EwaldPME::AddMoleculeToMesh(uint box, uint molIndex,
 
     double charge = thisKind.AtomCharge(i) * lambdaCoef;
     XYZ r = molCoords.Get(atomIndex);
-    XYZ s = currentAxes.TransformUnSlant(r, box);
-    double sx = s.x / currentAxes.axis.Get(box).x;
-    double sy = s.y / currentAxes.axis.Get(box).y;
-    double sz = s.z / currentAxes.axis.Get(box).z;
+    XYZ s = trialAxes[box].TransformUnSlant(r, box);
+    double sx = s.x / trialAxes[box].axis.Get(box).x;
+    double sy = s.y / trialAxes[box].axis.Get(box).y;
+    double sz = s.z / trialAxes[box].axis.Get(box).z;
 
     sx -= std::floor(sx);
     sy -= std::floor(sy);
@@ -310,7 +355,7 @@ void EwaldPME::ComputeGreenFunction(uint box) {
   std::vector<double> by = bspline::BSplineModuli(Ky, pmeOrder);
   std::vector<double> bz = bspline::BSplineModuli(Kz, pmeOrder);
 
-  double volume = currentAxes.volume[box];
+  double volume = trialAxes[box].volume[box];
   // Standard Ewald scaling: 4*PI * qqFact / V
   double fac = 4.0 * M_PI * num::qqFact / volume;
 
@@ -337,9 +382,9 @@ void EwaldPME::ComputeGreenFunction(uint box) {
       continue;
     }
 
-    double kx_cart = 2.0 * M_PI * kx_int / currentAxes.axis.Get(box).x;
-    double ky_cart = 2.0 * M_PI * ky_int / currentAxes.axis.Get(box).y;
-    double kz_cart = 2.0 * M_PI * iz / currentAxes.axis.Get(box).z;
+    double kx_cart = 2.0 * M_PI * kx_int / trialAxes[box].axis.Get(box).x;
+    double ky_cart = 2.0 * M_PI * ky_int / trialAxes[box].axis.Get(box).y;
+    double kz_cart = 2.0 * M_PI * iz / trialAxes[box].axis.Get(box).z;
     double kSq = kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
 
     double BFunc = bx[ix] * by[iy] * bz[iz];
@@ -390,9 +435,9 @@ double EwaldPME::SumMeshEnergy(uint box, const fftw_complex *S,
     if (virial) {
       int kx_int = (ix <= Kx / 2) ? ix : ix - Kx;
       int ky_int = (iy <= Ky / 2) ? iy : iy - Ky;
-      double kx_cart = 2.0 * M_PI * kx_int / currentAxes.axis.Get(box).x;
-      double ky_cart = 2.0 * M_PI * ky_int / currentAxes.axis.Get(box).y;
-      double kz_cart = 2.0 * M_PI * iz / currentAxes.axis.Get(box).z;
+      double kx_cart = 2.0 * M_PI * kx_int / trialAxes[box].axis.Get(box).x;
+      double ky_cart = 2.0 * M_PI * ky_int / trialAxes[box].axis.Get(box).y;
+      double kz_cart = 2.0 * M_PI * iz / trialAxes[box].axis.Get(box).z;
       double kSq = kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
 
       double common = 2.0 * (constVal + 1.0 / kSq);
@@ -411,54 +456,100 @@ double EwaldPME::SumMeshEnergy(uint box, const fftw_complex *S,
 
   return energy;
 }
-
-// ---------------------------------------------------------------------------
-// Helper: accumulate ΔS(m) for a set of atoms into a pre-allocated complex
-// array dS (same layout as S_ref: size (Kx*Ky*(Kz/2+1))).
-// sign   = +1 (insert) or -1 (remove).
-// ---------------------------------------------------------------------------
-void EwaldPME::ComputeMolDeltaS(uint box, const XYZArray &coords,
-                                const uint *atomIdx, const double *charges,
-                                uint nAtoms, double sign,
-                                fftw_complex *dS) const {
+void EwaldPME::UpdatePotentialMesh(uint box) {
+  if (box >= BOXES_WITH_U_NB || S_ref[box] == nullptr)
+    return;
   int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
   int halfKz = Kz / 2 + 1;
+  int nk = Kx * Ky * halfKz;
+  double *G = greenFunc[box];
+  fftw_complex *stref = S_ref[box];
 
-#ifdef _OPENMP
-#pragma omp parallel for default(shared)
-#endif
-  for (int a = 0; a < (int)nAtoms; ++a) {
-    AddAtomToDeltaS(box, atomIdx[a], sign * charges[a], coords, dS);
+  // We use S_trial as a temporary buffer to avoid modifying S_ref.
+  // We need to compute V(m) = G(m) * S_ref(m)
+  for (int i = 0; i < nk; ++i) {
+    S_trial[box][i][0] = G[i] * stref[i][0];
+    S_trial[box][i][1] = G[i] * stref[i][1];
+  }
+
+  // Backward FFT to get potential in real space
+  fftw_execute(bwdPlan[box]);
+
+  // Normalize by number of grid points (standard for IFFT)
+  // HOWEVER: the real space dot product \sum q \phi(r) equals \sum_m S(m) V(m)
+  // ONLY IF the iFFT is unnormalized (i.e., just \sum V(m) exp(i m r)).
+  // FFTW backward transform calculates exactly this. Dividing by N breaks Parseval's theorem!
+  // We MUST leave potentialMesh unnormalized.
+  // int N = Kx * Ky * Kz;
+  // double invN = 1.0 / (double)N;
+  // double *mesh = potentialMesh[box];
+  // for (int i = 0; i < N; ++i) {
+  //   mesh[i] *= invN;
+  // }
+}
+
+void EwaldPME::UpdateAtomInMesh(uint box, const double *charges, uint nAtoms,
+                                const XYZArray &coords, double sign) {
+  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
+  double bs_x[20], bs_y[20], bs_z[20];
+  for (uint i = 0; i < nAtoms; ++i) {
+    double charge = charges[i] * sign;
+    XYZ r = coords.Get(i);
+    XYZ s = currentAxes.TransformUnSlant(r, box);
+    double sx = s.x / currentAxes.axis.Get(box).x;
+    double sy = s.y / currentAxes.axis.Get(box).y;
+    double sz = s.z / currentAxes.axis.Get(box).z;
+    sx -= floor(sx); sy -= floor(sy); sz -= floor(sz);
+
+    double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
+    bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x);
+    bspline::EvalAll(pmeOrder, uy - floor(uy), bs_y);
+    bspline::EvalAll(pmeOrder, uz - floor(uz), bs_z);
+
+    int nx = (int)floor(ux) - pmeOrder + 1;
+    int ny = (int)floor(uy) - pmeOrder + 1;
+    int nz = (int)floor(uz) - pmeOrder + 1;
+
+    for (int ix = 0; ix < pmeOrder; ++ix) {
+      int gx = ((nx + ix) % Kx + Kx) % Kx;
+      double wx = bs_x[pmeOrder - 1 - ix];
+      for (int iy = 0; iy < pmeOrder; ++iy) {
+        int gy = ((ny + iy) % Ky + Ky) % Ky;
+        double wy = wx * bs_y[pmeOrder - 1 - iy];
+        for (int iz = 0; iz < pmeOrder; ++iz) {
+          int gz = ((nz + iz) % Kz + Kz) % Kz;
+          double w = charge * wy * bs_z[pmeOrder - 1 - iz];
+          int idx = (gx * Ky + gy) * Kz + gz;
+          chargeMesh[box][idx] += w;
+        }
+      }
+    }
   }
 }
 
-void EwaldPME::AddAtomToDeltaS(uint box, uint atomIdx, double charge,
-                               const XYZArray &coords, fftw_complex *dS) const {
+double EwaldPME::InterpolatePotential(uint box, const XYZ &r) const {
   int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
-  int halfKz = Kz / 2 + 1;
+  double *vMesh = potentialMesh[box];
 
-  XYZ r = coords.Get(atomIdx);
   XYZ s = currentAxes.TransformUnSlant(r, box);
   double sx = s.x / currentAxes.axis.Get(box).x;
   double sy = s.y / currentAxes.axis.Get(box).y;
   double sz = s.z / currentAxes.axis.Get(box).z;
-  sx -= std::floor(sx);
-  sy -= std::floor(sy);
-  sz -= std::floor(sz);
+  sx -= floor(sx);
+  sy -= floor(sy);
+  sz -= floor(sz);
 
   double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
   double bs_x[20], bs_y[20], bs_z[20];
-  bspline::EvalAll(pmeOrder, ux - std::floor(ux), bs_x);
-  bspline::EvalAll(pmeOrder, uy - std::floor(uy), bs_y);
-  bspline::EvalAll(pmeOrder, uz - std::floor(uz), bs_z);
+  bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x);
+  bspline::EvalAll(pmeOrder, uy - floor(uy), bs_y);
+  bspline::EvalAll(pmeOrder, uz - floor(uz), bs_z);
 
-  int nx = (int)std::floor(ux) - pmeOrder + 1;
-  int ny = (int)std::floor(uy) - pmeOrder + 1;
-  int nz = (int)std::floor(uz) - pmeOrder + 1;
+  int nx = (int)floor(ux) - pmeOrder + 1;
+  int ny = (int)floor(uy) - pmeOrder + 1;
+  int nz = (int)floor(uz) - pmeOrder + 1;
 
-  // Since this is incremental and only for 1 atom at a time in trials,
-  // we could use separability here too, but for one atom P^3 is small.
-  // However, dS is SHARED, so we need atomic updates.
+  double atomPotential = 0.0;
   for (int ix = 0; ix < pmeOrder; ++ix) {
     int gx = ((nx + ix) % Kx + Kx) % Kx;
     double wx = bs_x[pmeOrder - 1 - ix];
@@ -467,31 +558,72 @@ void EwaldPME::AddAtomToDeltaS(uint box, uint atomIdx, double charge,
       double wy = wx * bs_y[pmeOrder - 1 - iy];
       for (int iz = 0; iz < pmeOrder; ++iz) {
         int gz = ((nz + iz) % Kz + Kz) % Kz;
-        double w = charge * wy * bs_z[pmeOrder - 1 - iz];
+        double w = wy * bs_z[pmeOrder - 1 - iz];
+        int idx = (gx * Ky + gy) * Kz + gz;
+        atomPotential += w * vMesh[idx];
+      }
+    }
+  }
+  return atomPotential;
+}
 
-        for (int kmx = 0; kmx < Kx; ++kmx) {
-          int kxi = (kmx <= Kx / 2) ? kmx : kmx - Kx;
-          double phx = -2.0 * M_PI * kxi * gx / Kx;
-          for (int kmy = 0; kmy < Ky; ++kmy) {
-            int kyi = (kmy <= Ky / 2) ? kmy : kmy - Ky;
-            double phy = phx - 2.0 * M_PI * kyi * gy / Ky;
-            for (int kmz = 0; kmz < halfKz; ++kmz) {
-              double phase = phy - 2.0 * M_PI * kmz * gz / Kz;
-              int kidx = (kmx * Ky + kmy) * halfKz + kmz;
-#ifdef _OPENMP
-#pragma omp atomic update
-#endif
-              dS[kidx][0] += w * std::cos(phase);
-#ifdef _OPENMP
-#pragma omp atomic update
-#endif
-              dS[kidx][1] += w * std::sin(phase);
-            }
+// ---------------------------------------------------------------------------
+// Core incremental energy update.
+// ΔE = Σ_m C(m) · [Re(S_ref(m)·ΔS*(m)) + ½|ΔS(m)|²]
+// If updateSRef: S_ref(m) += ΔS(m)  (called on accept)
+// ---------------------------------------------------------------------------
+double EwaldPME::ComputeDeltaSsq(uint box, const XYZArray *newCoords, double sign_new,
+                                 const XYZArray *oldCoords, double sign_old,
+                                 const uint *atomIndices, const double *charges,
+                                 uint nAtoms) const {
+  if (nAtoms == 0)
+    return 0.0;
+
+  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
+  int N = Kx * Ky * Kz;
+  double *mesh = const_cast<double *>(scratchMesh[box]);
+  std::fill(mesh, mesh + N, 0.0);
+
+  double bs_x[20], bs_y[20], bs_z[20];
+  auto addAtoms = [&](const XYZArray *coords, double sign) {
+    if (!coords) return;
+    for (uint i = 0; i < nAtoms; ++i) {
+      if (particleHasNoCharge[atomIndices[i]]) continue;
+      double charge = charges[i] * sign;
+      XYZ r = coords->Get(i);
+      XYZ s = currentAxes.TransformUnSlant(r, box);
+      double sx = s.x / currentAxes.axis.Get(box).x;
+      double sy = s.y / currentAxes.axis.Get(box).y;
+      double sz = s.z / currentAxes.axis.Get(box).z;
+      sx -= floor(sx); sy -= floor(sy); sz -= floor(sz);
+      double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
+      bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x);
+      bspline::EvalAll(pmeOrder, uy - floor(uy), bs_y);
+      bspline::EvalAll(pmeOrder, uz - floor(uz), bs_z);
+      int nx = (int)floor(ux) - pmeOrder + 1;
+      int ny = (int)floor(uy) - pmeOrder + 1;
+      int nz = (int)floor(uz) - pmeOrder + 1;
+      for (int ix = 0; ix < pmeOrder; ++ix) {
+        int gx = ((nx + ix) % Kx + Kx) % Kx;
+        double wx = bs_x[pmeOrder - 1 - ix];
+        for (int iy = 0; iy < pmeOrder; ++iy) {
+          int gy = ((ny + iy) % Ky + Ky) % Ky;
+          double wy = wx * bs_y[pmeOrder - 1 - iy];
+          for (int iz = 0; iz < pmeOrder; ++iz) {
+            int gz = ((nz + iz) % Kz + Kz) % Kz;
+            double w = charge * wy * bs_z[pmeOrder - 1 - iz];
+            mesh[(gx * Ky + gy) * Kz + gz] += w;
           }
         }
       }
     }
-  }
+  };
+
+  addAtoms(newCoords, sign_new);
+  addAtoms(oldCoords, sign_old);
+
+  fftw_execute(scratchPlan[box]);
+  return SumMeshEnergy(box, S_delta[box]);
 }
 
 // ---------------------------------------------------------------------------
@@ -507,59 +639,43 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
   if (box >= BOXES_WITH_U_NB || S_ref == nullptr || S_ref[box] == nullptr)
     return 0.0;
 
-  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
-  int halfKz = Kz / 2 + 1;
-  int nk = Kx * Ky * halfKz;
-
-  // Allocate ΔS buffer (zero-initialized)
-  std::vector<fftw_complex> dS(nk);
-  for (int i = 0; i < nk; ++i) {
-    dS[i][0] = dS[i][1] = 0.0;
-  }
-
-  // Accumulate contributions from new and old positions
-  if (newCoords)
-    ComputeMolDeltaS(box, *newCoords, atomIndices, charges, nAtoms, sign_new,
-                     dS.data());
-  if (oldCoords)
-    ComputeMolDeltaS(box, *oldCoords, atomIndices, charges, nAtoms, sign_old,
-                     dS.data());
-
   double dE = 0.0;
-  double *G = greenFunc[box];
-  fftw_complex *stref = S_ref[box];
-
-#ifdef _OPENMP
-#pragma omp parallel for default(shared) reduction(+ : dE)
-#endif
-  for (int i = 0; i < nk; ++i) {
-    // Reconstruct kmz for weight calculation
-    int kmz = i % halfKz;
-    // Reconstruct kmx, kmy to check for origin skip
-    int kmy_kmz = i / halfKz;
-    int kmx = kmy_kmz / Ky;
-    int kmy = kmy_kmz % Ky;
-
-    if (kmx == 0 && kmy == 0 && kmz == 0)
-      continue;
-
-    double dre = dS[i][0], dim = dS[i][1];
-    double dSsq = dre * dre + dim * dim;
-    double cross = stref[i][0] * dre + stref[i][1] * dim;
-
-    double weight = (kmz == 0 || (Kz % 2 == 0 && kmz == Kz / 2)) ? 1.0 : 2.0;
-    dE += weight * G[i] * (cross + 0.5 * dSsq);
+  // Background interaction part: Interpolate potential Mesh at new/old positions
+  // ΔE_back = Σ q_i_new φ(r_i_new) - Σ q_i_old φ(r_i_old)
+  if (newCoords) {
+    for (uint a = 0; a < nAtoms; ++a) {
+      if (!particleHasNoCharge[atomIndices[a]]) {
+        dE += sign_new * charges[a] *
+              InterpolatePotential(box, newCoords->Get(a));
+      }
+    }
   }
+  if (oldCoords) {
+    for (uint a = 0; a < nAtoms; ++a) {
+      if (!particleHasNoCharge[atomIndices[a]]) {
+        dE += sign_old * charges[a] *
+              InterpolatePotential(box, oldCoords->Get(a));
+      }
+    }
+  }
+
+  // Self-energy part: 0.5 * Σ G(m) |ΔS(m)|^2
+  dE += ComputeDeltaSsq(box, newCoords, sign_new, oldCoords, sign_old, 
+                        atomIndices, charges, nAtoms);
 
   // Optionally commit the update to S_ref (on move acceptance)
   if (updateSRef) {
-#ifdef _OPENMP
-#pragma omp parallel for default(shared)
-#endif
+    if (oldCoords) UpdateAtomInMesh(box, charges, nAtoms, *oldCoords, sign_old);
+    if (newCoords) UpdateAtomInMesh(box, charges, nAtoms, *newCoords, sign_new);
+    fftw_execute(fwdPlan[box]);
+    
+    // Synchronize S_ref with S_trial (which now holds the updated GLOBAL S)
+    int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
     for (int i = 0; i < nk; ++i) {
-      stref[i][0] += dS[i][0];
-      stref[i][1] += dS[i][1];
+      S_ref[box][i][0] = S_trial[box][i][0];
+      S_ref[box][i][1] = S_trial[box][i][1];
     }
+    UpdatePotentialMesh(box);
   }
 
   return dE;
@@ -588,7 +704,22 @@ double EwaldPME::MolReciprocal(XYZArray const &molCoords, const uint molIndex,
 
   // Old positions are in currentCoords; new positions in molCoords
   // ΔE = E(new) - E(old)  => sign_new=+1, sign_old=-1
-  return DeltaERecip(box, &molCoords, +1.0, &currentCoords, -1.0, idx.data(),
+  XYZArray localOld(nAtoms);
+  for (uint i = 0; i < nAtoms; ++i) {
+    localOld.Set(i, currentCoords.Get(idx[i]));
+  }
+  cachedBox = box;
+  cachedSignNew = +1.0;
+  cachedSignOld = -1.0;
+  cachedNewCoords = molCoords;
+  cachedOldCoords = localOld;
+  cachedAtomIndices = idx;
+  cachedCharges = chg;
+  cachedNAtoms = nAtoms;
+  pendingUpdate = true;
+  forceFullUpdate = false;
+
+  return DeltaERecip(box, &molCoords, +1.0, &localOld, -1.0, idx.data(),
                      chg.data(), nAtoms, /*updateSRef=*/false);
 }
 
@@ -610,6 +741,17 @@ double EwaldPME::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box,
 
   // Insertion into dest box: new coords only (no old positions)
   const XYZArray &coords = newMol.GetCoords();
+
+  cachedBox = box;
+  cachedSignNew = +1.0;
+  cachedSignOld = 0.0;
+  cachedNewCoords = coords;
+  cachedAtomIndices = idx;
+  cachedCharges = chg;
+  cachedNAtoms = nAtoms;
+  pendingUpdate = true;
+  forceFullUpdate = false;
+
   return DeltaERecip(box, &coords, +1.0, nullptr, 0.0, idx.data(), chg.data(),
                      nAtoms, false);
 }
@@ -632,6 +774,17 @@ double EwaldPME::SwapSourceRecip(const cbmc::TrialMol &oldMol, const uint box,
 
   // Removal from source box: old coords only (negate)
   const XYZArray &coords = oldMol.GetCoords();
+
+  cachedBox = box;
+  cachedSignNew = 0.0;
+  cachedSignOld = -1.0;
+  cachedOldCoords = coords;
+  cachedAtomIndices = idx;
+  cachedCharges = chg;
+  cachedNAtoms = nAtoms;
+  pendingUpdate = true;
+  forceFullUpdate = false;
+
   return DeltaERecip(box, nullptr, 0.0, &coords, -1.0, idx.data(), chg.data(),
                      nAtoms, false);
 }
@@ -661,6 +814,16 @@ double EwaldPME::ChangeLambdaRecip(XYZArray const &molCoords,
   }
 
   // Inject additional charge at same positions
+  cachedBox = box;
+  cachedSignNew = +1.0;
+  cachedSignOld = 0.0;
+  cachedNewCoords = molCoords;
+  cachedAtomIndices = idx;
+  cachedCharges = chg;
+  cachedNAtoms = nAtoms;
+  pendingUpdate = true;
+  forceFullUpdate = false;
+
   return DeltaERecip(box, &molCoords, +1.0, nullptr, 0.0, idx.data(),
                      chg.data(), nAtoms, false);
 }
@@ -673,6 +836,12 @@ EwaldPME::MolExchangeReciprocal(const std::vector<cbmc::TrialMol> &newMol,
                                 bool first_call) {
 
   double dE = 0.0;
+
+  if (!newMol.empty() || !oldMol.empty()) {
+    cachedBox = !newMol.empty() ? newMol[0].GetBox() : oldMol[0].GetBox();
+    pendingUpdate = true;
+    forceFullUpdate = true; // Use full refresh for complex exchange moves
+  }
 
   // Insertions (into dest boxes)
   for (uint i = 0; i < newMol.size(); ++i) {
