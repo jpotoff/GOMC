@@ -1,13 +1,13 @@
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <utility>
 #include <vector>
-#include <cstring>
 
-#include "EwaldPME.h"
 #include "BSpline.h"
 #include "BoxDimensions.h"
 #include "EnergyTypes.h"
+#include "EwaldPME.h"
 #include "NumLib.h"
 #include "StaticVals.h"
 #include "System.h"
@@ -47,14 +47,22 @@ EwaldPME::EwaldPME(StaticVals &stat, System &sys) : Ewald(stat, sys) {
 
 EwaldPME::~EwaldPME() {
   for (uint b = 0; b < BOX_TOTAL; b++) {
-    if (S_ref && S_ref[b]) fftw_free(S_ref[b]);
-    if (greenFunc && greenFunc[b]) delete[] greenFunc[b];
-    if (chargeMesh && chargeMesh[b]) fftw_free(chargeMesh[b]);
-    if (potentialMesh && potentialMesh[b]) fftw_free(potentialMesh[b]);
-    if (fwdPlan[b]) fftw_destroy_plan(fwdPlan[b]);
-    if (bwdPlan[b]) fftw_destroy_plan(bwdPlan[b]);
-    if (S_trial && S_trial[b]) fftw_free(S_trial[b]);
-    if (greenFunc_trial && greenFunc_trial[b]) delete[] greenFunc_trial[b];
+    if (S_ref && S_ref[b])
+      fftw_free(S_ref[b]);
+    if (greenFunc && greenFunc[b])
+      delete[] greenFunc[b];
+    if (chargeMesh && chargeMesh[b])
+      fftw_free(chargeMesh[b]);
+    if (potentialMesh && potentialMesh[b])
+      fftw_free(potentialMesh[b]);
+    if (fwdPlan[b])
+      fftw_destroy_plan(fwdPlan[b]);
+    if (bwdPlan[b])
+      fftw_destroy_plan(bwdPlan[b]);
+    if (S_trial && S_trial[b])
+      fftw_free(S_trial[b]);
+    if (greenFunc_trial && greenFunc_trial[b])
+      delete[] greenFunc_trial[b];
   }
   delete[] S_ref;
   delete[] greenFunc;
@@ -127,40 +135,55 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
 
   if (kChanged || fwdPlan[box] == nullptr) {
     // Destroy old plans if they exist
-    if (fwdPlan[box]) fftw_destroy_plan(fwdPlan[box]);
-    if (bwdPlan[box]) fftw_destroy_plan(bwdPlan[box]);
-    if (scratchPlan[box]) fftw_destroy_plan(scratchPlan[box]);
+    if (fwdPlan[box])
+      fftw_destroy_plan(fwdPlan[box]);
+    if (bwdPlan[box])
+      fftw_destroy_plan(bwdPlan[box]);
+    if (scratchPlan[box])
+      fftw_destroy_plan(scratchPlan[box]);
 
     // Free old buffers if they exist
-    if (S_ref[box]) fftw_free(S_ref[box]);
-    if (S_trial[box]) fftw_free(S_trial[box]);
-    if (chargeMesh[box]) fftw_free(chargeMesh[box]);
-    if (potentialMesh[box]) fftw_free(potentialMesh[box]);
-    if (scratchMesh[box]) fftw_free(scratchMesh[box]);
-    if (S_delta[box]) fftw_free(S_delta[box]);
-    if (greenFunc[box]) delete[] greenFunc[box];
-    if (greenFunc_trial[box]) delete[] greenFunc_trial[box];
+    if (S_ref[box])
+      fftw_free(S_ref[box]);
+    if (S_trial[box])
+      fftw_free(S_trial[box]);
+    if (chargeMesh[box])
+      fftw_free(chargeMesh[box]);
+    if (potentialMesh[box])
+      fftw_free(potentialMesh[box]);
+    if (scratchMesh[box])
+      fftw_free(scratchMesh[box]);
+    if (S_delta[box])
+      fftw_free(S_delta[box]);
+    if (greenFunc[box])
+      delete[] greenFunc[box];
+    if (greenFunc_trial[box])
+      delete[] greenFunc_trial[box];
 
     // Allocate new buffers
     S_ref[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
-    S_trial[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
+    S_trial[box] =
+        (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
     chargeMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
     potentialMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
     scratchMesh[box] = (double *)fftw_malloc(sizeof(double) * N);
-    S_delta[box] = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
+    S_delta[box] =
+        (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * N_complex);
     greenFunc[box] = new double[N_complex];
     greenFunc_trial[box] = new double[N_complex];
 
     // Create new plans bound to these specific buffers
-    fwdPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, chargeMesh[box], S_trial[box],
-                                        FFTW_ESTIMATE);
-    bwdPlan[box] = fftw_plan_dft_c2r_3d(Kx, Ky, Kz, S_trial[box], potentialMesh[box],
-                                        FFTW_ESTIMATE);
-    scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box], S_delta[box],
-                                            FFTW_ESTIMATE);
-    
+    fwdPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, chargeMesh[box],
+                                        S_trial[box], FFTW_ESTIMATE);
+    bwdPlan[box] = fftw_plan_dft_c2r_3d(Kx, Ky, Kz, S_trial[box],
+                                        potentialMesh[box], FFTW_ESTIMATE);
+    scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box],
+                                            S_delta[box], FFTW_ESTIMATE);
+
     // Sync permanent grid dimensions
-    K[box][0] = Kx; K[box][1] = Ky; K[box][2] = Kz;
+    K[box][0] = Kx;
+    K[box][1] = Ky;
+    K[box][2] = Kz;
   }
 
   // Temporarily point greenFunc[box] to the trial buffer for calculation
@@ -185,7 +208,7 @@ void EwaldPME::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
   // This is a full refresh. Use Setup logic then immediately accept results.
   RecipInit(box, currentAxes);
   BoxReciprocalSetup(box, molCoords);
-  
+
   // Immediately accept results into reference
   UpdateRecipVec(box);
 }
@@ -222,10 +245,10 @@ void EwaldPME::UpdateRecipVec(uint box) {
           tempVirialRecip[box].recipTens[i][j];
     }
   }
-  
+
   // Sync trialAxes so subsequent per-molecule moves see consistent geometry.
   trialAxes[box] = currentAxes;
-  
+
   // Potential mesh must be recomputed for the new state
   UpdatePotentialMesh(box);
 }
@@ -243,17 +266,18 @@ void EwaldPME::UpdateRecip(uint box) {
     // Apply incremental update using DeltaERecip with updateSRef = true
     const XYZArray *pNew = (cachedSignNew != 0.0) ? &cachedNewCoords : nullptr;
     const XYZArray *pOld = (cachedSignOld != 0.0) ? &cachedOldCoords : nullptr;
-    double exactRecip = DeltaERecip(box, pNew, cachedSignNew, pOld, cachedSignOld,
-                                    cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms,
-                                    true);
+    double exactRecip = DeltaERecip(box, pNew, cachedSignNew, pOld,
+                                    cachedSignOld, cachedAtomIndices.data(),
+                                    cachedCharges.data(), cachedNAtoms, true);
     const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip = exactRecip;
   }
 
-  // NOTE: By explicitly overriding sysPotRef.boxEnergy[box].recip with the newly
-  // calculated exact mesh reciprocal energy from DeltaERecip(..., true), we 
-  // eliminate interpolation drift. This is mathematically necessary because VolumeTransfer 
-  // evaluates the trial volume's BoxReciprocal() exact energy and compares it 
-  // against sysPotRef. Any accumulated interpolation drift artificially biases NPT moves.
+  // NOTE: By explicitly overriding sysPotRef.boxEnergy[box].recip with the
+  // newly calculated exact mesh reciprocal energy from DeltaERecip(..., true),
+  // we eliminate interpolation drift. This is mathematically necessary because
+  // VolumeTransfer evaluates the trial volume's BoxReciprocal() exact energy
+  // and compares it against sysPotRef. Any accumulated interpolation drift
+  // artificially biases NPT moves.
 
   pendingUpdate = false;
   forceFullUpdate = false;
@@ -269,16 +293,18 @@ void EwaldPME::Maintain(const ulong step) {
 }
 
 // Called by GOMC when a volume move is rejected, to undo the trial state.
-// The base Ewald class no-ops here, but EwaldPME must restore chargeMesh because
-// BoxReciprocalSetup overwrites it with the trial charge density and leaves it
-// corrupted after a rejection (currentCoords and box revert, but chargeMesh does not).
+// The base Ewald class no-ops here, but EwaldPME must restore chargeMesh
+// because BoxReciprocalSetup overwrites it with the trial charge density and
+// leaves it corrupted after a rejection (currentCoords and box revert, but
+// chargeMesh does not).
 void EwaldPME::RestoreMol(int molIndex) {
   cachedSignNew = 0.0;
   pendingUpdate = false;
 }
 
 void EwaldPME::exgMolCache() {
-  Ewald::exgMolCache(); // call base (currently a no-op, but keeps the chain intact)
+  Ewald::exgMolCache(); // call base (currently a no-op, but keeps the chain
+                        // intact)
   for (uint box = 0; box < BOXES_WITH_U_NB; ++box) {
     if (chargeMesh[box] != nullptr) {
       // Check if K dimensions were corrupted by a rejected volume trial
@@ -291,28 +317,35 @@ void EwaldPME::exgMolCache() {
       int Ky = (pmeOrder > k1) ? pmeOrder : k1;
       int Kz = (pmeOrder > k2) ? pmeOrder : k2;
 
-      if (Kx % 2 != 0) Kx++;
-      if (Ky % 2 != 0) Ky++;
-      if (Kz % 2 != 0) Kz++;
+      if (Kx % 2 != 0)
+        Kx++;
+      if (Ky % 2 != 0)
+        Ky++;
+      if (Kz % 2 != 0)
+        Kz++;
 
       if (K[box][0] != Kx || K[box][1] != Ky || K[box][2] != Kz) {
-        // K dimensions were permanently altered during BoxReciprocalSetup but the move was rejected.
-        // The previously committed S_ref and potentialMesh were destroyed. Rebuild them completely.
+        // K dimensions were permanently altered during BoxReciprocalSetup but
+        // the move was rejected. The previously committed S_ref and
+        // potentialMesh were destroyed. Rebuild them completely.
         BoxReciprocalSums(box, currentCoords);
       } else {
-        // Restore trialAxes and Green function to the committed (current) volume.
+        // Restore trialAxes and Green function to the committed (current)
+        // volume.
         RecipInit(box, currentAxes);
         // Rebuild chargeMesh to reflect the committed (current) coordinates.
         ComputeChargeMesh(box, currentCoords);
         // CRITICAL: Recompute S_ref from the restored chargeMesh.
-        // BoxReciprocalSetup wrote the trial FFT into S_trial; the fwdPlan target
-        // is S_trial. We must write the current-state FFT back to S_ref.
+        // BoxReciprocalSetup wrote the trial FFT into S_trial; the fwdPlan
+        // target is S_trial. We must write the current-state FFT back to S_ref.
         // Execute the forward FFT (writes to S_trial as per the plan)...
         fftw_execute(fwdPlan[box]);
-        // ...then copy S_trial → S_ref (same as UpdateRecipVec does on acceptance).
+        // ...then copy S_trial → S_ref (same as UpdateRecipVec does on
+        // acceptance).
         int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
         std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
-        // Rebuild the real-space potential mesh so interpolation reads fresh data.
+        // Rebuild the real-space potential mesh so interpolation reads fresh
+        // data.
         UpdatePotentialMesh(box);
         // Recompute exact energy and store in sysPotRef to stay consistent.
         const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
@@ -476,8 +509,7 @@ double EwaldPME::SumMeshEnergy(uint box, const fftw_complex *S,
   double *Gptr = greenFunc[box];
 
 #ifdef _OPENMP
-#pragma omp parallel for default(shared)                                       \
-    reduction(+ : energy, wT11, wT22, wT33)
+#pragma omp parallel for default(shared) reduction(+ : energy, wT11, wT22, wT33)
 #endif
   for (int i = 0; i < nk; ++i) {
     int iz = i % halfKz;
@@ -543,11 +575,9 @@ void EwaldPME::UpdatePotentialMesh(uint box) {
   // Normalize by number of grid points (standard for IFFT)
   // HOWEVER: the real space dot product \sum q \phi(r) equals \sum_m S(m) V(m)
   // ONLY IF the iFFT is unnormalized (i.e., just \sum V(m) exp(i m r)).
-  // FFTW backward transform calculates exactly this. Dividing by N breaks Parseval's theorem!
-  // We MUST leave potentialMesh unnormalized.
-  // int N = Kx * Ky * Kz;
-  // double invN = 1.0 / (double)N;
-  // double *mesh = potentialMesh[box];
+  // FFTW backward transform calculates exactly this. Dividing by N breaks
+  // Parseval's theorem! We MUST leave potentialMesh unnormalized. int N = Kx *
+  // Ky * Kz; double invN = 1.0 / (double)N; double *mesh = potentialMesh[box];
   // for (int i = 0; i < N; ++i) {
   //   mesh[i] *= invN;
   // }
@@ -564,7 +594,9 @@ void EwaldPME::UpdateAtomInMesh(uint box, const double *charges, uint nAtoms,
     double sx = s.x / currentAxes.axis.Get(box).x;
     double sy = s.y / currentAxes.axis.Get(box).y;
     double sz = s.z / currentAxes.axis.Get(box).z;
-    sx -= floor(sx); sy -= floor(sy); sz -= floor(sz);
+    sx -= floor(sx);
+    sy -= floor(sy);
+    sz -= floor(sz);
 
     double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
     bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x);
@@ -637,10 +669,10 @@ double EwaldPME::InterpolatePotential(uint box, const XYZ &r) const {
 // ΔE = Σ_m C(m) · [Re(S_ref(m)·ΔS*(m)) + ½|ΔS(m)|²]
 // If updateSRef: S_ref(m) += ΔS(m)  (called on accept)
 // ---------------------------------------------------------------------------
-double EwaldPME::ComputeDeltaSsq(uint box, const XYZArray *newCoords, double sign_new,
-                                 const XYZArray *oldCoords, double sign_old,
-                                 const uint *atomIndices, const double *charges,
-                                 uint nAtoms) const {
+double EwaldPME::ComputeDeltaSsq(uint box, const XYZArray *newCoords,
+                                 double sign_new, const XYZArray *oldCoords,
+                                 double sign_old, const uint *atomIndices,
+                                 const double *charges, uint nAtoms) const {
   if (nAtoms == 0)
     return 0.0;
 
@@ -651,16 +683,20 @@ double EwaldPME::ComputeDeltaSsq(uint box, const XYZArray *newCoords, double sig
 
   double bs_x[20], bs_y[20], bs_z[20];
   auto addAtoms = [&](const XYZArray *coords, double sign) {
-    if (!coords) return;
+    if (!coords)
+      return;
     for (uint i = 0; i < nAtoms; ++i) {
-      if (particleHasNoCharge[atomIndices[i]]) continue;
+      if (particleHasNoCharge[atomIndices[i]])
+        continue;
       double charge = charges[i] * sign;
       XYZ r = coords->Get(i);
       XYZ s = currentAxes.TransformUnSlant(r, box);
       double sx = s.x / currentAxes.axis.Get(box).x;
       double sy = s.y / currentAxes.axis.Get(box).y;
       double sz = s.z / currentAxes.axis.Get(box).z;
-      sx -= floor(sx); sy -= floor(sy); sz -= floor(sz);
+      sx -= floor(sx);
+      sy -= floor(sy);
+      sz -= floor(sz);
       double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
       bspline::EvalAll(pmeOrder, ux - floor(ux), bs_x);
       bspline::EvalAll(pmeOrder, uy - floor(uy), bs_y);
@@ -705,8 +741,8 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
     return 0.0;
 
   double dE = 0.0;
-  // Background interaction part: Interpolate potential Mesh at new/old positions
-  // ΔE_back = Σ q_i_new φ(r_i_new) - Σ q_i_old φ(r_i_old)
+  // Background interaction part: Interpolate potential Mesh at new/old
+  // positions ΔE_back = Σ q_i_new φ(r_i_new) - Σ q_i_old φ(r_i_old)
   if (newCoords) {
     for (uint a = 0; a < nAtoms; ++a) {
       if (!particleHasNoCharge[atomIndices[a]]) {
@@ -725,7 +761,7 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
   }
 
   // Self-energy part: 0.5 * Σ G(m) |ΔS(m)|^2
-  dE += ComputeDeltaSsq(box, newCoords, sign_new, oldCoords, sign_old, 
+  dE += ComputeDeltaSsq(box, newCoords, sign_new, oldCoords, sign_old,
                         atomIndices, charges, nAtoms);
 
   // Optionally commit the update to S_ref (on move acceptance).
@@ -734,10 +770,12 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
   // it holds Q(r) for the currently committed coordinates and is restored
   // after volume trials by BoxReciprocalSetup's save/restore.
   if (updateSRef) {
-    if (oldCoords) UpdateAtomInMesh(box, charges, nAtoms, *oldCoords, sign_old);
-    if (newCoords) UpdateAtomInMesh(box, charges, nAtoms, *newCoords, sign_new);
+    if (oldCoords)
+      UpdateAtomInMesh(box, charges, nAtoms, *oldCoords, sign_old);
+    if (newCoords)
+      UpdateAtomInMesh(box, charges, nAtoms, *newCoords, sign_new);
     fftw_execute(fwdPlan[box]);
-    
+
     // Copy S_trial[box] to S_ref[box] for future references
     int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
     std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);

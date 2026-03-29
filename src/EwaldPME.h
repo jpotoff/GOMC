@@ -1,9 +1,9 @@
 #pragma once
-#include "Ewald.h"
 #include "BoxDimensions.h"
+#include "Ewald.h"
+#include <cassert>
 #include <fftw3.h>
 #include <vector>
-#include <cassert>
 
 class EwaldPME : public Ewald {
 public:
@@ -42,11 +42,11 @@ public:
                                bool first_call) override;
 
 private:
-  int pmeOrder;         // B-spline order P
-  int K[BOX_TOTAL][3];  // mesh dims per box
-  fftw_complex **S_ref; // stored FFT(Q), one per box (flat array)
-  double **greenFunc;   // C(m), one per box
-  double **chargeMesh;  // real staging buffer for FFT
+  int pmeOrder;           // B-spline order P
+  int K[BOX_TOTAL][3];    // mesh dims per box
+  fftw_complex **S_ref;   // stored FFT(Q), one per box (flat array)
+  double **greenFunc;     // C(m), one per box
+  double **chargeMesh;    // real staging buffer for FFT
   double **potentialMesh; // real mesh for background potential (after IFFT)
   fftw_plan fwdPlan[BOX_TOTAL];
   fftw_plan bwdPlan[BOX_TOTAL];
