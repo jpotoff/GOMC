@@ -7,6 +7,7 @@ set(TestSources
     test/src/ConsistentTrajectoryTest.cpp
     test/src/CheckpointTest.cpp
     test/src/TestBSpline.cpp
+    test/src/TestEwaldPMEMoves.cpp
 )
 
 set(TestHeaders

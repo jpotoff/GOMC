@@ -94,6 +94,7 @@ void Simulation::RunSimulation(void) {
   for (ulong step = startStep; step < totalSteps; step++) {
     system->moveSettings.AdjustMoves(step);
     system->ChooseAndRunMove(step);
+    system->calcEwald->Maintain(step);
     cpu->Output(step);
 
 #ifndef NDEBUG
@@ -240,9 +241,15 @@ PRNG &Simulation::GetPRNG() { return system->prng; }
 
 Molecules &Simulation::GetMolecules() { return staticValues->mol; }
 
+
 BoxDimensions &Simulation::GetBoxDim() { return system->boxDimRef; }
 
 ulong Simulation::GetTrueStep() { return system->trueStep; }
 
 ulong Simulation::GetRunSteps() { return totalSteps - startStep; }
+
+Ewald *Simulation::GetEwald() { return system->calcEwald; }
+
+CalculateEnergy &Simulation::GetCalcEnergy() { return system->calcEnergy; }
+
 #endif

@@ -35,6 +35,8 @@ public:
   SystemPotential &GetSystemEnergy(void);
   PRNG &GetPRNG();
   Molecules &GetMolecules();
+  Ewald *GetEwald();
+  CalculateEnergy &GetCalcEnergy();
 #endif
 private:
   StaticVals *staticValues;

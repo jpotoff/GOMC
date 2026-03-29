@@ -122,6 +122,9 @@ public:
   // update reciprocal values
   virtual void UpdateRecip(uint box);
 
+  // Periodic maintenance (e.g. PME full refresh)
+  virtual void Maintain(const ulong step) {}
+
   // copy reciprocal values from ref to new
   virtual void CopyRecip(uint box);
 

@@ -148,12 +148,12 @@ CMakeFiles/GOMC_NVT_Test.dir/all: googletest-build/googletest/CMakeFiles/gtest.d
 CMakeFiles/GOMC_NVT_Test.dir/all: googletest-build/googletest/CMakeFiles/gtest_main.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NVT_Test.dir/build.make CMakeFiles/GOMC_NVT_Test.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NVT_Test.dir/build.make CMakeFiles/GOMC_NVT_Test.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/ai8111/recovery/GOMC/build_test/CMakeFiles --progress-num=63,64,65,66,67,68,69,70,71,72,73,74 "Built target GOMC_NVT_Test"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/ai8111/recovery/GOMC/build_test/CMakeFiles --progress-num=63,64,65,66,67,68,69,70,71,72,73,74,75 "Built target GOMC_NVT_Test"
 .PHONY : CMakeFiles/GOMC_NVT_Test.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/GOMC_NVT_Test.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/ai8111/recovery/GOMC/build_test/CMakeFiles 13
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/ai8111/recovery/GOMC/build_test/CMakeFiles 14
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/GOMC_NVT_Test.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/ai8111/recovery/GOMC/build_test/CMakeFiles 0
 .PHONY : CMakeFiles/GOMC_NVT_Test.dir/rule
@@ -333,12 +333,12 @@ CMakeFiles/GCMC.dir/clean:
 CMakeFiles/NPT.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/NPT.dir/build.make CMakeFiles/NPT.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/NPT.dir/build.make CMakeFiles/NPT.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/ai8111/recovery/GOMC/build_test/CMakeFiles --progress-num=75,76,77,78,79,80,81,82,83,84,85,86 "Built target NPT"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/ai8111/recovery/GOMC/build_test/CMakeFiles --progress-num=76,77,78,79,80,81,82,83,84,85,86 "Built target NPT"
 .PHONY : CMakeFiles/NPT.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/NPT.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/ai8111/recovery/GOMC/build_test/CMakeFiles 12
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/ai8111/recovery/GOMC/build_test/CMakeFiles 11
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/NPT.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/ai8111/recovery/GOMC/build_test/CMakeFiles 0
 .PHONY : CMakeFiles/NPT.dir/rule

@@ -20,6 +20,9 @@ public:
   void UpdateRecipVec(uint box) override; // recomputes C(m)
   void SetRecipRef(uint box) override { UpdateRecipVec(box); }
   void UpdateRecip(uint box) override; // applies accepted moves to mesh
+  void Maintain(const ulong step) override;
+  void exgMolCache() override; // restores chargeMesh on vol-move reject
+  void RestoreMol(int molIndex) override; // clears pending move over network
   Virial VirialReciprocal(Virial &virial, uint box) const override;
 
   // Per-move path (no FFT, O(P³))
@@ -55,7 +58,7 @@ private:
   fftw_plan scratchPlan[BOX_TOTAL];
 
   // NPT / Volume move trial state
-  BoxDimensions trialAxes[BOX_TOTAL];
+  BoxDimensions trialAxes[BOX_TOTAL]; // holds axes from last RecipInit call
   fftw_complex **S_trial;
   double **greenFunc_trial;
   int K_trial[BOX_TOTAL][3];

@@ -153,6 +153,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/GOMC_NPT_Test.dir/test/src/MolLookupTest.cpp.o.d"
   "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestBSpline.cpp.o"
   "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestBSpline.cpp.o.d"
+  "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.o"
+  "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.o.d"
   "GOMC_NPT_Test"
   "GOMC_NPT_Test.pdb"
 )

@@ -1,0 +1,615 @@
+#include "CalculateEnergy.h"
+#include "Coordinates.h"
+#include "EwaldPME.h"
+#include "Molecules.h"
+#include "Simulation.h"
+#include "cbmc/TrialMol.h"
+#include "gtest/gtest.h"
+#include <cmath>
+#include <cstdio>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <unistd.h>
+
+class EwaldPMEMovesTest : public ::testing::Test {
+protected:
+  void SetUp() override {
+    // Create a temporary directory and copy files
+    if (system("mkdir -p /tmp/gomc_pme_repro")) {
+    }
+    if (system("cp "
+               "/home/ai8111/recovery/GOMC/test/input/Systems/OPC/Base/"
+               "OPC_FF.inp /tmp/gomc_pme_repro/")) {
+    }
+    if (system(
+            "cp /home/ai8111/recovery/GOMC/test/input/Systems/OPC/Base/*.pdb "
+            "/tmp/gomc_pme_repro/")) {
+    }
+    if (system(
+            "cp /home/ai8111/recovery/GOMC/test/input/Systems/OPC/Base/*.psf "
+            "/tmp/gomc_pme_repro/")) {
+    }
+
+    // Create in.conf
+    FILE *f = fopen("/tmp/gomc_pme_repro/in.conf", "w");
+    fprintf(f, "Restart False\n");
+    fprintf(f, "Checkpoint False\n");
+    fprintf(f, "ExpertMode False\n");
+    fprintf(f, "PRNG INTSEED\n");
+    fprintf(f, "Random_Seed 12345\n");
+    fprintf(f, "ParaTypeCHARMM True\n");
+    fprintf(f, "Parameters ./OPC_FF.inp\n");
+    fprintf(f, "Coordinates 0 ./initial_box_0.pdb\n");
+    fprintf(f, "Structure 0 ./initial_box_0.psf\n");
+    fprintf(f, "Temperature 300.0\n");
+    fprintf(f, "Pressure 1.0\n");
+    fprintf(f, "useConstantArea False\n");
+    fprintf(f, "Potential VDW\n");
+    fprintf(f, "LRC True\n");
+    fprintf(f, "IPC False\n");
+    fprintf(f, "Rcut 8.0\n");
+    fprintf(f, "RcutLow 0.7\n");
+    fprintf(f, "Exclude 1-4\n");
+    fprintf(f, "VDWGeometricSigma False\n");
+    fprintf(f, "ElectrostaticMethod PME\n");
+    fprintf(f, "ElectroStatic True\n");
+    fprintf(f, "Tolerance 1e-05\n");
+    fprintf(f, "1-4scaling 0.0\n");
+    fprintf(f, "PressureCalc False 10000000\n");
+    fprintf(f, "PMESplineOrder 4\n");
+    fprintf(f, "PMEGridSpacing 1.5\n");
+    fprintf(f, "PMERefreshFreq 100\n");
+    fprintf(f, "RunSteps 2\n");
+    fprintf(f, "EqSteps 1\n");
+    fprintf(f, "AdjSteps 1\n");
+    fprintf(f, "DisFreq 0.49\n");
+    fprintf(f, "RotFreq 0.49\n");
+    fprintf(f, "VolFreq 0.02\n");
+    fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
+    fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
+    fprintf(f, "CBMC_First 12\n");
+    fprintf(f, "CBMC_Nth 10\n");
+    fprintf(f, "CBMC_Ang 50\n");
+    fprintf(f, "CBMC_Dih 50\n");
+    fprintf(f, "OutputName repro\n");
+    fprintf(f, "RestartFreq True 10000000\n");
+    fprintf(f, "CheckpointFreq True 10000000\n");
+    fprintf(f, "CoordinatesFreq False 10000000\n");
+    fprintf(f, "DCDFreq True 10000000\n");
+    fprintf(f, "ConsoleFreq True 1\n");
+    fprintf(f, "BlockAverageFreq True 10000000\n");
+    fprintf(f, "HistogramFreq False 10000000\n");
+    fprintf(f, "DistName dis\n");
+    fprintf(f, "HistName his\n");
+    fprintf(f, "RunNumber 1\n");
+    fprintf(f, "RunLetter a\n");
+    fprintf(f, "SampleFreq 500\n");
+    fprintf(f, "OutEnergy True True\n");
+    fprintf(f, "OutPressure True True\n");
+    fprintf(f, "OutMolNum True True\n");
+    fprintf(f, "OutDensity True True\n");
+    fprintf(f, "OutVolume True True\n");
+    fprintf(f, "OutSurfaceTension False False\n");
+    fclose(f);
+
+    origDir = getcwd(NULL, 0);
+    if (chdir("/tmp/gomc_pme_repro")) {
+    }
+  }
+
+  void TearDown() override {
+    if (origDir) {
+      if (chdir(origDir)) {
+      }
+      free(origDir);
+    }
+    // if(system("rm -rf /tmp/gomc_pme_repro")) {}
+  }
+  char *origDir;
+};
+
+TEST_F(EwaldPMEMovesTest, DisplacementConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  // Calculate initial energy
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Initial Reciprocal Energy: " << initialEnergy << " K"
+            << std::endl;
+
+  // Pick a molecule to move
+  uint molIndex = 10;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
+
+  XYZ move(1.5, -0.8, 2.1); // Arbitrary displacement
+
+  // Get current coords for the molecule
+  uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+  XYZArray newCoords(nAtoms);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+  for (uint i = 0; i < nAtoms; ++i) {
+    newCoords.Set(i, sim.GetCoordinates().Get(startAtom + i) + move);
+  }
+
+  // Calculate dE incrementally
+  double dE = pme->MolReciprocal(newCoords, molIndex, box);
+  std::cout << "Incremental dE reported by EwaldPME: " << dE << " K"
+            << std::endl;
+
+  // Update state in PME (move accepted)
+  pme->UpdateRecip(box);
+
+  // In GOMC with PME, the energy tracker is now directly updated to the 
+  // exact reciprocal energy within UpdateRecip.
+  double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Expected Total Reciprocal Energy (from exact tracker): "
+            << expectedEnergy << " K" << std::endl;
+
+  // Manually update the coordinates in the simulation for the full sum check
+  for (uint i = 0; i < nAtoms; ++i) {
+    sim.GetCoordinates().Set(startAtom + i, newCoords.Get(i));
+  }
+
+  // Now perform a full reciprocal sum to verify consistency
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
+            << std::endl;
+
+  // If there is a massive bug, this will fail spectacularly
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+
+  // Also check if actualEnergy is reasonable (not -1.5E6)
+  EXPECT_GT(actualEnergy, -1e5);
+}
+
+TEST_F(EwaldPMEMovesTest, RotationMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  // Calculate initial energy
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Initial Reciprocal Energy: " << initialEnergy << " K"
+            << std::endl;
+
+  // Pick a molecule to move
+  uint molIndex = 11;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
+
+  // Get current coords for the molecule
+  uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+  XYZArray newCoords(nAtoms);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+
+  // Calculate COM (or just use atom 0 as pivot)
+  XYZ pivot = sim.GetCoordinates().Get(startAtom);
+
+  // Create an arbitrary rotation matrix (e.g., ~90 deg around Z axis)
+  double angle = 1.57079632679; // pi/2
+  double c = std::cos(angle);
+  double s = std::sin(angle);
+
+  for (uint i = 0; i < nAtoms; ++i) {
+    XYZ pos = sim.GetCoordinates().Get(startAtom + i);
+    // Translate to origin
+    pos.x -= pivot.x;
+    pos.y -= pivot.y;
+    pos.z -= pivot.z;
+
+    // Rotate around Z axis
+    double rx = pos.x * c - pos.y * s;
+    double ry = pos.x * s + pos.y * c;
+    double rz = pos.z;
+
+    // Translate back
+    pos.x = rx + pivot.x;
+    pos.y = ry + pivot.y;
+    pos.z = rz + pivot.z;
+
+    newCoords.Set(i, pos);
+  }
+
+  // Calculate dE incrementally
+  double dE = pme->MolReciprocal(newCoords, molIndex, box);
+  std::cout << "Incremental dE reported by EwaldPME: " << dE << " K"
+            << std::endl;
+
+  // Update state in PME (move accepted)
+  pme->UpdateRecip(box);
+
+  // In GOMC with PME, the energy tracker is now directly updated to the 
+  // exact reciprocal energy within UpdateRecip.
+  double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Expected Total Reciprocal Energy (from exact tracker): "
+            << expectedEnergy << " K" << std::endl;
+
+  // Manually update the coordinates in the simulation for the full sum check
+  for (uint i = 0; i < nAtoms; ++i) {
+    sim.GetCoordinates().Set(startAtom + i, newCoords.Get(i));
+  }
+
+  // Now perform a full reciprocal sum to verify consistency
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
+            << std::endl;
+
+  // If there is a massive bug, this will fail spectacularly
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+
+  // Also check if actualEnergy is reasonable (not -1.5E6)
+  EXPECT_GT(actualEnergy, -1e5);
+}
+
+TEST_F(EwaldPMEMovesTest, VolumeMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  // Calculate initial energy
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Initial Reciprocal Energy: " << initialEnergy << " K"
+            << std::endl;
+
+  // Manually shift the box dims
+  BoxDimensions newAxes = sim.GetBoxDim();
+  XYZ scale(1.05, 1.05, 1.05);
+  newAxes.axis.Set(0, XYZ(newAxes.axis.Get(0).x * 1.05,
+                          newAxes.axis.Get(0).y * 1.05,
+                          newAxes.axis.Get(0).z * 1.05));
+  newAxes.halfAx.Set(0, XYZ(newAxes.halfAx.Get(0).x * 1.05,
+                            newAxes.halfAx.Get(0).y * 1.05,
+                            newAxes.halfAx.Get(0).z * 1.05));
+  newAxes.volume[0] *= (1.05 * 1.05 * 1.05);
+  newAxes.volInv[0] = 1.0 / newAxes.volume[0];
+  newAxes.cellBasis[0].Set(0, XYZ(newAxes.axis.Get(0).x, 0.0, 0.0));
+  newAxes.cellBasis[0].Set(1, XYZ(0.0, newAxes.axis.Get(0).y, 0.0));
+  newAxes.cellBasis[0].Set(2, XYZ(0.0, 0.0, newAxes.axis.Get(0).z));
+
+  // Scale coords
+  XYZArray newCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    XYZ pos = sim.GetCoordinates().Get(i);
+    // Origin is implicitly 0,0,0
+    pos.x *= 1.05;
+    pos.y *= 1.05;
+    pos.z *= 1.05;
+    newCoords.Set(i, pos);
+  }
+
+  // Calculate trial energy
+  pme->RecipInit(box, newAxes);
+  pme->BoxReciprocalSetup(box, newCoords);
+  double trialEnergy = pme->BoxReciprocal(box, true);
+  std::cout << "Incremental dE reported by EwaldPME: "
+            << (trialEnergy - initialEnergy) << " K" << std::endl;
+
+  // Accept move
+  sim.GetBoxDim() = newAxes;
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    sim.GetCoordinates().Set(i, newCoords.Get(i));
+  }
+  pme->UpdateRecip(box);
+  pme->UpdateRecipVec(box);
+
+  sim.GetSystemEnergy().boxEnergy[box].recip = trialEnergy;
+  double expectedEnergy = trialEnergy;
+  std::cout << "Expected Total Reciprocal Energy: " << expectedEnergy << " K"
+            << std::endl;
+
+  // Now perform a full reciprocal sum to verify consistency
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
+            << std::endl;
+
+  // If there is a massive bug, this will fail spectacularly
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+
+  // Also check if actualEnergy is reasonable
+  EXPECT_GT(actualEnergy, -1e5);
+}
+
+TEST_F(EwaldPMEMovesTest, IntraSwapMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  // Calculate initial energy
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Initial Reciprocal Energy: " << initialEnergy << " K"
+            << std::endl;
+
+  // Pick a molecule to modify internally
+  uint molIndex = 12;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
+
+  // Get current coords for the molecule
+  uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+  if (nAtoms < 2) {
+    GTEST_SKIP() << "Molecule has less than 2 atoms, cannot perform IntraSwap";
+  }
+
+  XYZArray newCoords(nAtoms);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+  for (uint i = 0; i < nAtoms; ++i) {
+    newCoords.Set(i, sim.GetCoordinates().Get(startAtom + i));
+  }
+
+  // Perform an intramolecular swap (exchange positions of atom 0 and atom 1)
+  XYZ temp = newCoords.Get(0);
+  newCoords.Set(0, newCoords.Get(1));
+  newCoords.Set(1, temp);
+
+  // Calculate dE incrementally
+  double dE = pme->MolReciprocal(newCoords, molIndex, box);
+  std::cout << "Incremental dE reported by EwaldPME: " << dE << " K"
+            << std::endl;
+
+  // Update state in PME (move accepted)
+  pme->UpdateRecip(box);
+
+  // In GOMC, the energy tracker is now updated exactly by UpdateRecip.
+  double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Expected Total Reciprocal Energy (from exact tracker): "
+            << expectedEnergy << " K" << std::endl;
+
+  // Manually update the coordinates in the simulation for the full sum check
+  for (uint i = 0; i < nAtoms; ++i) {
+    sim.GetCoordinates().Set(startAtom + i, newCoords.Get(i));
+  }
+
+  // Now perform a full reciprocal sum to verify consistency
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
+            << std::endl;
+
+  // If there is a massive bug, this will fail spectacularly
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+
+  // Also check if actualEnergy is reasonable (not -1.5E6)
+  EXPECT_GT(actualEnergy, -1e5);
+}
+
+TEST_F(EwaldPMEMovesTest, SwapMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  // Calculate initial energy
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Initial Reciprocal Energy: " << initialEnergy << " K"
+            << std::endl;
+
+  // Pick a molecule to delete and re-insert
+  uint molIndex = 14;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
+
+  MoleculeKind const &kind = sim.GetMolecules().GetKind(molIndex);
+  uint nAtoms = kind.NumAtoms();
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+
+  // 1. Build "Old" TrialMol matching current coordinates
+  cbmc::TrialMol oldMol(kind, sim.GetBoxDim(), box);
+  oldMol.SetCoords(sim.GetCoordinates(), startAtom);
+
+  // 2. Build "New" TrialMol shifted by an arbitrary vector
+  cbmc::TrialMol newMol(kind, sim.GetBoxDim(), box);
+  XYZArray shiftedCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < shiftedCoords.Count(); ++i) {
+    shiftedCoords.Set(i, sim.GetCoordinates().Get(i));
+  }
+
+  XYZ move(4.2, -3.1, 1.9); // Arbitrary insertion site delta
+  for (uint i = 0; i < nAtoms; ++i) {
+    shiftedCoords.Set(startAtom + i, shiftedCoords.Get(startAtom + i) + move);
+  }
+  newMol.SetCoords(shiftedCoords, startAtom);
+
+  // 3. Test SwapSourceRecip (Deletion)
+  double dE_del = pme->SwapSourceRecip(oldMol, box, molIndex);
+  std::cout << "Incremental dE_del reported by PME deletion: " << dE_del << " K"
+            << std::endl;
+  pme->UpdateRecip(box); // Accept Deletion
+
+  // 4. Test SwapDestRecip (Insertion)
+  double dE_ins = pme->SwapDestRecip(newMol, box, molIndex);
+  std::cout << "Incremental dE_ins reported by PME insertion: " << dE_ins
+            << " K" << std::endl;
+  pme->UpdateRecip(box); // Accept Insertion
+
+  // Net expected tracking
+  double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  std::cout << "Expected Total Reciprocal Energy (from exact tracker): "
+            << expectedEnergy << " K" << std::endl;
+
+  // 5. Update coordinates array so SystemTotal can build it from scratch
+  for (uint i = 0; i < nAtoms; ++i) {
+    sim.GetCoordinates().Set(startAtom + i, shiftedCoords.Get(startAtom + i));
+  }
+
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
+            << std::endl;
+
+  // Verify consistency!
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+  EXPECT_GT(actualEnergy, -1e5);
+}
+
+TEST_F(EwaldPMEMovesTest, CombinedVolumeAndDisplacementMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  // We use this just to get past initialization
+
+  // -- 1. VOLUME MOVE (REJECTED) --
+  // We use a large scale to force K to change (25 * 1.2 = 30; 30/1.5 = 20 > 18)
+  BoxDimensions newAxes = sim.GetBoxDim();
+  newAxes.axis.Set(0, XYZ(newAxes.axis.Get(0).x * 1.20,
+                          newAxes.axis.Get(0).y * 1.20,
+                          newAxes.axis.Get(0).z * 1.20));
+  newAxes.halfAx.Set(0, XYZ(newAxes.halfAx.Get(0).x * 1.20,
+                            newAxes.halfAx.Get(0).y * 1.20,
+                            newAxes.halfAx.Get(0).z * 1.20));
+  newAxes.volume[0] *= (1.20 * 1.20 * 1.20);
+  newAxes.volInv[0] = 1.0 / newAxes.volume[0];
+  newAxes.cellBasis[0].Set(0, XYZ(newAxes.axis.Get(0).x, 0.0, 0.0));
+  newAxes.cellBasis[0].Set(1, XYZ(0.0, newAxes.axis.Get(0).y, 0.0));
+  newAxes.cellBasis[0].Set(2, XYZ(0.0, 0.0, newAxes.axis.Get(0).z));
+
+  XYZArray newCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    XYZ pos = sim.GetCoordinates().Get(i);
+    pos.x *= 1.20;
+    pos.y *= 1.20;
+    pos.z *= 1.20;
+    newCoords.Set(i, pos);
+  }
+
+  pme->RecipInit(box, newAxes);
+  pme->BoxReciprocalSetup(box, newCoords);
+  double trialEnergy = pme->BoxReciprocal(box, true);
+
+  // REJECT Volume Move
+  // Do not accept new volume / coords.
+  // Call exgMolCache to simulate what GOMC does on rejection
+  pme->exgMolCache();
+
+  // -- 2. DISPLACEMENT MOVE --
+  uint molIndex = 10;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
+
+  XYZ move(1.5, -0.8, 2.1);
+  uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+  XYZArray dispCoords(nAtoms);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+  for (uint i = 0; i < nAtoms; ++i) {
+    dispCoords.Set(i, sim.GetCoordinates().Get(startAtom + i) + move);
+  }
+
+  double dE = pme->MolReciprocal(dispCoords, molIndex, box);
+
+  // Accept Displacement
+  pme->UpdateRecip(box);
+  double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  for (uint i = 0; i < nAtoms; ++i) {
+    sim.GetCoordinates().Set(startAtom + i, dispCoords.Get(i));
+  }
+
+  // Verify
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  std::cout << "Expected: " << expectedEnergy << " Actual: " << actualEnergy
+            << std::endl;
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic: scan raw PME BoxReciprocalSetup energy across box scales.
+// Prints the full reciprocal energy for a range of volume scale factors so
+// we can confirm the energy landscape drives compression toward ~998 kg/m³.
+// The scale factor applies uniformly to all box dimensions and all atom coords.
+// At each scale the potential mesh is fully recomputed (same path as VolumeTransfer).
+// After each probe the PME state is restored via exgMolCache.
+// ---------------------------------------------------------------------------
+TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double refRecip = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  // Scale factors: 1.20 = low density (~555 kg/m³), 0.95 = high density (~1122 kg/m³)
+  // Volume scales as scale^3, so scale 1.02→~998 kg/m³ (from 957 kg/m³ start)
+  std::vector<double> scales = {1.20, 1.15, 1.10, 1.05, 1.02, 1.00,
+                                 0.98, 0.97, 0.95};
+
+  std::cout << "\n=== PME ReciprocalEnergyVsVolume scan ===\n";
+  std::cout << "Scale     Volume(A^3)   Recip(K)\n";
+
+  double firstRecip  = 0.0;
+  double lastRecip   = 0.0;
+  bool   isFirst     = true;
+
+  for (double scale : scales) {
+    BoxDimensions &curAxes = sim.GetBoxDim();
+    BoxDimensions newAxes  = curAxes;
+    double L0   = curAxes.axis.Get(box).x;
+    double Lnew = L0 * scale;
+
+    newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
+    newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
+    newAxes.volume[box]  = Lnew * Lnew * Lnew;
+    newAxes.volInv[box]  = 1.0 / newAxes.volume[box];
+    newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0,  0.0 ));
+    newAxes.cellBasis[box].Set(1, XYZ(0.0,  Lnew, 0.0 ));
+    newAxes.cellBasis[box].Set(2, XYZ(0.0,  0.0,  Lnew));
+
+    XYZArray newCoords(sim.GetCoordinates().Count());
+    for (uint i = 0; i < newCoords.Count(); ++i) {
+      XYZ pos = sim.GetCoordinates().Get(i);
+      newCoords.Set(i, XYZ(pos.x * scale, pos.y * scale, pos.z * scale));
+    }
+
+    pme->RecipInit(box, newAxes);
+    pme->BoxReciprocalSetup(box, newCoords);
+    double trialRecip = pme->BoxReciprocal(box, true);
+
+    std::cout << std::fixed << std::setprecision(4)
+              << scale << "      "
+              << std::setprecision(1) << newAxes.volume[box] << "    "
+              << trialRecip << "\n";
+
+    if (isFirst) { firstRecip = trialRecip; isFirst = false; }
+    lastRecip = trialRecip;
+
+    // Restore PME state (simulate rejection)
+    pme->exgMolCache();
+  }
+
+  std::cout << "Reference recip (scale=1.00, SystemTotal): " << refRecip << "\n";
+  std::cout << "===========================================\n";
+
+  // The energy should vary meaningfully across the scan (not degenerate/flat).
+  // A flat landscape means PME is not sensing the volume change at all.
+  double variation = std::abs(firstRecip - lastRecip);
+  EXPECT_GT(variation, 1000.0)
+      << "PME recip energy barely changes over 2.2x volume range — "
+      << "possible normalization bug. variation=" << variation;
+}

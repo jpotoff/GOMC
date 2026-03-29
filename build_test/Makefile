@@ -3753,6 +3753,39 @@ test/src/TestBSpline.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GEMC_Test.dir/build.make CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestBSpline.cpp.s
 .PHONY : test/src/TestBSpline.cpp.s
 
+test/src/TestEwaldPMEMoves.o: test/src/TestEwaldPMEMoves.cpp.o
+.PHONY : test/src/TestEwaldPMEMoves.o
+
+# target to build an object file
+test/src/TestEwaldPMEMoves.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NVT_Test.dir/build.make CMakeFiles/GOMC_NVT_Test.dir/test/src/TestEwaldPMEMoves.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NPT_Test.dir/build.make CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GCMC_Test.dir/build.make CMakeFiles/GOMC_GCMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GEMC_Test.dir/build.make CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.o
+.PHONY : test/src/TestEwaldPMEMoves.cpp.o
+
+test/src/TestEwaldPMEMoves.i: test/src/TestEwaldPMEMoves.cpp.i
+.PHONY : test/src/TestEwaldPMEMoves.i
+
+# target to preprocess a source file
+test/src/TestEwaldPMEMoves.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NVT_Test.dir/build.make CMakeFiles/GOMC_NVT_Test.dir/test/src/TestEwaldPMEMoves.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NPT_Test.dir/build.make CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GCMC_Test.dir/build.make CMakeFiles/GOMC_GCMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GEMC_Test.dir/build.make CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.i
+.PHONY : test/src/TestEwaldPMEMoves.cpp.i
+
+test/src/TestEwaldPMEMoves.s: test/src/TestEwaldPMEMoves.cpp.s
+.PHONY : test/src/TestEwaldPMEMoves.s
+
+# target to generate assembly for a file
+test/src/TestEwaldPMEMoves.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NVT_Test.dir/build.make CMakeFiles/GOMC_NVT_Test.dir/test/src/TestEwaldPMEMoves.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_NPT_Test.dir/build.make CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GCMC_Test.dir/build.make CMakeFiles/GOMC_GCMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GOMC_GEMC_Test.dir/build.make CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.s
+.PHONY : test/src/TestEwaldPMEMoves.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -4012,6 +4045,9 @@ help:
 	@echo "... test/src/TestBSpline.o"
 	@echo "... test/src/TestBSpline.i"
 	@echo "... test/src/TestBSpline.s"
+	@echo "... test/src/TestEwaldPMEMoves.o"
+	@echo "... test/src/TestEwaldPMEMoves.i"
+	@echo "... test/src/TestEwaldPMEMoves.s"
 .PHONY : help
 
 

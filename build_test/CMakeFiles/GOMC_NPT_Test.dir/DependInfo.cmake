@@ -85,6 +85,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/ai8111/recovery/GOMC/test/src/ConsistentTrajectoryTest.cpp" "CMakeFiles/GOMC_NPT_Test.dir/test/src/ConsistentTrajectoryTest.cpp.o" "gcc" "CMakeFiles/GOMC_NPT_Test.dir/test/src/ConsistentTrajectoryTest.cpp.o.d"
   "/home/ai8111/recovery/GOMC/test/src/MolLookupTest.cpp" "CMakeFiles/GOMC_NPT_Test.dir/test/src/MolLookupTest.cpp.o" "gcc" "CMakeFiles/GOMC_NPT_Test.dir/test/src/MolLookupTest.cpp.o.d"
   "/home/ai8111/recovery/GOMC/test/src/TestBSpline.cpp" "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestBSpline.cpp.o" "gcc" "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestBSpline.cpp.o.d"
+  "/home/ai8111/recovery/GOMC/test/src/TestEwaldPMEMoves.cpp" "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.o" "gcc" "CMakeFiles/GOMC_NPT_Test.dir/test/src/TestEwaldPMEMoves.cpp.o.d"
   )
 
 # Targets to which this target links.

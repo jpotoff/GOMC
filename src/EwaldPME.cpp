@@ -105,9 +105,9 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
   // Kx, Ky, Kz should be at least pmeOrder
   double gridSpacing = ff.pmeGridSpacing <= 0.0 ? 1.0 : ff.pmeGridSpacing;
 
-  int k0 = (int)ceil(currentAxes.axis.Get(box).x / gridSpacing);
-  int k1 = (int)ceil(currentAxes.axis.Get(box).y / gridSpacing);
-  int k2 = (int)ceil(currentAxes.axis.Get(box).z / gridSpacing);
+  int k0 = (int)ceil(trialAxes[box].axis.Get(box).x / gridSpacing);
+  int k1 = (int)ceil(trialAxes[box].axis.Get(box).y / gridSpacing);
+  int k2 = (int)ceil(trialAxes[box].axis.Get(box).z / gridSpacing);
 
   K_trial[box][0] = (pmeOrder > k0) ? pmeOrder : k0;
   K_trial[box][1] = (pmeOrder > k1) ? pmeOrder : k1;
@@ -182,8 +182,7 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
 void EwaldPME::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
   if (box >= BOXES_WITH_U_NB)
     return;
-  // This is a full refresh. Update trial axes and use Setup logic.
-  trialAxes[box] = currentAxes;
+  // This is a full refresh. Use Setup logic then immediately accept results.
   RecipInit(box, currentAxes);
   BoxReciprocalSetup(box, molCoords);
   
@@ -199,7 +198,7 @@ double EwaldPME::BoxReciprocal(uint box, bool isNewVolume) const {
 
 void EwaldPME::RecipInit(uint box, BoxDimensions const &axes) {
   Ewald::RecipInit(box, axes);
-  trialAxes[box] = axes;
+  trialAxes[box] = axes; // Cache the trial axes for use by mesh/Green functions
 }
 
 void EwaldPME::UpdateRecipVec(uint box) {
@@ -212,9 +211,6 @@ void EwaldPME::UpdateRecipVec(uint box) {
   std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
   std::memcpy(greenFunc[box], greenFunc_trial[box], sizeof(double) * nk);
 
-  // Update green function factor for the current axes if needed
-  trialAxes[box] = currentAxes;
-
   // Update sysPotRef
   const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
       tempEnergyRecip[box];
@@ -226,6 +222,9 @@ void EwaldPME::UpdateRecipVec(uint box) {
           tempVirialRecip[box].recipTens[i][j];
     }
   }
+  
+  // Sync trialAxes so subsequent per-molecule moves see consistent geometry.
+  trialAxes[box] = currentAxes;
   
   // Potential mesh must be recomputed for the new state
   UpdatePotentialMesh(box);
@@ -244,17 +243,83 @@ void EwaldPME::UpdateRecip(uint box) {
     // Apply incremental update using DeltaERecip with updateSRef = true
     const XYZArray *pNew = (cachedSignNew != 0.0) ? &cachedNewCoords : nullptr;
     const XYZArray *pOld = (cachedSignOld != 0.0) ? &cachedOldCoords : nullptr;
-    DeltaERecip(box, pNew, cachedSignNew, pOld, cachedSignOld,
-                cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms,
-                true);
+    double exactRecip = DeltaERecip(box, pNew, cachedSignNew, pOld, cachedSignOld,
+                                    cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms,
+                                    true);
+    const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip = exactRecip;
   }
 
-  // NOTE: We INTENTIONALLY DO NOT overwrite sysPotRef.boxEnergy[box].recip
-  // because GOMC accumulated dE correctly into it. Overwriting it with
-  // currentEnergyRecip (which is unmaintained in PME) destroys the tracker.
+  // NOTE: By explicitly overriding sysPotRef.boxEnergy[box].recip with the newly
+  // calculated exact mesh reciprocal energy from DeltaERecip(..., true), we 
+  // eliminate interpolation drift. This is mathematically necessary because VolumeTransfer 
+  // evaluates the trial volume's BoxReciprocal() exact energy and compares it 
+  // against sysPotRef. Any accumulated interpolation drift artificially biases NPT moves.
 
   pendingUpdate = false;
   forceFullUpdate = false;
+}
+
+void EwaldPME::Maintain(const ulong step) {
+  if (refreshInterval == 0 || (step + 1) % refreshInterval != 0)
+    return;
+
+  for (uint b = 0; b < BOXES_WITH_U_NB; b++) {
+    BoxReciprocalSums(b, currentCoords);
+  }
+}
+
+// Called by GOMC when a volume move is rejected, to undo the trial state.
+// The base Ewald class no-ops here, but EwaldPME must restore chargeMesh because
+// BoxReciprocalSetup overwrites it with the trial charge density and leaves it
+// corrupted after a rejection (currentCoords and box revert, but chargeMesh does not).
+void EwaldPME::RestoreMol(int molIndex) {
+  cachedSignNew = 0.0;
+  pendingUpdate = false;
+}
+
+void EwaldPME::exgMolCache() {
+  Ewald::exgMolCache(); // call base (currently a no-op, but keeps the chain intact)
+  for (uint box = 0; box < BOXES_WITH_U_NB; ++box) {
+    if (chargeMesh[box] != nullptr) {
+      // Check if K dimensions were corrupted by a rejected volume trial
+      double gridSpacing = ff.pmeGridSpacing <= 0.0 ? 1.0 : ff.pmeGridSpacing;
+      int k0 = (int)ceil(currentAxes.axis.Get(box).x / gridSpacing);
+      int k1 = (int)ceil(currentAxes.axis.Get(box).y / gridSpacing);
+      int k2 = (int)ceil(currentAxes.axis.Get(box).z / gridSpacing);
+
+      int Kx = (pmeOrder > k0) ? pmeOrder : k0;
+      int Ky = (pmeOrder > k1) ? pmeOrder : k1;
+      int Kz = (pmeOrder > k2) ? pmeOrder : k2;
+
+      if (Kx % 2 != 0) Kx++;
+      if (Ky % 2 != 0) Ky++;
+      if (Kz % 2 != 0) Kz++;
+
+      if (K[box][0] != Kx || K[box][1] != Ky || K[box][2] != Kz) {
+        // K dimensions were permanently altered during BoxReciprocalSetup but the move was rejected.
+        // The previously committed S_ref and potentialMesh were destroyed. Rebuild them completely.
+        BoxReciprocalSums(box, currentCoords);
+      } else {
+        // Restore trialAxes and Green function to the committed (current) volume.
+        RecipInit(box, currentAxes);
+        // Rebuild chargeMesh to reflect the committed (current) coordinates.
+        ComputeChargeMesh(box, currentCoords);
+        // CRITICAL: Recompute S_ref from the restored chargeMesh.
+        // BoxReciprocalSetup wrote the trial FFT into S_trial; the fwdPlan target
+        // is S_trial. We must write the current-state FFT back to S_ref.
+        // Execute the forward FFT (writes to S_trial as per the plan)...
+        fftw_execute(fwdPlan[box]);
+        // ...then copy S_trial → S_ref (same as UpdateRecipVec does on acceptance).
+        int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
+        std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
+        // Rebuild the real-space potential mesh so interpolation reads fresh data.
+        UpdatePotentialMesh(box);
+        // Recompute exact energy and store in sysPotRef to stay consistent.
+        const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
+            SumMeshEnergy(box, S_ref[box]);
+      }
+    }
+  }
 }
 
 Virial EwaldPME::VirialReciprocal(Virial &virial, uint box) const {
@@ -663,14 +728,19 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
   dE += ComputeDeltaSsq(box, newCoords, sign_new, oldCoords, sign_old, 
                         atomIndices, charges, nAtoms);
 
-  // Optionally commit the update to S_ref (on move acceptance)
+  // Optionally commit the update to S_ref (on move acceptance).
+  // Incrementally update chargeMesh then re-FFT to get new S_ref.
+  // chargeMesh is maintained correctly between per-molecule moves:
+  // it holds Q(r) for the currently committed coordinates and is restored
+  // after volume trials by BoxReciprocalSetup's save/restore.
   if (updateSRef) {
     if (oldCoords) UpdateAtomInMesh(box, charges, nAtoms, *oldCoords, sign_old);
     if (newCoords) UpdateAtomInMesh(box, charges, nAtoms, *newCoords, sign_new);
     fftw_execute(fwdPlan[box]);
     
-    // Synchronize S_ref with S_trial (which now holds the updated GLOBAL S)
+    // Copy S_trial[box] to S_ref[box] for future references
     int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
+    std::memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
     for (int i = 0; i < nk; ++i) {
       S_ref[box][i][0] = S_trial[box][i][0];
       S_ref[box][i][1] = S_trial[box][i][1];
@@ -678,6 +748,11 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
     UpdatePotentialMesh(box);
   }
 
+  // Always return the exact energy of the successfully committed S_ref
+  // (S_trial is destroyed during UpdatePotentialMesh's c2r transform)
+  if (updateSRef) {
+    return SumMeshEnergy(box, S_ref[box]);
+  }
   return dE;
 }
 

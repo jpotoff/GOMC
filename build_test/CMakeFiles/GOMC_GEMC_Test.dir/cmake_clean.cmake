@@ -153,6 +153,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/GOMC_GEMC_Test.dir/test/src/MolLookupTest.cpp.o.d"
   "CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestBSpline.cpp.o"
   "CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestBSpline.cpp.o.d"
+  "CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.o"
+  "CMakeFiles/GOMC_GEMC_Test.dir/test/src/TestEwaldPMEMoves.cpp.o.d"
   "GOMC_GEMC_Test"
   "GOMC_GEMC_Test.pdb"
 )
