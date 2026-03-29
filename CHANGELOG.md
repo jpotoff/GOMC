@@ -1,4 +1,4 @@
-#Change Log
+# Change Log
 All notable changes to this project will be documented in this file.
 
 ## [2.80] - 12/03/2025
@@ -153,24 +153,14 @@ TO DO: IntraSwap does not work properly. The bug is going to be fixed.
 
 ##[1.00] - 3/15/2016
 + Fix the bug of GEMC simulation. Now all NVT, GCMC, and GEMC are working.
-+ Enable the Cache version of GEMC to save time;
-however,
-    the scalability is limited.
++ Enable the Cache version of GEMC to save time; however, the scalability is limited.
 
-        ##[1.00] -
-        01 / 25 / 2016 + Fix the coherence issue on two boxes simulations,
-    including NPT, GEMC,
-    and two boxes GCMC simulations.
+##[1.00] - 01/25/2016
++ Fix the coherence issue on two boxes simulations, including NPT, GEMC, and two boxes GCMC simulations.
 
-        + To fix the issue,
-    Calp() and SetupRecip() have to be
-        recalculated everytime before and after the volume transfer;
-RecipSinSum and RecipCosSum arrays have to be synchronized in two boxes
-    simulations;
-GEMC_NVT is different from GEMC_NPT,
-    the difference between GEMC_NVT and GEMC_NPT requires "if" statement.
++ To fix the issue, Calp() and SetupRecip() have to be recalculated everytime before and after the volume transfer; RecipSinSum and RecipCosSum arrays have to be synchronized in two boxes simulations; GEMC_NVT is different from GEMC_NPT, the difference between GEMC_NVT and GEMC_NPT requires "if" statement.
 
-    ? GEMC is returning good result from computation; however, it does not return correct results. A potential bug inside of the computation logic.
+? GEMC is returning good result from computation; however, it does not return correct results. A potential bug inside of the computation logic.
 
 ## [1.1] - 01/20/2016
 + Supporting Martini forcefield
@@ -204,3 +194,4 @@ GEMC_NVT is different from GEMC_NPT,
 + Improved move adjustments for better targeting of desired acceptance rate.
 + Various minor bug fixes for fringe conditions.
 + Improvements to I/O handling, inclusion of new output types relating to grand canonical ensemble (fluctuations, energy/particle samples, and distribution of molecule counts).
+

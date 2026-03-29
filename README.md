@@ -1,4 +1,4 @@
-#GOMC - GPU Optimized Monte Carlo
+# GOMC - GPU Optimized Monte Carlo
 
 GOMC is an acronym for GPU Optimized Monte Carlo. GOMC is a parallel molecular simulation code designed for high-performance simulation of large systems that runs on both CPUs, with or without OpenMP, and NVIDIA GPUs.
 
