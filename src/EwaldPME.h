@@ -1,9 +1,12 @@
 #pragma once
-#include "BoxDimensions.h"
-#include "Ewald.h"
 #include <cassert>
 #include <fftw3.h>
 #include <vector>
+
+#include "BasicTypes.h"
+#include "Ewald.h"
+#include "XYZArray.h"
+#include "EnergyTypes.h"
 
 class EwaldPME : public Ewald {
 public:
@@ -17,15 +20,17 @@ public:
   void BoxReciprocalSetup(uint box, XYZArray const &molCoords) override;
   void BoxReciprocalSums(uint box, XYZArray const &molCoords) override;
   double BoxReciprocal(uint box, bool isNewVolume) const override;
-  void UpdateRecipVec(uint box) override; // recomputes C(m)
+  void UpdateRecipVec(uint box) override; 
   void SetRecipRef(uint box) override { UpdateRecipVec(box); }
-  void UpdateRecip(uint box) override; // applies accepted moves to mesh
+  void UpdateRecip(uint box) override; 
   void Maintain(const ulong step) override;
-  void exgMolCache() override; // restores chargeMesh on vol-move reject
-  void RestoreMol(int molIndex) override; // clears pending move over network
+  void exgMolCache() override; 
+  void RestoreMol(int molIndex) override; 
+  void BoxForceReciprocal(XYZArray const &molCoords, XYZArray &atomForceRec,
+                          XYZArray &molForceRec, uint box) override;
   Virial VirialReciprocal(Virial &virial, uint box) const override;
 
-  // Per-move path (no FFT, O(P³))
+  // Per-move path (no FFT)
   double MolReciprocal(XYZArray const &molCoords, const uint molIndex,
                        const uint box) override;
   double SwapDestRecip(const cbmc::TrialMol &newMol, const uint box,
@@ -42,30 +47,27 @@ public:
                                bool first_call) override;
 
 private:
-  int pmeOrder;           // B-spline order P
-  int K[BOX_TOTAL][3];    // mesh dims per box
-  fftw_complex **S_ref;   // stored FFT(Q), one per box (flat array)
-  double **greenFunc;     // C(m), one per box
-  double **chargeMesh;    // real staging buffer for FFT
-  double **potentialMesh; // real mesh for background potential (after IFFT)
+  int pmeOrder;           
+  int K[BOX_TOTAL][3];    
+  fftw_complex **S_ref;   
+  double **greenFunc;     
+  double **chargeMesh;    
+  double **potentialMesh; 
   fftw_plan fwdPlan[BOX_TOTAL];
   fftw_plan bwdPlan[BOX_TOTAL];
-  uint refreshInterval; // steps between full S_ref recomputes
+  uint refreshInterval; 
 
-  // Scratch buffers for incremental changes
   double **scratchMesh;
   fftw_complex **S_delta;
   fftw_plan scratchPlan[BOX_TOTAL];
 
-  // NPT / Volume move trial state
-  BoxDimensions trialAxes[BOX_TOTAL]; // holds axes from last RecipInit call
+  BoxDimensions trialAxes[BOX_TOTAL]; 
   fftw_complex **S_trial;
   double **greenFunc_trial;
   int K_trial[BOX_TOTAL][3];
   double tempEnergyRecip[BOX_TOTAL];
   Virial tempVirialRecip[BOX_TOTAL];
 
-  // Move caching for O(P³) incremental S_ref updates on accept
   bool pendingUpdate;
   bool forceFullUpdate;
   uint cachedBox;
@@ -77,16 +79,12 @@ private:
   std::vector<double> cachedCharges;
   uint cachedNAtoms;
 
-  void ComputeChargeMesh(uint box, XYZArray const &molCoords);
-  void AddMoleculeToMesh(uint box, uint molIndex, XYZArray const &molCoords,
-                         double *mesh);
-  void ComputeGreenFunction(uint box);
-  double SumMeshEnergy(uint box, const fftw_complex *S,
+  void UpdateGreenFunction(uint box, const BoxDimensions &axes);
+  double SumMeshEnergy(uint box, fftw_complex *S,
                        Virial *virial = nullptr) const;
   void UpdatePotentialMesh(uint box);
   double InterpolatePotential(uint box, const XYZ &coords) const;
 
-  // Compute 0.5 * sum_m G(m) * |dS(m)|^2 where dS is the charge mesh delta
   double ComputeDeltaSsq(uint box, const XYZArray *newCoords, double sign_new,
                          const XYZArray *oldCoords, double sign_old,
                          const uint *atomIndices, const double *charges,
