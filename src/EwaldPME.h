@@ -25,6 +25,8 @@ public:
   void UpdateRecip(uint box) override; 
   void Maintain(const ulong step) override;
   void exgMolCache() override; 
+  void backupMolCache() override;
+  void CopyRecip(uint box) override;
   void RestoreMol(int molIndex) override; 
   void BoxForceReciprocal(XYZArray const &molCoords, XYZArray &atomForceRec,
                           XYZArray &molForceRec, uint box) override;

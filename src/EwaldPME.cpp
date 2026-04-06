@@ -215,7 +215,7 @@ void EwaldPME::UpdateGreenFunction(uint box, const BoxDimensions &axes) {
         double kSq = kx * kx + ky * ky + kz * kz;
         int idx = (ix * Ky + iy) * halfKz + iz;
         if (kSq == 0) greenFunc[box][idx] = 0.0;
-        else greenFunc[box][idx] = (4.0 * M_PI / (vol * kSq)) * exp(-pre * kSq) * bx[ix] * by[iy] * bz[iz];
+        else greenFunc[box][idx] = num::qqFact * (4.0 * M_PI / (vol * kSq)) * exp(-pre * kSq) * bx[ix] * by[iy] * bz[iz];
       }
     }
   }
@@ -263,12 +263,13 @@ void EwaldPME::UpdatePotentialMesh(uint box) {
 }
 
 void EwaldPME::UpdateAtomInMesh(uint box, const double *charges, uint nAtoms,
-                                const XYZArray &coords, double sign) {
-  int Kx = K_trial[box][0], Ky = K_trial[box][1], Kz = K_trial[box][2];
+                                 const XYZArray &coords, double sign) {
+  // Use committed K dims (not K_trial) for consistency with ComputeDeltaSsq
+  int Kx = K[box][0], Ky = K[box][1], Kz = K[box][2];
   for (uint i = 0; i < nAtoms; ++i) {
     double charge = charges[i] * sign;
-    XYZ r = coords.Get(i); XYZ s = trialAxes[box].TransformUnSlant(r, box);
-    double sx = s.x / trialAxes[box].axis.Get(box).x, sy = s.y / trialAxes[box].axis.Get(box).y, sz = s.z / trialAxes[box].axis.Get(box).z;
+    XYZ r = coords.Get(i); XYZ s = currentAxes.TransformUnSlant(r, box);
+    double sx = s.x / currentAxes.axis.Get(box).x, sy = s.y / currentAxes.axis.Get(box).y, sz = s.z / currentAxes.axis.Get(box).z;
     sx -= floor(sx); sy -= floor(sy); sz -= floor(sz);
     double ux = sx * Kx, uy = sy * Ky, uz = sz * Kz;
     double bs_x[20], bs_y[20], bs_z[20];
@@ -407,8 +408,14 @@ void EwaldPME::UpdateRecip(uint box) {
     int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
     memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
     UpdatePotentialMesh(box);
+    // Store the exact energy computed from the full mesh rebuild
+    const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
+        SumMeshEnergy(box, S_ref[box]);
   } else {
-    DeltaERecip(box, (cachedSignNew!=0.0?&cachedNewCoords:nullptr), cachedSignNew, (cachedSignOld!=0.0?&cachedOldCoords:nullptr), cachedSignOld, cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms, true);
+    // DeltaERecip with updateSRef=true returns the exact total recip energy
+    double exactEnergy = DeltaERecip(box, (cachedSignNew!=0.0?&cachedNewCoords:nullptr), cachedSignNew, (cachedSignOld!=0.0?&cachedOldCoords:nullptr), cachedSignOld, cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms, true);
+    // Store exact energy, overwriting any incremental += dE from the caller
+    const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip = exactEnergy;
   }
   pendingUpdate = false; forceFullUpdate = false;
 }
@@ -424,6 +431,19 @@ void EwaldPME::Maintain(const ulong step) {
 void EwaldPME::exgMolCache() {
   for (uint b = 0; b < BOXES_WITH_U_NB; ++b) {
     if (S_ref && S_ref[b]) {
+      // Reset K_trial to committed K dims before rebuilding.
+      // After a rejected volume move, K_trial still holds the trial dims;
+      // BoxReciprocalSetup uses K_trial, so we must restore it first to
+      // avoid a dimension mismatch between meshes/FFTW plans and K.
+      K_trial[b][0] = K[b][0];
+      K_trial[b][1] = K[b][1];
+      K_trial[b][2] = K[b][2];
+      trialAxes[b] = currentAxes;
+      // Destroy existing FFTW plans so BoxReciprocalSetup is forced to
+      // recreate them for the committed K dims (the nullptr check triggers it).
+      if (fwdPlan[b]) { fftw_destroy_plan(fwdPlan[b]); fwdPlan[b] = nullptr; }
+      if (bwdPlan[b]) { fftw_destroy_plan(bwdPlan[b]); bwdPlan[b] = nullptr; }
+      if (scratchPlan[b]) { fftw_destroy_plan(scratchPlan[b]); scratchPlan[b] = nullptr; }
       BoxReciprocalSetup(b, currentCoords);
       int nk = K[b][0] * K[b][1] * (K[b][2] / 2 + 1);
       memcpy(S_ref[b], S_trial[b], sizeof(fftw_complex) * nk);
@@ -435,6 +455,12 @@ void EwaldPME::exgMolCache() {
 void EwaldPME::RestoreMol(int molIndex) {
   pendingUpdate = false; forceFullUpdate = false;
 }
+
+// PME uses mesh-based S_ref/S_trial;
+// the base Ewald's sumR/sumI arrays are not relevant.
+void EwaldPME::CopyRecip(uint box) { return; }
+void EwaldPME::backupMolCache() { return; }
+
 
 void EwaldPME::BoxForceReciprocal(XYZArray const &molCoords, XYZArray &atomForceRec, XYZArray &molForceRec, uint box) {
   if (box >= BOXES_WITH_U_NB || S_ref[box] == nullptr) return;
@@ -486,21 +512,65 @@ double EwaldPME::MolReciprocal(XYZArray const &molCoords, const uint molIndex, c
   uint startAtom = mols.MolStart(molIndex), length = mols.MolLength(molIndex);
   vector<uint> atomIndices(length); vector<double> charges(length);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = particleCharge[startAtom + i]; }
-  return DeltaERecip(box, &molCoords, 1.0, &currentCoords, -1.0, atomIndices.data(), charges.data(), length, false);
+  double dE = DeltaERecip(box, &molCoords, 1.0, &currentCoords, -1.0, atomIndices.data(), charges.data(), length, false);
+
+  // Cache move data so UpdateRecip can apply it on acceptance
+  pendingUpdate = true;
+  forceFullUpdate = false;
+  cachedBox = box;
+  cachedNewCoords = molCoords;
+  cachedOldCoords.Uninit();
+  cachedOldCoords.Init(length);
+  currentCoords.CopyRange(cachedOldCoords, startAtom, 0, length);
+  cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
+  cachedCharges.assign(charges.begin(), charges.end());
+  cachedSignNew = 1.0;
+  cachedSignOld = -1.0;
+  cachedNAtoms = length;
+
+  return dE;
 }
 
 double EwaldPME::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box, const int molIndex) {
   uint length = newMol.GetKind().NumAtoms(); vector<uint> atomIndices(length); vector<double> charges(length);
   uint startAtom = mols.MolStart(molIndex);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = newMol.GetKind().AtomCharge(i); }
-  return DeltaERecip(box, &newMol.GetCoords(), 1.0, nullptr, 0.0, atomIndices.data(), charges.data(), length, false);
+  double dE = DeltaERecip(box, &newMol.GetCoords(), 1.0, nullptr, 0.0, atomIndices.data(), charges.data(), length, false);
+
+  pendingUpdate = true;
+  forceFullUpdate = false;
+  cachedBox = box;
+  cachedNewCoords = newMol.GetCoords();
+  cachedOldCoords.Uninit();
+  cachedOldCoords.Init(0);
+  cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
+  cachedCharges.assign(charges.begin(), charges.end());
+  cachedSignNew = 1.0;
+  cachedSignOld = 0.0;
+  cachedNAtoms = length;
+
+  return dE;
 }
 
 double EwaldPME::SwapSourceRecip(const cbmc::TrialMol &oldMol, const uint box, const int molIndex) {
   uint length = oldMol.GetKind().NumAtoms(); vector<uint> atomIndices(length); vector<double> charges(length);
   uint startAtom = mols.MolStart(molIndex);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = oldMol.GetKind().AtomCharge(i); }
-  return DeltaERecip(box, nullptr, 0.0, &oldMol.GetCoords(), -1.0, atomIndices.data(), charges.data(), length, false);
+  double dE = DeltaERecip(box, nullptr, 0.0, &oldMol.GetCoords(), -1.0, atomIndices.data(), charges.data(), length, false);
+
+  pendingUpdate = true;
+  forceFullUpdate = false;
+  cachedBox = box;
+  cachedNewCoords.Uninit();
+  cachedNewCoords.Init(0);
+  cachedOldCoords = oldMol.GetCoords();
+  cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
+  cachedCharges.assign(charges.begin(), charges.end());
+  cachedSignNew = 0.0;
+  cachedSignOld = -1.0;
+  cachedNAtoms = length;
+
+  return dE;
 }
 
 double EwaldPME::ChangeLambdaRecip(XYZArray const &molCoords, const double lambdaOld, const double lambdaNew, const uint molIndex, const uint box) {
