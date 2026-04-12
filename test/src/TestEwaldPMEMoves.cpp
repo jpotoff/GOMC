@@ -613,3 +613,197 @@ TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
       << "PME recip energy barely changes over 2.2x volume range — "
       << "possible normalization bug. variation=" << variation;
 }
+
+// ---------------------------------------------------------------------------
+// Regression test for the K_trial/greenFunc_trial corruption bug.
+//
+// This test catches the specific failure mode where SumMeshEnergy uses
+// K_trial and greenFunc_trial (which become stale after a rejected volume
+// move) instead of the committed K and greenFunc arrays during per-move
+// energy evaluations.
+//
+// The test sequence is:
+//   1. Record the initial reciprocal energy via full rebuild.
+//   2. Perform a volume move that changes K_trial to *different* dimensions.
+//   3. Reject the volume move (via exgMolCache).
+//   4. Perform N sequential displacement moves, accepting each one.
+//   5. After each accepted move, verify the PME incremental energy matches
+//      a full system rebuild within tight tolerance.
+//
+// Without the useTrial fix, step 5 would show growing discrepancies because
+// ComputeDeltaSsq→SumMeshEnergy would use stale K_trial dimensions and the
+// wrong Green function values.
+// ---------------------------------------------------------------------------
+TEST_F(EwaldPMEMovesTest, RejectedVolumeDoesNotCorruptPerMoveEnergy) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double baselineRecip = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Baseline reciprocal energy: " << baselineRecip << " K\n";
+
+  // --- Step 1: Perform a volume move that will change K_trial ---
+  // Use a large scale (1.30) to force K_trial to differ from K.
+  // With PMEGridSpacing=1.5: K = round(25.0/1.5) = 17;
+  // after scale 1.30: K_trial = round(32.5/1.5) = 22. This is different.
+  {
+    BoxDimensions newAxes = sim.GetBoxDim();
+    double scale = 1.30;
+    double Lnew = newAxes.axis.Get(box).x * scale;
+    newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
+    newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
+    newAxes.volume[box] = Lnew * Lnew * Lnew;
+    newAxes.volInv[box] = 1.0 / newAxes.volume[box];
+    newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0, 0.0));
+    newAxes.cellBasis[box].Set(1, XYZ(0.0, Lnew, 0.0));
+    newAxes.cellBasis[box].Set(2, XYZ(0.0, 0.0, Lnew));
+
+    XYZArray scaledCoords(sim.GetCoordinates().Count());
+    for (uint i = 0; i < scaledCoords.Count(); ++i) {
+      XYZ pos = sim.GetCoordinates().Get(i);
+      scaledCoords.Set(i, XYZ(pos.x * scale, pos.y * scale, pos.z * scale));
+    }
+
+    pme->RecipInit(box, newAxes);
+    pme->BoxReciprocalSetup(box, scaledCoords);
+    double trialEnergy = pme->BoxReciprocal(box, true);
+    std::cout << "Trial volume energy (scale=1.30): " << trialEnergy << " K\n";
+
+    // REJECT the volume move
+    pme->exgMolCache();
+    std::cout << "Volume move rejected. K_trial may be dirty.\n";
+  }
+
+  // --- Step 2: Perform N displacement moves and verify consistency ---
+  const int nMoves = 5;
+  // Use different molecules and displacement vectors for each move
+  uint molIndices[] = {5, 10, 15, 20, 25};
+  XYZ displacements[] = {
+    XYZ(1.5, -0.8, 2.1),
+    XYZ(-2.3, 1.4, -0.5),
+    XYZ(0.7, 2.5, -1.8),
+    XYZ(-1.1, -1.1, 3.0),
+    XYZ(3.2, 0.3, -2.4)
+  };
+
+  for (int moveIdx = 0; moveIdx < nMoves; ++moveIdx) {
+    uint molIndex = molIndices[moveIdx];
+    if (molIndex >= sim.GetMolecules().count)
+      molIndex = moveIdx;  // Fallback to low index
+
+    XYZ move = displacements[moveIdx];
+    uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+    XYZArray newCoords(nAtoms);
+    uint startAtom = sim.GetMolecules().MolStart(molIndex);
+    for (uint i = 0; i < nAtoms; ++i) {
+      newCoords.Set(i, sim.GetCoordinates().Get(startAtom + i) + move);
+    }
+
+    // Calculate incremental dE
+    double dE = pme->MolReciprocal(newCoords, molIndex, box);
+
+    // Accept the move
+    pme->UpdateRecip(box);
+    double incrementalEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+    // Update coordinates so full rebuild sees the new positions
+    for (uint i = 0; i < nAtoms; ++i) {
+      sim.GetCoordinates().Set(startAtom + i, newCoords.Get(i));
+    }
+
+    // Full rebuild to get ground-truth energy
+    pme->UpdateVectorsAndRecipTerms(false);
+    sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+    double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+    std::cout << "Move " << moveIdx << " (mol " << molIndex << "): "
+              << "incremental=" << incrementalEnergy
+              << "  fullRebuild=" << fullRebuildEnergy
+              << "  diff=" << (incrementalEnergy - fullRebuildEnergy) << "\n";
+
+    // The incremental energy MUST match the full rebuild.
+    // Without the useTrial fix, this would diverge badly after the
+    // rejected volume move because SumMeshEnergy would read stale
+    // K_trial dimensions and greenFunc_trial values.
+    EXPECT_NEAR(incrementalEnergy, fullRebuildEnergy, 1e-1)
+        << "Reciprocal energy corruption detected after rejected volume move! "
+        << "Move " << moveIdx << ", mol " << molIndex;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Regression test: multiple rejected volume moves followed by displacement.
+//
+// This test is a stress variant that performs multiple rejected volume moves
+// at different scales before running displacement moves. It catches bugs
+// where internal state accumulates corruption across multiple rejections.
+// ---------------------------------------------------------------------------
+TEST_F(EwaldPMEMovesTest, MultipleRejectedVolumesDoNotCorruptEnergy) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+
+  // Perform 3 rejected volume moves at different scales
+  double scales[] = {1.20, 0.85, 1.40};
+  for (double scale : scales) {
+    BoxDimensions newAxes = sim.GetBoxDim();
+    double Lnew = newAxes.axis.Get(box).x * scale;
+    newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
+    newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
+    newAxes.volume[box] = Lnew * Lnew * Lnew;
+    newAxes.volInv[box] = 1.0 / newAxes.volume[box];
+    newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0, 0.0));
+    newAxes.cellBasis[box].Set(1, XYZ(0.0, Lnew, 0.0));
+    newAxes.cellBasis[box].Set(2, XYZ(0.0, 0.0, Lnew));
+
+    XYZArray scaledCoords(sim.GetCoordinates().Count());
+    for (uint i = 0; i < scaledCoords.Count(); ++i) {
+      XYZ pos = sim.GetCoordinates().Get(i);
+      scaledCoords.Set(i, XYZ(pos.x * scale, pos.y * scale, pos.z * scale));
+    }
+
+    pme->RecipInit(box, newAxes);
+    pme->BoxReciprocalSetup(box, scaledCoords);
+    pme->BoxReciprocal(box, true);
+    pme->exgMolCache(); // REJECT
+    std::cout << "Rejected volume move at scale=" << scale << "\n";
+  }
+
+  // Now do a displacement move and verify
+  uint molIndex = 8;
+  if (molIndex >= sim.GetMolecules().count) molIndex = 0;
+
+  uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+  XYZArray newCoords(nAtoms);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+  XYZ move(2.0, -1.5, 0.8);
+  for (uint i = 0; i < nAtoms; ++i) {
+    newCoords.Set(i, sim.GetCoordinates().Get(startAtom + i) + move);
+  }
+
+  double dE = pme->MolReciprocal(newCoords, molIndex, box);
+  pme->UpdateRecip(box);
+  double incrementalEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  for (uint i = 0; i < nAtoms; ++i) {
+    sim.GetCoordinates().Set(startAtom + i, newCoords.Get(i));
+  }
+
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  std::cout << "After 3 rejected volumes + 1 displacement: "
+            << "incremental=" << incrementalEnergy
+            << "  fullRebuild=" << fullRebuildEnergy
+            << "  diff=" << (incrementalEnergy - fullRebuildEnergy) << "\n";
+
+  EXPECT_NEAR(incrementalEnergy, fullRebuildEnergy, 1e-1)
+      << "Reciprocal energy corruption after multiple rejected volume moves!";
+}
+

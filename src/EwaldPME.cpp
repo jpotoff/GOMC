@@ -522,16 +522,18 @@ double EwaldPME::MolReciprocal(XYZArray const &molCoords, const uint molIndex, c
   uint startAtom = mols.MolStart(molIndex), length = mols.MolLength(molIndex);
   vector<uint> atomIndices(length); vector<double> charges(length);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = particleCharge[startAtom + i]; }
-  double dE = DeltaERecip(box, &molCoords, 1.0, &currentCoords, -1.0, atomIndices.data(), charges.data(), length, false);
+  // Extract old coords first so we can pass the correctly-sized array
+  cachedOldCoords.Uninit();
+  cachedOldCoords.Init(length);
+  currentCoords.CopyRange(cachedOldCoords, startAtom, 0, length);
 
-  // Cache move data so UpdateRecip can apply it on acceptance
+  double dE = DeltaERecip(box, &molCoords, 1.0, &cachedOldCoords, -1.0, atomIndices.data(), charges.data(), length, false);
+
+  // Cache remaining move data so UpdateRecip can apply it on acceptance
   pendingUpdate = true;
   forceFullUpdate = false;
   cachedBox = box;
   cachedNewCoords = molCoords;
-  cachedOldCoords.Uninit();
-  cachedOldCoords.Init(length);
-  currentCoords.CopyRange(cachedOldCoords, startAtom, 0, length);
   cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
   cachedCharges.assign(charges.begin(), charges.end());
   cachedSignNew = 1.0;
