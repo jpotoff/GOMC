@@ -38,6 +38,7 @@ EwaldPME::EwaldPME(StaticVals &stat, System &sys) : Ewald(stat, sys) {
   for (uint b = 0; b < BOX_TOTAL; b++) {
     K[b][0] = K[b][1] = K[b][2] = 0;
     K_trial[b][0] = K_trial[b][1] = K_trial[b][2] = 0;
+    K_allocated[b][0] = K_allocated[b][1] = K_allocated[b][2] = 0;
     tempEnergyRecip[b] = 0.0;
   }
 
@@ -109,7 +110,7 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     return;
 
   int Kx = K_trial[box][0], Ky = K_trial[box][1], Kz = K_trial[box][2];
-  bool kChanged = (Kx != K[box][0] || Ky != K[box][1] || Kz != K[box][2]);
+  bool kChanged = (Kx != K_allocated[box][0] || Ky != K_allocated[box][1] || Kz != K_allocated[box][2]);
 
   if (kChanged || fwdPlan[box] == nullptr) {
     if (fwdPlan[box]) fftw_destroy_plan(fwdPlan[box]);
@@ -145,6 +146,8 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
                                         potentialMesh[box], FFTW_ESTIMATE);
     scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box],
                                             S_delta[box], FFTW_ESTIMATE);
+
+    K_allocated[box][0] = Kx; K_allocated[box][1] = Ky; K_allocated[box][2] = Kz;
 
     // Initialize the committed greenFunc with valid data so it doesn't contain garbage zeros
     UpdateGreenFunction(box, trialAxes[box], greenFunc[box]);
@@ -391,20 +394,23 @@ double EwaldPME::BoxReciprocal(uint box, bool isNewVolume) const {
 void EwaldPME::RecipInit(uint box, BoxDimensions const &axes) {
   Ewald::RecipInit(box, axes);
   trialAxes[box] = axes;
-  if (K[box][0] == 0) {
-    K_trial[box][0] = (int)round(axes.axis.Get(box).x / ff.pmeGridSpacing);
-    K_trial[box][1] = (int)round(axes.axis.Get(box).y / ff.pmeGridSpacing);
-    K_trial[box][2] = (int)round(axes.axis.Get(box).z / ff.pmeGridSpacing);
-    if (K_trial[box][0] < 1) K_trial[box][0] = 1;
-    if (K_trial[box][1] < 1) K_trial[box][1] = 1;
-    if (K_trial[box][2] < 1) K_trial[box][2] = 1;
-  } else {
-    // Lock grid dimensions to preserve detailed balance and prevent destroying the
-    // continuous chargeMesh arrays during NPT trial volume rejections. 
-    K_trial[box][0] = K[box][0];
-    K_trial[box][1] = K[box][1];
-    K_trial[box][2] = K[box][2];
-  }
+
+  K_trial[box][0] = (int)round(axes.axis.Get(box).x / ff.pmeGridSpacing);
+  K_trial[box][1] = (int)round(axes.axis.Get(box).y / ff.pmeGridSpacing);
+  K_trial[box][2] = (int)round(axes.axis.Get(box).z / ff.pmeGridSpacing);
+
+  if (K_trial[box][0] < 1) K_trial[box][0] = 1;
+  if (K_trial[box][1] < 1) K_trial[box][1] = 1;
+  if (K_trial[box][2] < 1) K_trial[box][2] = 1;
+
+  auto nextFFTW = [](int d) {
+    while (d % 2 != 0 && d % 3 != 0 && d % 5 != 0) d++;
+    return d;
+  };
+
+  K_trial[box][0] = nextFFTW(K_trial[box][0]);
+  K_trial[box][1] = nextFFTW(K_trial[box][1]);
+  K_trial[box][2] = nextFFTW(K_trial[box][2]);
 }
 
 void EwaldPME::UpdateRecipVec(uint box) {
@@ -455,23 +461,21 @@ void EwaldPME::Maintain(const ulong step) {
 void EwaldPME::exgMolCache() {
   for (uint b = 0; b < BOXES_WITH_U_NB; ++b) {
     if (S_ref && S_ref[b]) {
-      // Reset K_trial to committed K dims before rebuilding.
-      // After a rejected volume move, K_trial still holds the trial dims;
-      // BoxReciprocalSetup uses K_trial, so we must restore it first to
-      // avoid a dimension mismatch between meshes/FFTW plans and K.
       K_trial[b][0] = K[b][0];
       K_trial[b][1] = K[b][1];
       K_trial[b][2] = K[b][2];
       trialAxes[b] = currentAxes;
-      // Destroy existing FFTW plans so BoxReciprocalSetup is forced to
-      // recreate them for the committed K dims (the nullptr check triggers it).
-      if (fwdPlan[b]) { fftw_destroy_plan(fwdPlan[b]); fwdPlan[b] = nullptr; }
-      if (bwdPlan[b]) { fftw_destroy_plan(bwdPlan[b]); bwdPlan[b] = nullptr; }
-      if (scratchPlan[b]) { fftw_destroy_plan(scratchPlan[b]); scratchPlan[b] = nullptr; }
-      BoxReciprocalSetup(b, currentCoords);
-      int nk = K[b][0] * K[b][1] * (K[b][2] / 2 + 1);
-      memcpy(S_ref[b], S_trial[b], sizeof(fftw_complex) * nk);
-      UpdatePotentialMesh(b);
+
+      if (K_allocated[b][0] != K[b][0] || K_allocated[b][1] != K[b][1] || K_allocated[b][2] != K[b][2]) {
+        if (fwdPlan[b]) { fftw_destroy_plan(fwdPlan[b]); fwdPlan[b] = nullptr; }
+        if (bwdPlan[b]) { fftw_destroy_plan(bwdPlan[b]); bwdPlan[b] = nullptr; }
+        if (scratchPlan[b]) { fftw_destroy_plan(scratchPlan[b]); scratchPlan[b] = nullptr; }
+
+        BoxReciprocalSetup(b, currentCoords);
+        int nk = K[b][0] * K[b][1] * (K[b][2] / 2 + 1);
+        memcpy(S_ref[b], S_trial[b], sizeof(fftw_complex) * nk);
+        UpdatePotentialMesh(b);
+      }
     }
   }
 }

@@ -67,6 +67,7 @@ private:
   fftw_complex **S_trial;
   double **greenFunc_trial;
   int K_trial[BOX_TOTAL][3];
+  int K_allocated[BOX_TOTAL][3];
   double tempEnergyRecip[BOX_TOTAL];
   Virial tempVirialRecip[BOX_TOTAL];
 
