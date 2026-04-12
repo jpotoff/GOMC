@@ -145,6 +145,9 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
                                         potentialMesh[box], FFTW_ESTIMATE);
     scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box],
                                             S_delta[box], FFTW_ESTIMATE);
+
+    // Initialize the committed greenFunc with valid data so it doesn't contain garbage zeros
+    UpdateGreenFunction(box, trialAxes[box], greenFunc[box]);
   }
 
   // Always evaluate the trial green function for the new trial dimensions
@@ -388,9 +391,20 @@ double EwaldPME::BoxReciprocal(uint box, bool isNewVolume) const {
 void EwaldPME::RecipInit(uint box, BoxDimensions const &axes) {
   Ewald::RecipInit(box, axes);
   trialAxes[box] = axes;
-  K_trial[box][0] = (int)round(axes.axis.Get(box).x / ff.pmeGridSpacing);
-  K_trial[box][1] = (int)round(axes.axis.Get(box).y / ff.pmeGridSpacing);
-  K_trial[box][2] = (int)round(axes.axis.Get(box).z / ff.pmeGridSpacing);
+  if (K[box][0] == 0) {
+    K_trial[box][0] = (int)round(axes.axis.Get(box).x / ff.pmeGridSpacing);
+    K_trial[box][1] = (int)round(axes.axis.Get(box).y / ff.pmeGridSpacing);
+    K_trial[box][2] = (int)round(axes.axis.Get(box).z / ff.pmeGridSpacing);
+    if (K_trial[box][0] < 1) K_trial[box][0] = 1;
+    if (K_trial[box][1] < 1) K_trial[box][1] = 1;
+    if (K_trial[box][2] < 1) K_trial[box][2] = 1;
+  } else {
+    // Lock grid dimensions to preserve detailed balance and prevent destroying the
+    // continuous chargeMesh arrays during NPT trial volume rejections. 
+    K_trial[box][0] = K[box][0];
+    K_trial[box][1] = K[box][1];
+    K_trial[box][2] = K[box][2];
+  }
 }
 
 void EwaldPME::UpdateRecipVec(uint box) {
