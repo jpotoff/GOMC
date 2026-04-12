@@ -81,7 +81,7 @@ private:
   std::vector<double> cachedCharges;
   uint cachedNAtoms;
 
-  void UpdateGreenFunction(uint box, const BoxDimensions &axes);
+  void UpdateGreenFunction(uint box, const BoxDimensions &axes, double *gf_out);
   double SumMeshEnergy(uint box, fftw_complex *S,
                        Virial *virial = nullptr,
                        bool useTrial = true) const;

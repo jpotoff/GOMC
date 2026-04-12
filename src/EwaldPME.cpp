@@ -145,10 +145,10 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
                                         potentialMesh[box], FFTW_ESTIMATE);
     scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box],
                                             S_delta[box], FFTW_ESTIMATE);
-
-    UpdateGreenFunction(box, trialAxes[box]);
-    memcpy(greenFunc_trial[box], greenFunc[box], sizeof(double) * N_complex);
   }
+
+  // Always evaluate the trial green function for the new trial dimensions
+  UpdateGreenFunction(box, trialAxes[box], greenFunc_trial[box]);
 
   int N = Kx * Ky * Kz;
   fill(chargeMesh[box], chargeMesh[box] + N, 0.0);
@@ -196,7 +196,7 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
   tempEnergyRecip[box] = SumMeshEnergy(box, S_trial[box]);
 }
 
-void EwaldPME::UpdateGreenFunction(uint box, const BoxDimensions &axes) {
+void EwaldPME::UpdateGreenFunction(uint box, const BoxDimensions &axes, double *gf_out) {
   int Kx = K_trial[box][0], Ky = K_trial[box][1], Kz = K_trial[box][2];
   int halfKz = Kz / 2 + 1;
   double Lx = axes.axis.Get(box).x, Ly = axes.axis.Get(box).y, Lz = axes.axis.Get(box).z;
@@ -214,8 +214,8 @@ void EwaldPME::UpdateGreenFunction(uint box, const BoxDimensions &axes) {
         double kz = 2.0 * M_PI * iz / Lz;
         double kSq = kx * kx + ky * ky + kz * kz;
         int idx = (ix * Ky + iy) * halfKz + iz;
-        if (kSq == 0) greenFunc[box][idx] = 0.0;
-        else greenFunc[box][idx] = num::qqFact * (4.0 * M_PI / (vol * kSq)) * exp(-pre * kSq) * bx[ix] * by[iy] * bz[iz];
+        if (kSq == 0) gf_out[idx] = 0.0;
+        else gf_out[idx] = num::qqFact * (4.0 * M_PI / (vol * kSq)) * exp(-pre * kSq) * bx[ix] * by[iy] * bz[iz];
       }
     }
   }
