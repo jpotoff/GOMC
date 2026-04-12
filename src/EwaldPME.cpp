@@ -221,8 +221,13 @@ void EwaldPME::UpdateGreenFunction(uint box, const BoxDimensions &axes) {
   }
 }
 
-double EwaldPME::SumMeshEnergy(uint box, fftw_complex *S, Virial *virial) const {
-  int Kx = K_trial[box][0], Ky = K_trial[box][1], Kz = K_trial[box][2];
+double EwaldPME::SumMeshEnergy(uint box, fftw_complex *S, Virial *virial,
+                               bool useTrial) const {
+  int Kx = useTrial ? K_trial[box][0] : K[box][0];
+  int Ky = useTrial ? K_trial[box][1] : K[box][1];
+  int Kz = useTrial ? K_trial[box][2] : K[box][2];
+  const double *gf = useTrial ? greenFunc_trial[box] : greenFunc[box];
+  const BoxDimensions &axes = useTrial ? trialAxes[box] : currentAxes;
   int halfKz = Kz / 2 + 1;
   double energy = 0.0, wT11 = 0.0, wT22 = 0.0, wT33 = 0.0;
   double constVal = 1.0 / (4.0 * ff.alpha[box] * ff.alpha[box]);
@@ -231,13 +236,13 @@ double EwaldPME::SumMeshEnergy(uint box, fftw_complex *S, Virial *virial) const 
     if (ix == 0 && iy == 0 && iz == 0) continue;
     double S_sq = S[i][0] * S[i][0] + S[i][1] * S[i][1];
     double weight = (iz == 0 || (Kz % 2 == 0 && iz == Kz / 2)) ? 1.0 : 2.0;
-    double G = greenFunc_trial[box][i], term = 0.5 * weight * G * S_sq;
+    double G = gf[i], term = 0.5 * weight * G * S_sq;
     energy += term;
     if (virial) {
       int kx_int = (ix <= Kx / 2) ? ix : ix - Kx, ky_int = (iy <= Ky / 2) ? iy : iy - Ky;
-      double kx_cart = 2.0 * M_PI * kx_int / trialAxes[box].axis.Get(box).x;
-      double ky_cart = 2.0 * M_PI * ky_int / trialAxes[box].axis.Get(box).y;
-      double kz_cart = 2.0 * M_PI * iz / trialAxes[box].axis.Get(box).z;
+      double kx_cart = 2.0 * M_PI * kx_int / axes.axis.Get(box).x;
+      double ky_cart = 2.0 * M_PI * ky_int / axes.axis.Get(box).y;
+      double kz_cart = 2.0 * M_PI * iz / axes.axis.Get(box).z;
       double kSq = kx_cart * kx_cart + ky_cart * ky_cart + kz_cart * kz_cart;
       double common = 2.0 * (constVal + 1.0 / kSq);
       wT11 += term * (1.0 - common * kx_cart * kx_cart);
@@ -344,7 +349,7 @@ double EwaldPME::ComputeDeltaSsq(uint box, const XYZArray *newCoords,
   };
   add(newCoords, sign_new); add(oldCoords, sign_old);
   fftw_execute(scratchPlan[box]);
-  return SumMeshEnergy(box, S_delta[box]);
+  return SumMeshEnergy(box, S_delta[box], nullptr, false);
 }
 
 double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
@@ -364,7 +369,7 @@ double EwaldPME::DeltaERecip(uint box, const XYZArray *newCoords,
     int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
     memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
     UpdatePotentialMesh(box);
-    return SumMeshEnergy(box, S_ref[box]);
+    return SumMeshEnergy(box, S_ref[box], nullptr, false);
   }
   return dE;
 }
@@ -404,13 +409,18 @@ void EwaldPME::UpdateRecipVec(uint box) {
 void EwaldPME::UpdateRecip(uint box) {
   if (box >= BOXES_WITH_U_NB || !pendingUpdate || box != cachedBox) return;
   if (forceFullUpdate) {
+    // Ensure K_trial matches committed K before rebuilding
+    K_trial[box][0] = K[box][0];
+    K_trial[box][1] = K[box][1];
+    K_trial[box][2] = K[box][2];
+    trialAxes[box] = currentAxes;
     BoxReciprocalSetup(box, currentCoords);
     int nk = K[box][0] * K[box][1] * (K[box][2] / 2 + 1);
     memcpy(S_ref[box], S_trial[box], sizeof(fftw_complex) * nk);
     UpdatePotentialMesh(box);
     // Store the exact energy computed from the full mesh rebuild
     const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip =
-        SumMeshEnergy(box, S_ref[box]);
+        SumMeshEnergy(box, S_ref[box], nullptr, false);
   } else {
     // DeltaERecip with updateSRef=true returns the exact total recip energy
     double exactEnergy = DeltaERecip(box, (cachedSignNew!=0.0?&cachedNewCoords:nullptr), cachedSignNew, (cachedSignOld!=0.0?&cachedOldCoords:nullptr), cachedSignOld, cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms, true);
@@ -590,5 +600,5 @@ double EwaldPME::MolExchangeReciprocal(const std::vector<cbmc::TrialMol> &newMol
 
 Virial EwaldPME::VirialReciprocal(Virial &virial, uint box) const {
   if (box >= BOXES_WITH_U_NB || S_ref[box] == nullptr) return virial;
-  SumMeshEnergy(box, S_ref[box], &virial); return virial;
+  SumMeshEnergy(box, S_ref[box], &virial, false); return virial;
 }

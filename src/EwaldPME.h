@@ -83,7 +83,8 @@ private:
 
   void UpdateGreenFunction(uint box, const BoxDimensions &axes);
   double SumMeshEnergy(uint box, fftw_complex *S,
-                       Virial *virial = nullptr) const;
+                       Virial *virial = nullptr,
+                       bool useTrial = true) const;
   void UpdatePotentialMesh(uint box);
   double InterpolatePotential(uint box, const XYZ &coords) const;
 
