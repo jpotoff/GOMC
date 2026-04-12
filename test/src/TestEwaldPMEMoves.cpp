@@ -807,3 +807,84 @@ TEST_F(EwaldPMEMovesTest, MultipleRejectedVolumesDoNotCorruptEnergy) {
       << "Reciprocal energy corruption after multiple rejected volume moves!";
 }
 
+TEST_F(EwaldPMEMovesTest, RejectedDisplacementConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double baselineEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  uint molIndex = 11;
+  if (molIndex >= sim.GetMolecules().count) molIndex = 0;
+
+  XYZ move(1.2, -1.8, 0.4);
+  uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
+  XYZArray newCoords(nAtoms);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+  for (uint i = 0; i < nAtoms; ++i) {
+    newCoords.Set(i, sim.GetCoordinates().Get(startAtom + i) + move);
+  }
+
+  // Evaluate incremental dE but REJECT it
+  double dE = pme->MolReciprocal(newCoords, molIndex, box);
+  pme->exgMolCache();
+
+  // Full rebuild to assert the reject left the original system perfectly intact
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  EXPECT_NEAR(baselineEnergy, fullRebuildEnergy, 1e-1)
+      << "Reciprocal energy changed after a rejected displacement move! MolReciprocal mutated core arrays incorrectly.";
+}
+
+TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  // Use a tiny 1.0001 volume scaling factor that will NOT trigger kChanged = true 
+  // prior to the RecipInit lock. This explicitly tests the stale greenFunc_trial bug.
+  BoxDimensions newAxes = sim.GetBoxDim();
+  double scale = 1.0001;
+  double Lnew = newAxes.axis.Get(box).x * scale;
+  newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
+  newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
+  newAxes.volume[box] = Lnew * Lnew * Lnew;
+  newAxes.volInv[box] = 1.0 / newAxes.volume[box];
+  newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0, 0.0));
+  newAxes.cellBasis[box].Set(1, XYZ(0.0, Lnew, 0.0));
+  newAxes.cellBasis[box].Set(2, XYZ(0.0, 0.0, Lnew));
+
+  XYZArray newCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    XYZ pos = sim.GetCoordinates().Get(i);
+    newCoords.Set(i, XYZ(pos.x * scale, pos.y * scale, pos.z * scale));
+  }
+
+  pme->RecipInit(box, newAxes);
+  pme->BoxReciprocalSetup(box, newCoords);
+  double trialEnergy = pme->BoxReciprocal(box, true);
+
+  // Accept the move
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    sim.GetCoordinates().Set(i, newCoords.Get(i));
+  }
+  sim.GetBoxDim() = newAxes;
+  sim.GetSystemEnergy().boxEnergy[box].recip = trialEnergy;
+  pme->UpdateRecip(box);
+  pme->UpdateRecipVec(box);
+
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  EXPECT_NEAR(trialEnergy, fullRebuildEnergy, 1e-1)
+      << "Reciprocal energy from small volumetric scaled trial does not match full rebuild due to stale block bugs.";
+}
