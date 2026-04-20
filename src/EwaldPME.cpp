@@ -458,12 +458,20 @@ void EwaldPME::Maintain(const ulong step) {
 void EwaldPME::exgMolCache() {
   for (uint b = 0; b < BOXES_WITH_U_NB; ++b) {
     if (S_ref && S_ref[b]) {
-      K_trial[b][0] = K[b][0];
-      K_trial[b][1] = K[b][1];
-      K_trial[b][2] = K[b][2];
-      trialAxes[b] = currentAxes;
+      bool grid_corrupted = false;
 
+      // If K_allocated diverged during the trial, arrays were re-malloc'd to trial dimensions.
       if (K_allocated[b][0] != K[b][0] || K_allocated[b][1] != K[b][1] || K_allocated[b][2] != K[b][2]) {
+        grid_corrupted = true;
+      }
+
+      // Even if K integer boundaries didn't change, BoxReciprocalSetup strictly overwrites 
+      // the real-space chargeMesh with trial coordinates. If volume changed, chargeMesh is corrupted.
+      if (trialAxes[b].volume[b] != currentAxes.volume[b] || trialAxes[b].axis.Get(b).x != currentAxes.axis.Get(b).x) {
+        grid_corrupted = true;
+      }
+
+      if (grid_corrupted) {
         if (fwdPlan[b]) { fftw_destroy_plan(fwdPlan[b]); fwdPlan[b] = nullptr; }
         if (bwdPlan[b]) { fftw_destroy_plan(bwdPlan[b]); bwdPlan[b] = nullptr; }
         if (scratchPlan[b]) { fftw_destroy_plan(scratchPlan[b]); scratchPlan[b] = nullptr; }
@@ -473,6 +481,11 @@ void EwaldPME::exgMolCache() {
         memcpy(S_ref[b], S_trial[b], sizeof(fftw_complex) * nk);
         UpdatePotentialMesh(b);
       }
+
+      K_trial[b][0] = K[b][0];
+      K_trial[b][1] = K[b][1];
+      K_trial[b][2] = K[b][2];
+      trialAxes[b] = currentAxes;
     }
   }
 }
