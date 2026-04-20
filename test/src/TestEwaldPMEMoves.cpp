@@ -80,13 +80,8 @@ protected:
     fprintf(f, "DCDFreq True 10000000\n");
     fprintf(f, "ConsoleFreq True 1\n");
     fprintf(f, "BlockAverageFreq True 10000000\n");
-    fprintf(f, "HistogramFreq False 10000000\n");
-    fprintf(f, "DistName dis\n");
-    fprintf(f, "HistName his\n");
-    fprintf(f, "RunNumber 1\n");
-    fprintf(f, "RunLetter a\n");
-    fprintf(f, "SampleFreq 500\n");
-    fprintf(f, "OutEnergy True True\n");
+    fprintf(f, "HistogramFreq False 10000000\n")
+        fprintf(f, "OutEnergy True True\n");
     fprintf(f, "OutPressure True True\n");
     fprintf(f, "OutMolNum True True\n");
     fprintf(f, "OutDensity True True\n");
@@ -145,7 +140,7 @@ TEST_F(EwaldPMEMovesTest, DisplacementConsistency) {
   // Update state in PME (move accepted)
   pme->UpdateRecip(box);
 
-  // In GOMC with PME, the energy tracker is now directly updated to the 
+  // In GOMC with PME, the energy tracker is now directly updated to the
   // exact reciprocal energy within UpdateRecip.
   double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
   std::cout << "Expected Total Reciprocal Energy (from exact tracker): "
@@ -228,7 +223,7 @@ TEST_F(EwaldPMEMovesTest, RotationMoveConsistency) {
   // Update state in PME (move accepted)
   pme->UpdateRecip(box);
 
-  // In GOMC with PME, the energy tracker is now directly updated to the 
+  // In GOMC with PME, the energy tracker is now directly updated to the
   // exact reciprocal energy within UpdateRecip.
   double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
   std::cout << "Expected Total Reciprocal Energy (from exact tracker): "
@@ -543,8 +538,8 @@ TEST_F(EwaldPMEMovesTest, CombinedVolumeAndDisplacementMoveConsistency) {
 // Prints the full reciprocal energy for a range of volume scale factors so
 // we can confirm the energy landscape drives compression toward ~998 kg/m³.
 // The scale factor applies uniformly to all box dimensions and all atom coords.
-// At each scale the potential mesh is fully recomputed (same path as VolumeTransfer).
-// After each probe the PME state is restored via exgMolCache.
+// At each scale the potential mesh is fully recomputed (same path as
+// VolumeTransfer). After each probe the PME state is restored via exgMolCache.
 // ---------------------------------------------------------------------------
 TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
   Simulation sim("in.conf");
@@ -555,31 +550,32 @@ TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
   sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
   double refRecip = sim.GetSystemEnergy().boxEnergy[box].recip;
 
-  // Scale factors: 1.20 = low density (~555 kg/m³), 0.95 = high density (~1122 kg/m³)
-  // Volume scales as scale^3, so scale 1.02→~998 kg/m³ (from 957 kg/m³ start)
-  std::vector<double> scales = {1.20, 1.15, 1.10, 1.05, 1.02, 1.00,
-                                 0.98, 0.97, 0.95};
+  // Scale factors: 1.20 = low density (~555 kg/m³), 0.95 = high density (~1122
+  // kg/m³) Volume scales as scale^3, so scale 1.02→~998 kg/m³ (from 957 kg/m³
+  // start)
+  std::vector<double> scales = {1.20, 1.15, 1.10, 1.05, 1.02,
+                                1.00, 0.98, 0.97, 0.95};
 
   std::cout << "\n=== PME ReciprocalEnergyVsVolume scan ===\n";
   std::cout << "Scale     Volume(A^3)   Recip(K)\n";
 
-  double firstRecip  = 0.0;
-  double lastRecip   = 0.0;
-  bool   isFirst     = true;
+  double firstRecip = 0.0;
+  double lastRecip = 0.0;
+  bool isFirst = true;
 
   for (double scale : scales) {
     BoxDimensions &curAxes = sim.GetBoxDim();
-    BoxDimensions newAxes  = curAxes;
-    double L0   = curAxes.axis.Get(box).x;
+    BoxDimensions newAxes = curAxes;
+    double L0 = curAxes.axis.Get(box).x;
     double Lnew = L0 * scale;
 
     newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
     newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
-    newAxes.volume[box]  = Lnew * Lnew * Lnew;
-    newAxes.volInv[box]  = 1.0 / newAxes.volume[box];
-    newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0,  0.0 ));
-    newAxes.cellBasis[box].Set(1, XYZ(0.0,  Lnew, 0.0 ));
-    newAxes.cellBasis[box].Set(2, XYZ(0.0,  0.0,  Lnew));
+    newAxes.volume[box] = Lnew * Lnew * Lnew;
+    newAxes.volInv[box] = 1.0 / newAxes.volume[box];
+    newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0, 0.0));
+    newAxes.cellBasis[box].Set(1, XYZ(0.0, Lnew, 0.0));
+    newAxes.cellBasis[box].Set(2, XYZ(0.0, 0.0, Lnew));
 
     XYZArray newCoords(sim.GetCoordinates().Count());
     for (uint i = 0; i < newCoords.Count(); ++i) {
@@ -591,19 +587,22 @@ TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
     pme->BoxReciprocalSetup(box, newCoords);
     double trialRecip = pme->BoxReciprocal(box, true);
 
-    std::cout << std::fixed << std::setprecision(4)
-              << scale << "      "
+    std::cout << std::fixed << std::setprecision(4) << scale << "      "
               << std::setprecision(1) << newAxes.volume[box] << "    "
               << trialRecip << "\n";
 
-    if (isFirst) { firstRecip = trialRecip; isFirst = false; }
+    if (isFirst) {
+      firstRecip = trialRecip;
+      isFirst = false;
+    }
     lastRecip = trialRecip;
 
     // Restore PME state (simulate rejection)
     pme->exgMolCache();
   }
 
-  std::cout << "Reference recip (scale=1.00, SystemTotal): " << refRecip << "\n";
+  std::cout << "Reference recip (scale=1.00, SystemTotal): " << refRecip
+            << "\n";
   std::cout << "===========================================\n";
 
   // The energy should vary meaningfully across the scan (not degenerate/flat).
@@ -680,18 +679,14 @@ TEST_F(EwaldPMEMovesTest, RejectedVolumeDoesNotCorruptPerMoveEnergy) {
   const int nMoves = 5;
   // Use different molecules and displacement vectors for each move
   uint molIndices[] = {5, 10, 15, 20, 25};
-  XYZ displacements[] = {
-    XYZ(1.5, -0.8, 2.1),
-    XYZ(-2.3, 1.4, -0.5),
-    XYZ(0.7, 2.5, -1.8),
-    XYZ(-1.1, -1.1, 3.0),
-    XYZ(3.2, 0.3, -2.4)
-  };
+  XYZ displacements[] = {XYZ(1.5, -0.8, 2.1), XYZ(-2.3, 1.4, -0.5),
+                         XYZ(0.7, 2.5, -1.8), XYZ(-1.1, -1.1, 3.0),
+                         XYZ(3.2, 0.3, -2.4)};
 
   for (int moveIdx = 0; moveIdx < nMoves; ++moveIdx) {
     uint molIndex = molIndices[moveIdx];
     if (molIndex >= sim.GetMolecules().count)
-      molIndex = moveIdx;  // Fallback to low index
+      molIndex = moveIdx; // Fallback to low index
 
     XYZ move = displacements[moveIdx];
     uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
@@ -776,7 +771,8 @@ TEST_F(EwaldPMEMovesTest, MultipleRejectedVolumesDoNotCorruptEnergy) {
 
   // Now do a displacement move and verify
   uint molIndex = 8;
-  if (molIndex >= sim.GetMolecules().count) molIndex = 0;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
 
   uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
   XYZArray newCoords(nAtoms);
@@ -817,7 +813,8 @@ TEST_F(EwaldPMEMovesTest, RejectedDisplacementConsistency) {
   double baselineEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
 
   uint molIndex = 11;
-  if (molIndex >= sim.GetMolecules().count) molIndex = 0;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
 
   XYZ move(1.2, -1.8, 0.4);
   uint nAtoms = sim.GetMolecules().GetKind(molIndex).NumAtoms();
@@ -837,7 +834,8 @@ TEST_F(EwaldPMEMovesTest, RejectedDisplacementConsistency) {
   double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
 
   EXPECT_NEAR(baselineEnergy, fullRebuildEnergy, 1e-1)
-      << "Reciprocal energy changed after a rejected displacement move! MolReciprocal mutated core arrays incorrectly.";
+      << "Reciprocal energy changed after a rejected displacement move! "
+         "MolReciprocal mutated core arrays incorrectly.";
 }
 
 TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
@@ -849,8 +847,9 @@ TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
   sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
   double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
 
-  // Use a tiny 1.0001 volume scaling factor that will NOT trigger kChanged = true 
-  // prior to the RecipInit lock. This explicitly tests the stale greenFunc_trial bug.
+  // Use a tiny 1.0001 volume scaling factor that will NOT trigger kChanged =
+  // true prior to the RecipInit lock. This explicitly tests the stale
+  // greenFunc_trial bug.
   BoxDimensions newAxes = sim.GetBoxDim();
   double scale = 1.0001;
   double Lnew = newAxes.axis.Get(box).x * scale;
@@ -886,7 +885,8 @@ TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
   double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
 
   EXPECT_NEAR(trialEnergy, fullRebuildEnergy, 1e-1)
-      << "Reciprocal energy from small volumetric scaled trial does not match full rebuild due to stale block bugs.";
+      << "Reciprocal energy from small volumetric scaled trial does not match "
+         "full rebuild due to stale block bugs.";
 }
 
 TEST_F(EwaldPMEMovesTest, DynamicGridResizingRejectionConsistency) {
@@ -897,25 +897,28 @@ TEST_F(EwaldPMEMovesTest, DynamicGridResizingRejectionConsistency) {
   pme->UpdateVectorsAndRecipTerms(false);
   sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
 
-  // Pick a molecule and calculate a tiny displacement to get a baseline DeltaERecip
+  // Pick a molecule and calculate a tiny displacement to get a baseline
+  // DeltaERecip
   uint molIndex = 0;
   XYZArray newCoords(sim.GetCoordinates().Count());
   for (uint i = 0; i < newCoords.Count(); ++i) {
     if (i >= sim.GetMolecules().MolStart(molIndex) &&
-        i < sim.GetMolecules().MolStart(molIndex) + sim.GetMolecules().MolLength(molIndex)) {
+        i < sim.GetMolecules().MolStart(molIndex) +
+                sim.GetMolecules().MolLength(molIndex)) {
       XYZ pos = sim.GetCoordinates().Get(i);
       newCoords.Set(i, XYZ(pos.x + 0.1, pos.y + 0.1, pos.z + 0.1));
     } else {
       newCoords.Set(i, sim.GetCoordinates().Get(i));
     }
   }
-  
+
   double expected_dE = pme->MolReciprocal(newCoords, molIndex, box);
   pme->exgMolCache(); // reject displacement
 
   // Now perform a volume scaling that guarantees a K lattice dimension shift
   BoxDimensions newAxes = sim.GetBoxDim();
-  double scale = 1.08; // Expand by 8% to cross K boundaries without exceeding Kmax buffer
+  double scale =
+      1.08; // Expand by 8% to cross K boundaries without exceeding Kmax buffer
   double Lnew = newAxes.axis.Get(box).x * scale;
   newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
   newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
@@ -936,15 +939,87 @@ TEST_F(EwaldPMEMovesTest, DynamicGridResizingRejectionConsistency) {
   pme->BoxReciprocalSetup(box, expandedCoords);
   pme->BoxReciprocal(box, true);
 
-  // REJECT the Volume move. 
-  // If `K_allocated` tracking and forceful grid restitution works, the FFT arrays are restored to the committed boundaries.
+  // REJECT the Volume move.
+  // If `K_allocated` tracking and forceful grid restitution works, the FFT
+  // arrays are restored to the committed boundaries.
   pme->exgMolCache();
 
-  // Test the arrays by executing the exact same displacement move! 
-  // If the committed fwdPlan or S_ref were silently corrupted due to the bounding resizing, we get garbage or segfault.
+  // Test the arrays by executing the exact same displacement move!
+  // If the committed fwdPlan or S_ref were silently corrupted due to the
+  // bounding resizing, we get garbage or segfault.
   double recovered_dE = pme->MolReciprocal(newCoords, molIndex, box);
-  pme->exgMolCache(); 
+  pme->exgMolCache();
 
   EXPECT_NEAR(expected_dE, recovered_dE, 1e-4)
-      << "Committed K grid was strictly corrupted and not successfully reconstructed after a rejected dynamic-bounding volume move.";
+      << "Committed K grid was strictly corrupted and not successfully "
+         "reconstructed after a rejected dynamic-bounding volume move.";
+}
+
+TEST_F(EwaldPMEMovesTest, ConstantGridResizingRejectionConsistency) {
+  uint box = 0;
+  Simulation sim("in.conf");
+  EwaldPME *pme = static_cast<EwaldPME *>(sim.GetEwald());
+
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+
+  // Pick a molecule and calculate a tiny displacement to get a baseline
+  // DeltaERecip
+  uint molIndex = 0;
+  XYZArray newCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    if (i >= sim.GetMolecules().MolStart(molIndex) &&
+        i < sim.GetMolecules().MolStart(molIndex) +
+                sim.GetMolecules().MolLength(molIndex)) {
+      XYZ pos = sim.GetCoordinates().Get(i);
+      newCoords.Set(i, XYZ(pos.x + 0.1, pos.y + 0.1, pos.z + 0.1));
+    } else {
+      newCoords.Set(i, sim.GetCoordinates().Get(i));
+    }
+  }
+
+  double expected_dE = pme->MolReciprocal(newCoords, molIndex, box);
+  pme->exgMolCache(); // reject displacement
+
+  // Now perform a microscopic volume scaling that guarantees the K lattice
+  // dimension DOES NOT shift
+  BoxDimensions newAxes = sim.GetBoxDim();
+  double scale =
+      1.0001; // Tiny expansion strictly constrained to identical K bin limits
+  double Lnew = newAxes.axis.Get(box).x * scale;
+  newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
+  newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
+  newAxes.volume[box] = Lnew * Lnew * Lnew;
+  newAxes.volInv[box] = 1.0 / newAxes.volume[box];
+  newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0, 0.0));
+  newAxes.cellBasis[box].Set(1, XYZ(0.0, Lnew, 0.0));
+  newAxes.cellBasis[box].Set(2, XYZ(0.0, 0.0, Lnew));
+
+  XYZArray expandedCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < expandedCoords.Count(); ++i) {
+    XYZ pos = sim.GetCoordinates().Get(i);
+    expandedCoords.Set(i, XYZ(pos.x * scale, pos.y * scale, pos.z * scale));
+  }
+
+  // Trigger the trial setup that populates the chargeMesh with the modified
+  // scale structure
+  pme->RecipInit(box, newAxes);
+  pme->BoxReciprocalSetup(box, expandedCoords);
+  pme->BoxReciprocal(box, true);
+
+  // REJECT the Volume move.
+  // We recently enforced that even if `K_allocated` remains identical,
+  // exgMolCache explicitly checks volume divergence to reconstruct the smeared
+  // mesh limits cleanly.
+  pme->exgMolCache();
+
+  // Re-run the baseline test: If chargeMesh reconstruction failed, DeltaERecip
+  // uses the ghost expanded matrix coefficients to evaluate the differential
+  // displacement and wildly fails.
+  double recovered_dE = pme->MolReciprocal(newCoords, molIndex, box);
+  pme->exgMolCache();
+
+  EXPECT_NEAR(expected_dE, recovered_dE, 1e-4)
+      << "ChargeMesh retained Ghost Atoms: Mathematical Fourier reconstruction "
+         "explicitly bypassed after constant-K trial regression.";
 }

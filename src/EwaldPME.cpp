@@ -471,6 +471,13 @@ void EwaldPME::exgMolCache() {
         grid_corrupted = true;
       }
 
+      // Restore parameters immediately so if BoxReciprocalSetup activates, 
+      // it orchestrates the reconstruction mathematically identically to the committed K targets.
+      K_trial[b][0] = K[b][0];
+      K_trial[b][1] = K[b][1];
+      K_trial[b][2] = K[b][2];
+      trialAxes[b] = currentAxes;
+
       if (grid_corrupted) {
         if (fwdPlan[b]) { fftw_destroy_plan(fwdPlan[b]); fwdPlan[b] = nullptr; }
         if (bwdPlan[b]) { fftw_destroy_plan(bwdPlan[b]); bwdPlan[b] = nullptr; }
@@ -479,13 +486,9 @@ void EwaldPME::exgMolCache() {
         BoxReciprocalSetup(b, currentCoords);
         int nk = K[b][0] * K[b][1] * (K[b][2] / 2 + 1);
         memcpy(S_ref[b], S_trial[b], sizeof(fftw_complex) * nk);
+        memcpy(greenFunc[b], greenFunc_trial[b], sizeof(double) * nk);
         UpdatePotentialMesh(b);
       }
-
-      K_trial[b][0] = K[b][0];
-      K_trial[b][1] = K[b][1];
-      K_trial[b][2] = K[b][2];
-      trialAxes[b] = currentAxes;
     }
   }
 }
