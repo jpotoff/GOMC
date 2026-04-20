@@ -888,3 +888,63 @@ TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
   EXPECT_NEAR(trialEnergy, fullRebuildEnergy, 1e-1)
       << "Reciprocal energy from small volumetric scaled trial does not match full rebuild due to stale block bugs.";
 }
+
+TEST_F(EwaldPMEMovesTest, DynamicGridResizingRejectionConsistency) {
+  uint box = 0;
+  Simulation sim("in.conf");
+  EwaldPME *pme = static_cast<EwaldPME *>(sim.GetEwald());
+
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+
+  // Pick a molecule and calculate a tiny displacement to get a baseline DeltaERecip
+  uint molIndex = 0;
+  XYZArray newCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    if (i >= sim.GetMolecules().MolStart(molIndex) &&
+        i < sim.GetMolecules().MolStart(molIndex) + sim.GetMolecules().MolLength(molIndex)) {
+      XYZ pos = sim.GetCoordinates().Get(i);
+      newCoords.Set(i, XYZ(pos.x + 0.1, pos.y + 0.1, pos.z + 0.1));
+    } else {
+      newCoords.Set(i, sim.GetCoordinates().Get(i));
+    }
+  }
+  
+  double expected_dE = pme->MolReciprocal(newCoords, molIndex, box);
+  pme->exgMolCache(); // reject displacement
+
+  // Now perform a volume scaling that guarantees a K lattice dimension shift
+  BoxDimensions newAxes = sim.GetBoxDim();
+  double scale = 1.08; // Expand by 8% to cross K boundaries without exceeding Kmax buffer
+  double Lnew = newAxes.axis.Get(box).x * scale;
+  newAxes.axis.Set(box, XYZ(Lnew, Lnew, Lnew));
+  newAxes.halfAx.Set(box, XYZ(Lnew / 2, Lnew / 2, Lnew / 2));
+  newAxes.volume[box] = Lnew * Lnew * Lnew;
+  newAxes.volInv[box] = 1.0 / newAxes.volume[box];
+  newAxes.cellBasis[box].Set(0, XYZ(Lnew, 0.0, 0.0));
+  newAxes.cellBasis[box].Set(1, XYZ(0.0, Lnew, 0.0));
+  newAxes.cellBasis[box].Set(2, XYZ(0.0, 0.0, Lnew));
+
+  XYZArray expandedCoords(sim.GetCoordinates().Count());
+  for (uint i = 0; i < expandedCoords.Count(); ++i) {
+    XYZ pos = sim.GetCoordinates().Get(i);
+    expandedCoords.Set(i, XYZ(pos.x * scale, pos.y * scale, pos.z * scale));
+  }
+
+  // Trigger the destructive K trial resizing!
+  pme->RecipInit(box, newAxes);
+  pme->BoxReciprocalSetup(box, expandedCoords);
+  pme->BoxReciprocal(box, true);
+
+  // REJECT the Volume move. 
+  // If `K_allocated` tracking and forceful grid restitution works, the FFT arrays are restored to the committed boundaries.
+  pme->exgMolCache();
+
+  // Test the arrays by executing the exact same displacement move! 
+  // If the committed fwdPlan or S_ref were silently corrupted due to the bounding resizing, we get garbage or segfault.
+  double recovered_dE = pme->MolReciprocal(newCoords, molIndex, box);
+  pme->exgMolCache(); 
+
+  EXPECT_NEAR(expected_dE, recovered_dE, 1e-4)
+      << "Committed K grid was strictly corrupted and not successfully reconstructed after a rejected dynamic-bounding volume move.";
+}

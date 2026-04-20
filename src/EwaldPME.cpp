@@ -148,9 +148,6 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
                                             S_delta[box], FFTW_ESTIMATE);
 
     K_allocated[box][0] = Kx; K_allocated[box][1] = Ky; K_allocated[box][2] = Kz;
-
-    // Initialize the committed greenFunc with valid data so it doesn't contain garbage zeros
-    UpdateGreenFunction(box, trialAxes[box], greenFunc[box]);
   }
 
   // Always evaluate the trial green function for the new trial dimensions
