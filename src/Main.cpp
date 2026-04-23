@@ -18,7 +18,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <unordered_map>
 #endif
 #include <ctime>
+#include <filesystem>
 #include <iostream>
+#include <system_error>
 
 // find and include appropriate files for getHostname
 #ifdef _WIN32
@@ -125,21 +127,42 @@ int main(int argc, char *argv[]) {
              "Info: Compiled with OpenMP Version:", match->second.c_str());
 #endif
 
-    // OPEN FILE
-    inputFileReader.open(inputFileString.c_str(), std::ios::in | std::ios::out);
+    // Open file
+    inputFileReader.open(inputFileString.c_str(), std::ios::in);
 
-    // CHECK IF FILE IS OPENED...IF NOT OPENED EXCEPTION REASON FIRED
+    // Check if file has been opened. If not, output an error message and exit.
     if (!inputFileReader.is_open()) {
-      std::cout << "Error: Cannot open/find " << inputFileString
-                << " in the directory provided!\n";
-      exit(EXIT_FAILURE);
+      // First check if the file exists
+      if (!std::filesystem::exists(inputFileString.c_str())) {
+        int error_num = static_cast<int>(std::errc::no_such_file_or_directory);
+        std::error_code ec =
+            std::make_error_code(std::errc::no_such_file_or_directory);
+        std::cout << "Problem opening " << inputFileString << ": "
+                  << ec.message() << "\n";
+        exit(error_num);
+      }
+      // Since the file exists, check if there is a problem with the directory
+      // and file permissions.
+      std::ifstream tempFile(inputFileString.c_str());
+      if (!tempFile.is_open()) {
+        int error_num = static_cast<int>(std::errc::permission_denied);
+        std::error_code ec = std::make_error_code(std::errc::permission_denied);
+        std::cout << "Problem opening " << inputFileString
+                  << ": File found but " << ec.message() << "\n";
+        exit(error_num);
+      }
+      // Failed for some unknown reason. Shouldn't reach here but need to
+      // terminate if we do.
+      std::cout << "Problem opening " << inputFileString
+                << ": Unexpected error!\n";
+      exit(2);
     }
 
-    // CLOSE FILE TO NOW PASS TO SIMULATION
+    // Close file to now pass to simulation.
     inputFileReader.close();
 
-    // ONCE FILE FOUND PASS STRING TO SIMULATION CLASS TO READ AND
-    // HANDLE PDB|PSF FILE
+    // Once file found pass string to simulation class to read and
+    // handle pdb|psf files.
 #if GOMC_LIB_MPI
     if (multisim != NULL) {
       Simulation sim(inputFileString.c_str(), multisim);

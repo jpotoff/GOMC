@@ -42,18 +42,39 @@ ParallelTemperingPreprocessor::ParallelTemperingPreprocessor(int argc,
       }
     }
     // OPEN FILE
-    inputFileReaderMPI.open(inputFileStringMPI.c_str(),
-                            std::ios::in | std::ios::out);
+    inputFileReaderMPI.open(inputFileStringMPI.c_str(), std::ios::in);
 
-    // CHECK IF FILE IS OPENED...IF NOT OPENED EXCEPTION REASON FIRED
-    if (!inputFileReaderMPI.is_open()) {
-      std::cout << "Error: Cannot open/find " << inputFileStringMPI
-                << " in the directory provided!\n";
+    // Check if file has been opened. If not, output an error message and exit.
+    if (!inputFileStringMPI.is_open()) {
+      // Clean up MPI
       MPI_Finalize();
-      exit(EXIT_FAILURE);
+      // First check if the file exists
+      if (!std::filesystem::exists(inputFileStringMPI.c_str())) {
+        int error_num = static_cast<int>(std::errc::no_such_file_or_directory);
+        std::error_code ec =
+            std::make_error_code(std::errc::no_such_file_or_directory);
+        std::cout << "Problem opening " << inputFileStringMPI << ": "
+                  << ec.message() << "\n";
+        exit(error_num);
+      }
+      // Since the file exists, check if there is a problem with the directory
+      // and file permissions.
+      std::ifstream tempFile(inputFileStringMPI.c_str());
+      if (!tempFile.is_open()) {
+        int error_num = static_cast<int>(std::errc::permission_denied);
+        std::error_code ec = std::make_error_code(std::errc::permission_denied);
+        std::cout << "Problem opening " << inputFileStringMPI
+                  << ": File found but " << ec.message() << "\n";
+        exit(error_num);
+      }
+      // Failed for some unknown reason. Shouldn't reach here but need to
+      // terminate if we do.
+      std::cout << "Problem opening " << inputFileStringMPI
+                << ": Unexpected error!\n";
+      exit(2);
     }
 
-    // CLOSE FILE TO NOW PASS TO SIMULATION
+    // Close file to now pass to simulation.
     inputFileReaderMPI.close();
 
     if (checkIfExpandedEnsemble(inputFileStringMPI.c_str())) {
