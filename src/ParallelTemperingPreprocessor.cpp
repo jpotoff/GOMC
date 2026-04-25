@@ -43,7 +43,7 @@ ParallelTemperingPreprocessor::ParallelTemperingPreprocessor(int argc,
     }
 
     // Test whether the provided configuration filename can be open for reading
-    inputFileReaderMPI.Test(inputFileStringMPI.c_str());
+    inputFileReaderMPI.Test(inputFileStringMPI);
 
     if (checkIfExpandedEnsemble(inputFileStringMPI.c_str())) {
       checkIfValid(inputFileStringMPI.c_str());

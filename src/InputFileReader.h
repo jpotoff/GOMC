@@ -23,9 +23,9 @@ private:
 
 public:
   bool readNextLine(std::vector<std::string> &str);
-  void Open(std::string fileName);
-  void Test(std::string fileName);
-  InputFileReader(std::string fileName);
+  void Open(const std::string& fileName);
+  void Test(const std::string& fileName);
+  InputFileReader(const std::string& fileName);
   InputFileReader() {}
   ~InputFileReader();
 };

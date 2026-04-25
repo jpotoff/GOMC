@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     // Test whether the provided configuration filename can be open for reading
-    inputFileReader.Test(inputFileString.c_str());
+    inputFileReader.Test(inputFileString);
 
     // Once file found pass string to simulation class to read and
     // handle pdb|psf files.
