@@ -18,9 +18,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <unordered_map>
 #endif
 #include <ctime>
-#include <filesystem>
 #include <iostream>
-#include <system_error>
 
 // find and include appropriate files for getHostname
 #ifdef _WIN32
@@ -73,23 +71,23 @@ int main(int argc, char *argv[]) {
 #endif
   // Only run if valid ensemble was detected.
   if (CheckAndPrintEnsemble()) {
-    // FOLLOWING LINES ADDED TO OBTAIN INPUT PARAMETER FILE
+    // Following lines added to obtain input parameter file.
     std::string inputFileString;
-    std::fstream inputFileReader;
+    InputFileReader inputFileReader;
     int numThreads;
 
-    // CHECK IF ARGS/FILE PROVIDED IN CMD LINE
+    // Check if args/filename provided in command line.
     if (argc < 2) {
       std::cout << "Error: Input parameter file (*.dat or *.conf) not "
                    "specified on command line!\n";
       exit(EXIT_FAILURE);
     } else {
       if (argc == 2) {
-        // FIRST PARAMETER WILL BE FILE NAME
+        // First parameter will be filename.
         inputFileString = argv[1];
         numThreads = 1;
       } else {
-        // SECOND PARAMETER WILL BE FILE NAME
+        // Second parameter will be filename.
         inputFileString = argv[2];
 
         if (argv[1][0] == '+' && argv[1][1] == 'p') {
@@ -102,7 +100,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    // SET NUMBER OF THREADS
+    // Set number of threads.
 #ifdef _OPENMP
     omp_set_num_threads(numThreads);
     printf("%-40s %-d \n", "Info: Number of OpenMP threads:", numThreads);
@@ -127,39 +125,8 @@ int main(int argc, char *argv[]) {
              "Info: Compiled with OpenMP Version:", match->second.c_str());
 #endif
 
-    // Open file
-    inputFileReader.open(inputFileString.c_str(), std::ios::in);
-
-    // Check if file has been opened. If not, output an error message and exit.
-    if (!inputFileReader.is_open()) {
-      // First check if the file exists
-      if (!std::filesystem::exists(inputFileString.c_str())) {
-        int error_num = static_cast<int>(std::errc::no_such_file_or_directory);
-        std::error_code ec =
-            std::make_error_code(std::errc::no_such_file_or_directory);
-        std::cout << "Problem opening " << inputFileString << ": "
-                  << ec.message() << "\n";
-        exit(error_num);
-      }
-      // Since the file exists, check if there is a problem with the directory
-      // and file permissions.
-      std::ifstream tempFile(inputFileString.c_str());
-      if (!tempFile.is_open()) {
-        int error_num = static_cast<int>(std::errc::permission_denied);
-        std::error_code ec = std::make_error_code(std::errc::permission_denied);
-        std::cout << "Problem opening " << inputFileString
-                  << ": File found but " << ec.message() << "\n";
-        exit(error_num);
-      }
-      // Failed for some unknown reason. Shouldn't reach here but need to
-      // terminate if we do.
-      std::cout << "Problem opening " << inputFileString
-                << ": Unexpected error!\n";
-      exit(2);
-    }
-
-    // Close file to now pass to simulation.
-    inputFileReader.close();
+    // Test whether the provided configuration filename can be open for reading
+    inputFileReader.Test(inputFileString.c_str());
 
     // Once file found pass string to simulation class to read and
     // handle pdb|psf files.

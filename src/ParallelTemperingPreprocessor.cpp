@@ -18,7 +18,7 @@ ParallelTemperingPreprocessor::ParallelTemperingPreprocessor(int argc,
   // Get the rank of the process
   MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
 
-  // CHECK IF ARGS/FILE PROVIDED IN CMD LINE
+  // Check if args/filename provided in command line
   if (argc < 2) {
     std::cout << "Error: Input parameter file (*.dat or *.conf) not specified "
                  "on command line!\n";
@@ -26,10 +26,10 @@ ParallelTemperingPreprocessor::ParallelTemperingPreprocessor(int argc,
     exit(EXIT_FAILURE);
   } else {
     if (argc == 2) {
-      // FIRST PARAMETER WILL BE FILE NAME
+      // First parameter will be filename
       inputFileStringMPI = argv[1];
     } else {
-      // SECOND PARAMETER WILL BE FILE NAME
+      // Second parameter will be filename
       inputFileStringMPI = argv[2];
 
       if (argv[1][0] == '+' && argv[1][1] == 'p') {
@@ -41,41 +41,9 @@ ParallelTemperingPreprocessor::ParallelTemperingPreprocessor(int argc,
         exit(EXIT_FAILURE);
       }
     }
-    // OPEN FILE
-    inputFileReaderMPI.open(inputFileStringMPI.c_str(), std::ios::in);
 
-    // Check if file has been opened. If not, output an error message and exit.
-    if (!inputFileStringMPI.is_open()) {
-      // Clean up MPI
-      MPI_Finalize();
-      // First check if the file exists
-      if (!std::filesystem::exists(inputFileStringMPI.c_str())) {
-        int error_num = static_cast<int>(std::errc::no_such_file_or_directory);
-        std::error_code ec =
-            std::make_error_code(std::errc::no_such_file_or_directory);
-        std::cout << "Problem opening " << inputFileStringMPI << ": "
-                  << ec.message() << "\n";
-        exit(error_num);
-      }
-      // Since the file exists, check if there is a problem with the directory
-      // and file permissions.
-      std::ifstream tempFile(inputFileStringMPI.c_str());
-      if (!tempFile.is_open()) {
-        int error_num = static_cast<int>(std::errc::permission_denied);
-        std::error_code ec = std::make_error_code(std::errc::permission_denied);
-        std::cout << "Problem opening " << inputFileStringMPI
-                  << ": File found but " << ec.message() << "\n";
-        exit(error_num);
-      }
-      // Failed for some unknown reason. Shouldn't reach here but need to
-      // terminate if we do.
-      std::cout << "Problem opening " << inputFileStringMPI
-                << ": Unexpected error!\n";
-      exit(2);
-    }
-
-    // Close file to now pass to simulation.
-    inputFileReaderMPI.close();
+    // Test whether the provided configuration filename can be open for reading
+    inputFileReaderMPI.Test(inputFileStringMPI.c_str());
 
     if (checkIfExpandedEnsemble(inputFileStringMPI.c_str())) {
       checkIfValid(inputFileStringMPI.c_str());
