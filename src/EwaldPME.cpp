@@ -42,12 +42,13 @@ EwaldPME::EwaldPME(StaticVals &stat, System &sys) : Ewald(stat, sys) {
     tempEnergyRecip[b] = 0.0;
   }
 
-  pendingUpdate = false;
-  forceFullUpdate = false;
-  cachedBox = 0;
-  cachedSignNew = 0.0;
-  cachedSignOld = 0.0;
-  cachedNAtoms = 0;
+  for (uint b = 0; b < BOX_TOTAL; b++) {
+    pendingUpdate[b] = false;
+    forceFullUpdate[b] = false;
+    cachedSignNew[b] = 0.0;
+    cachedSignOld[b] = 0.0;
+    cachedNAtoms[b] = 0;
+  }
 }
 
 EwaldPME::~EwaldPME() {
@@ -424,8 +425,8 @@ void EwaldPME::UpdateRecipVec(uint box) {
 }
 
 void EwaldPME::UpdateRecip(uint box) {
-  if (box >= BOXES_WITH_U_NB || !pendingUpdate || box != cachedBox) return;
-  if (forceFullUpdate) {
+  if (box >= BOXES_WITH_U_NB || !pendingUpdate[box]) return;
+  if (forceFullUpdate[box]) {
     // Ensure K_trial matches committed K before rebuilding
     K_trial[box][0] = K[box][0];
     K_trial[box][1] = K[box][1];
@@ -440,11 +441,11 @@ void EwaldPME::UpdateRecip(uint box) {
         SumMeshEnergy(box, S_ref[box], nullptr, false);
   } else {
     // DeltaERecip with updateSRef=true returns the exact total recip energy
-    double exactEnergy = DeltaERecip(box, (cachedSignNew!=0.0?&cachedNewCoords:nullptr), cachedSignNew, (cachedSignOld!=0.0?&cachedOldCoords:nullptr), cachedSignOld, cachedAtomIndices.data(), cachedCharges.data(), cachedNAtoms, true);
+    double exactEnergy = DeltaERecip(box, (cachedSignNew[box]!=0.0?&cachedNewCoords[box]:nullptr), cachedSignNew[box], (cachedSignOld[box]!=0.0?&cachedOldCoords[box]:nullptr), cachedSignOld[box], cachedAtomIndices[box].data(), cachedCharges[box].data(), cachedNAtoms[box], true);
     // Store exact energy, overwriting any incremental += dE from the caller
     const_cast<SystemPotential &>(sysPotRef).boxEnergy[box].recip = exactEnergy;
   }
-  pendingUpdate = false; forceFullUpdate = false;
+  pendingUpdate[box] = false; forceFullUpdate[box] = false;
 }
 
 void EwaldPME::Maintain(const ulong step) {
@@ -494,7 +495,9 @@ void EwaldPME::exgMolCache() {
 }
 
 void EwaldPME::RestoreMol(int molIndex) {
-  pendingUpdate = false; forceFullUpdate = false;
+  for (uint b = 0; b < BOX_TOTAL; b++) {
+    pendingUpdate[b] = false; forceFullUpdate[b] = false;
+  }
 }
 
 // PME uses mesh-based S_ref/S_trial;
@@ -554,22 +557,21 @@ double EwaldPME::MolReciprocal(XYZArray const &molCoords, const uint molIndex, c
   vector<uint> atomIndices(length); vector<double> charges(length);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = particleCharge[startAtom + i]; }
   // Extract old coords first so we can pass the correctly-sized array
-  cachedOldCoords.Uninit();
-  cachedOldCoords.Init(length);
-  currentCoords.CopyRange(cachedOldCoords, startAtom, 0, length);
+  cachedOldCoords[box].Uninit();
+  cachedOldCoords[box].Init(length);
+  currentCoords.CopyRange(cachedOldCoords[box], startAtom, 0, length);
 
-  double dE = DeltaERecip(box, &molCoords, 1.0, &cachedOldCoords, -1.0, atomIndices.data(), charges.data(), length, false);
+  double dE = DeltaERecip(box, &molCoords, 1.0, &cachedOldCoords[box], -1.0, atomIndices.data(), charges.data(), length, false);
 
   // Cache remaining move data so UpdateRecip can apply it on acceptance
-  pendingUpdate = true;
-  forceFullUpdate = false;
-  cachedBox = box;
-  cachedNewCoords = molCoords;
-  cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
-  cachedCharges.assign(charges.begin(), charges.end());
-  cachedSignNew = 1.0;
-  cachedSignOld = -1.0;
-  cachedNAtoms = length;
+  pendingUpdate[box] = true;
+  forceFullUpdate[box] = false;
+  cachedNewCoords[box] = molCoords;
+  cachedAtomIndices[box].assign(atomIndices.begin(), atomIndices.end());
+  cachedCharges[box].assign(charges.begin(), charges.end());
+  cachedSignNew[box] = 1.0;
+  cachedSignOld[box] = -1.0;
+  cachedNAtoms[box] = length;
 
   return dE;
 }
@@ -580,17 +582,16 @@ double EwaldPME::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box, con
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = newMol.GetKind().AtomCharge(i); }
   double dE = DeltaERecip(box, &newMol.GetCoords(), 1.0, nullptr, 0.0, atomIndices.data(), charges.data(), length, false);
 
-  pendingUpdate = true;
-  forceFullUpdate = false;
-  cachedBox = box;
-  cachedNewCoords = newMol.GetCoords();
-  cachedOldCoords.Uninit();
-  cachedOldCoords.Init(0);
-  cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
-  cachedCharges.assign(charges.begin(), charges.end());
-  cachedSignNew = 1.0;
-  cachedSignOld = 0.0;
-  cachedNAtoms = length;
+  pendingUpdate[box] = true;
+  forceFullUpdate[box] = false;
+  cachedNewCoords[box] = newMol.GetCoords();
+  cachedOldCoords[box].Uninit();
+  cachedOldCoords[box].Init(0);
+  cachedAtomIndices[box].assign(atomIndices.begin(), atomIndices.end());
+  cachedCharges[box].assign(charges.begin(), charges.end());
+  cachedSignNew[box] = 1.0;
+  cachedSignOld[box] = 0.0;
+  cachedNAtoms[box] = length;
 
   return dE;
 }
@@ -601,17 +602,16 @@ double EwaldPME::SwapSourceRecip(const cbmc::TrialMol &oldMol, const uint box, c
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = oldMol.GetKind().AtomCharge(i); }
   double dE = DeltaERecip(box, nullptr, 0.0, &oldMol.GetCoords(), -1.0, atomIndices.data(), charges.data(), length, false);
 
-  pendingUpdate = true;
-  forceFullUpdate = false;
-  cachedBox = box;
-  cachedNewCoords.Uninit();
-  cachedNewCoords.Init(0);
-  cachedOldCoords = oldMol.GetCoords();
-  cachedAtomIndices.assign(atomIndices.begin(), atomIndices.end());
-  cachedCharges.assign(charges.begin(), charges.end());
-  cachedSignNew = 0.0;
-  cachedSignOld = -1.0;
-  cachedNAtoms = length;
+  pendingUpdate[box] = true;
+  forceFullUpdate[box] = false;
+  cachedNewCoords[box].Uninit();
+  cachedNewCoords[box].Init(0);
+  cachedOldCoords[box] = oldMol.GetCoords();
+  cachedAtomIndices[box].assign(atomIndices.begin(), atomIndices.end());
+  cachedCharges[box].assign(charges.begin(), charges.end());
+  cachedSignNew[box] = 0.0;
+  cachedSignOld[box] = -1.0;
+  cachedNAtoms[box] = length;
 
   return dE;
 }

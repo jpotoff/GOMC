@@ -71,16 +71,15 @@ private:
   double tempEnergyRecip[BOX_TOTAL];
   Virial tempVirialRecip[BOX_TOTAL];
 
-  bool pendingUpdate;
-  bool forceFullUpdate;
-  uint cachedBox;
-  XYZArray cachedNewCoords;
-  XYZArray cachedOldCoords;
-  double cachedSignNew;
-  double cachedSignOld;
-  std::vector<uint> cachedAtomIndices;
-  std::vector<double> cachedCharges;
-  uint cachedNAtoms;
+  bool pendingUpdate[BOX_TOTAL];
+  bool forceFullUpdate[BOX_TOTAL];
+  XYZArray cachedNewCoords[BOX_TOTAL];
+  XYZArray cachedOldCoords[BOX_TOTAL];
+  double cachedSignNew[BOX_TOTAL];
+  double cachedSignOld[BOX_TOTAL];
+  std::vector<uint> cachedAtomIndices[BOX_TOTAL];
+  std::vector<double> cachedCharges[BOX_TOTAL];
+  uint cachedNAtoms[BOX_TOTAL];
 
   void UpdateGreenFunction(uint box, const BoxDimensions &axes, double *gf_out);
   double SumMeshEnergy(uint box, fftw_complex *S,

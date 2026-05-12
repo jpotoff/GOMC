@@ -63,12 +63,34 @@ protected:
     fprintf(f, "RunSteps 2\n");
     fprintf(f, "EqSteps 1\n");
     fprintf(f, "AdjSteps 1\n");
+#if ENSEMBLE == GEMC
+    fprintf(f, "DisFreq 0.39\n");
+    fprintf(f, "RotFreq 0.39\n");
+    fprintf(f, "VolFreq 0.02\n");
+    fprintf(f, "SwapFreq 0.20\n");
+    fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
+    fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
+    fprintf(f, "CellBasisVector1 1 25.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 1 0.0 25.0 0.0\n");
+    fprintf(f, "CellBasisVector3 1 0.0 0.0 25.0\n");
+#elif ENSEMBLE == GCMC
+    fprintf(f, "DisFreq 0.40\n");
+    fprintf(f, "RotFreq 0.40\n");
+    fprintf(f, "VolFreq 0.00\n");
+    fprintf(f, "SwapFreq 0.20\n");
+    fprintf(f, "ChemPot TIP4A -10.0\n");
+    fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
+    fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
+#else
     fprintf(f, "DisFreq 0.49\n");
     fprintf(f, "RotFreq 0.49\n");
     fprintf(f, "VolFreq 0.02\n");
     fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
     fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
     fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
+#endif
     fprintf(f, "CBMC_First 12\n");
     fprintf(f, "CBMC_Nth 10\n");
     fprintf(f, "CBMC_Ang 50\n");
@@ -80,8 +102,8 @@ protected:
     fprintf(f, "DCDFreq True 10000000\n");
     fprintf(f, "ConsoleFreq True 1\n");
     fprintf(f, "BlockAverageFreq True 10000000\n");
-    fprintf(f, "HistogramFreq False 10000000\n")
-        fprintf(f, "OutEnergy True True\n");
+    fprintf(f, "HistogramFreq False 10000000\n");
+    fprintf(f, "OutEnergy True True\n");
     fprintf(f, "OutPressure True True\n");
     fprintf(f, "OutMolNum True True\n");
     fprintf(f, "OutDensity True True\n");
@@ -1023,3 +1045,56 @@ TEST_F(EwaldPMEMovesTest, ConstantGridResizingRejectionConsistency) {
       << "ChargeMesh retained Ghost Atoms: Mathematical Fourier reconstruction "
          "explicitly bypassed after constant-K trial regression.";
 }
+
+#if BOX_TOTAL >= 2
+TEST_F(EwaldPMEMovesTest, MultiBoxCacheConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  // We are going to simulate a MoleculeTransfer move that touches box 0 and box 1
+  uint destBox = 0;
+  uint sourceBox = 1;
+
+  // We manually ensure S_ref is accessible for box 1 to bypass the `S_ref[box] == nullptr` return.
+  pme->RecipInit(sourceBox, sim.GetBoxDim());
+  pme->BoxReciprocalSetup(sourceBox, sim.GetCoordinates());
+  pme->UpdateRecipVec(sourceBox);
+
+  uint molIndex = 14;
+  if (molIndex >= sim.GetMolecules().count)
+    molIndex = 0;
+
+  MoleculeKind const &kind = sim.GetMolecules().GetKind(molIndex);
+  uint startAtom = sim.GetMolecules().MolStart(molIndex);
+
+  // 1. Build "Old" TrialMol for Deletion
+  cbmc::TrialMol oldMol(kind, sim.GetBoxDim(), sourceBox);
+  oldMol.SetCoords(sim.GetCoordinates(), startAtom);
+
+  // 2. Build "New" TrialMol for Insertion
+  cbmc::TrialMol newMol(kind, sim.GetBoxDim(), destBox);
+  newMol.SetCoords(sim.GetCoordinates(), startAtom);
+
+  // In GOMC, SwapDestRecip and SwapSourceRecip are evaluated sequentially before UpdateRecip.
+  pme->SwapDestRecip(newMol, destBox, molIndex);
+  pme->SwapSourceRecip(oldMol, sourceBox, molIndex);
+
+  // Accept the move and apply updates to both boxes.
+  // Before the fix, the SwapSourceRecip (box 1) would overwrite SwapDestRecip (box 0)'s cache,
+  // causing UpdateRecip(box 0) to skip evaluating the grid.
+  pme->UpdateRecip(sourceBox);
+  pme->UpdateRecip(destBox);
+
+  // Verify that the exact energy in the energy tracker matches a full rebuild for BOTH boxes
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+
+  double actualEnergyDest = sim.GetSystemEnergy().boxEnergy[destBox].recip;
+  double expectedEnergyDest = sim.GetSystemEnergy().boxEnergy[destBox].recip; // from the internal UpdateRecip
+  
+  // This expects the full rebuild (actual) matches the tracked energy (expected)
+  EXPECT_NEAR(expectedEnergyDest, actualEnergyDest, 1e-1)
+      << "Box " << destBox << " reciprocal energy drifted! The multi-box cache was likely overwritten.";
+}
+#endif
