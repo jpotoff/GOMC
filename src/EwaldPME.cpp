@@ -142,11 +142,11 @@ void EwaldPME::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     greenFunc_trial[box] = new double[N_complex];
 
     fwdPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, chargeMesh[box],
-                                        S_trial[box], FFTW_ESTIMATE);
+                                        S_trial[box], FFTW_ESTIMATE | FFTW_PRESERVE_INPUT);
     bwdPlan[box] = fftw_plan_dft_c2r_3d(Kx, Ky, Kz, S_trial[box],
                                         potentialMesh[box], FFTW_ESTIMATE);
     scratchPlan[box] = fftw_plan_dft_r2c_3d(Kx, Ky, Kz, scratchMesh[box],
-                                            S_delta[box], FFTW_ESTIMATE);
+                                            S_delta[box], FFTW_ESTIMATE | FFTW_PRESERVE_INPUT);
 
     K_allocated[box][0] = Kx; K_allocated[box][1] = Ky; K_allocated[box][2] = Kz;
   }
@@ -577,6 +577,7 @@ double EwaldPME::MolReciprocal(XYZArray const &molCoords, const uint molIndex, c
 }
 
 double EwaldPME::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box, const int molIndex) {
+  if (box >= BOXES_WITH_U_NB) return 0.0;
   uint length = newMol.GetKind().NumAtoms(); vector<uint> atomIndices(length); vector<double> charges(length);
   uint startAtom = mols.MolStart(molIndex);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = newMol.GetKind().AtomCharge(i); }
@@ -597,6 +598,7 @@ double EwaldPME::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box, con
 }
 
 double EwaldPME::SwapSourceRecip(const cbmc::TrialMol &oldMol, const uint box, const int molIndex) {
+  if (box >= BOXES_WITH_U_NB) return 0.0;
   uint length = oldMol.GetKind().NumAtoms(); vector<uint> atomIndices(length); vector<double> charges(length);
   uint startAtom = mols.MolStart(molIndex);
   for (uint i = 0; i < length; ++i) { atomIndices[i] = startAtom + i; charges[i] = oldMol.GetKind().AtomCharge(i); }
