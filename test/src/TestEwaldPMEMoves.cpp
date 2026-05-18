@@ -18,18 +18,41 @@ protected:
     // Create a temporary directory and copy files
     if (system("mkdir -p /tmp/gomc_pme_repro")) {
     }
+#if ENSEMBLE == GCMC
     if (system("cp "
-               "/home/ai8111/recovery/GOMC/test/input/Systems/OPC/Base/"
+               "../test/input/Systems/OPC/GCMC/"
                "OPC_FF.inp /tmp/gomc_pme_repro/")) {
     }
-    if (system(
-            "cp /home/ai8111/recovery/GOMC/test/input/Systems/OPC/Base/*.pdb "
-            "/tmp/gomc_pme_repro/")) {
+    if (system("cp ../test/input/Systems/OPC/GCMC/*.pdb "
+               "/tmp/gomc_pme_repro/")) {
     }
-    if (system(
-            "cp /home/ai8111/recovery/GOMC/test/input/Systems/OPC/Base/*.psf "
-            "/tmp/gomc_pme_repro/")) {
+    if (system("cp ../test/input/Systems/OPC/GCMC/*.psf "
+               "/tmp/gomc_pme_repro/")) {
     }
+#elif ENSEMBLE == GEMC
+    if (system("cp "
+               "../test/input/Systems/OPC/GEMC/"
+               "OPC_FF.inp /tmp/gomc_pme_repro/")) {
+    }
+    if (system("cp ../test/input/Systems/OPC/GEMC/*.pdb "
+               "/tmp/gomc_pme_repro/")) {
+    }
+    if (system("cp ../test/input/Systems/OPC/GEMC/*.psf "
+               "/tmp/gomc_pme_repro/")) {
+    }
+
+#elif ENSEMBLE == NPT
+    if (system("cp "
+               "../test/input/Systems/OPC/NPT/"
+               "OPC_FF.inp /tmp/gomc_pme_repro/")) {
+    }
+    if (system("cp ../test/input/Systems/OPC/NPT/*.pdb "
+               "/tmp/gomc_pme_repro/")) {
+    }
+    if (system("cp ../test/input/Systems/OPC/NPT/*.psf "
+               "/tmp/gomc_pme_repro/")) {
+    }
+#endif
 
     // Create in.conf
     FILE *f = fopen("/tmp/gomc_pme_repro/in.conf", "w");
@@ -38,13 +61,6 @@ protected:
     fprintf(f, "ExpertMode False\n");
     fprintf(f, "PRNG INTSEED\n");
     fprintf(f, "Random_Seed 12345\n");
-    fprintf(f, "ParaTypeCHARMM True\n");
-    fprintf(f, "Parameters ./OPC_FF.inp\n");
-    fprintf(f, "Coordinates 0 ./initial_box_0.pdb\n");
-    fprintf(f, "Structure 0 ./initial_box_0.psf\n");
-    fprintf(f, "Temperature 300.0\n");
-    fprintf(f, "Pressure 1.0\n");
-    fprintf(f, "useConstantArea False\n");
     fprintf(f, "Potential VDW\n");
     fprintf(f, "LRC True\n");
     fprintf(f, "IPC False\n");
@@ -63,7 +79,27 @@ protected:
     fprintf(f, "RunSteps 2\n");
     fprintf(f, "EqSteps 1\n");
     fprintf(f, "AdjSteps 1\n");
-#if ENSEMBLE == GEMC
+#if ENSEMBLE == NPT
+    fprintf(f, "Coordinates 0 ./initial_box_0.pdb\n");
+    fprintf(f, "Structure 0 ./initial_box_0.psf\n");
+    fprintf(f, "Temperature 300.0\n");
+    fprintf(f, "Pressure 1.0\n");
+    fprintf(f, "useConstantArea False\n");
+    fprintf(f, "ParaTypeCHARMM True\n");
+    fprintf(f, "Parameters ./OPC_FF.inp\n");
+    fprintf(f, "DisFreq 0.49\n");
+    fprintf(f, "RotFreq 0.49\n");
+    fprintf(f, "VolFreq 0.02\n");
+    fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
+    fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
+#elif ENSEMBLE == GEMC
+    fprintf(f, "Coordinates 0 ./initial_box_0.pdb\n");
+    fprintf(f, "Structure 0 ./initial_box_0.psf\n");
+    fprintf(f, "Coordinates 1 ./initial_box_1.pdb\n");
+    fprintf(f, "Structure 1 ./initial_box_1.psf\n");
+    fprintf(f, "ParaTypeMIE True\n");
+    fprintf(f, "Parameters ./OPC_FF.inp\n");
     fprintf(f, "DisFreq 0.39\n");
     fprintf(f, "RotFreq 0.39\n");
     fprintf(f, "VolFreq 0.02\n");
@@ -75,14 +111,29 @@ protected:
     fprintf(f, "CellBasisVector2 1 0.0 25.0 0.0\n");
     fprintf(f, "CellBasisVector3 1 0.0 0.0 25.0\n");
 #elif ENSEMBLE == GCMC
-    fprintf(f, "DisFreq 0.40\n");
-    fprintf(f, "RotFreq 0.40\n");
-    fprintf(f, "VolFreq 0.00\n");
-    fprintf(f, "SwapFreq 0.20\n");
-    fprintf(f, "ChemPot TIP4A -10.0\n");
+    fprintf(f, "ParaTypeMIE True\n");
+    fprintf(f, "Parameters ./OPC_FF.inp\n");
+    fprintf(f, "Coordinates 0 ./initial_box_0.pdb\n");
+    fprintf(f, "Structure 0 ./initial_box_0.psf\n");
+    fprintf(f, "Coordinates 1 ./initial_box_1.pdb\n");
+    fprintf(f, "Structure 1 ./initial_box_1.psf\n");
+    fprintf(f, "DisFreq 0.25\n");
+    fprintf(f, "RotFreq 0.25\n");
+    fprintf(f, "SwapFreq 0.50\n");
+    fprintf(f, "Temperature 650.0\n");
+    fprintf(f, "ChemPot OPC -4750.0\n");
     fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
     fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
     fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
+    fprintf(f, "CellBasisVector1 1 100.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 1 0.0 100.0 0.0\n");
+    fprintf(f, "CellBasisVector3 1 0.0 0.0 100.0\n");
+    fprintf(f, "HistogramFreq True 1000\n");
+    fprintf(f, "DistName  dis\n");
+    fprintf(f, "HistName  hi\n");
+    fprintf(f, "RunNumber 1\n");
+    fprintf(f, "RunLetter a\n");
+    fprintf(f, "SampleFreq 250\n");
 #else
     fprintf(f, "DisFreq 0.49\n");
     fprintf(f, "RotFreq 0.49\n");
@@ -271,6 +322,9 @@ TEST_F(EwaldPMEMovesTest, RotationMoveConsistency) {
 }
 
 TEST_F(EwaldPMEMovesTest, VolumeMoveConsistency) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
@@ -481,6 +535,9 @@ TEST_F(EwaldPMEMovesTest, SwapMoveConsistency) {
 }
 
 TEST_F(EwaldPMEMovesTest, CombinedVolumeAndDisplacementMoveConsistency) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
@@ -564,6 +621,9 @@ TEST_F(EwaldPMEMovesTest, CombinedVolumeAndDisplacementMoveConsistency) {
 // VolumeTransfer). After each probe the PME state is restored via exgMolCache.
 // ---------------------------------------------------------------------------
 TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
@@ -656,6 +716,9 @@ TEST_F(EwaldPMEMovesTest, ReciprocalEnergyVsVolume) {
 // wrong Green function values.
 // ---------------------------------------------------------------------------
 TEST_F(EwaldPMEMovesTest, RejectedVolumeDoesNotCorruptPerMoveEnergy) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
@@ -758,6 +821,9 @@ TEST_F(EwaldPMEMovesTest, RejectedVolumeDoesNotCorruptPerMoveEnergy) {
 // where internal state accumulates corruption across multiple rejections.
 // ---------------------------------------------------------------------------
 TEST_F(EwaldPMEMovesTest, MultipleRejectedVolumesDoNotCorruptEnergy) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
@@ -861,6 +927,9 @@ TEST_F(EwaldPMEMovesTest, RejectedDisplacementConsistency) {
 }
 
 TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
@@ -912,6 +981,9 @@ TEST_F(EwaldPMEMovesTest, SmallVolumeMoveConsistency) {
 }
 
 TEST_F(EwaldPMEMovesTest, DynamicGridResizingRejectionConsistency) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   uint box = 0;
   Simulation sim("in.conf");
   EwaldPME *pme = static_cast<EwaldPME *>(sim.GetEwald());
@@ -978,6 +1050,9 @@ TEST_F(EwaldPMEMovesTest, DynamicGridResizingRejectionConsistency) {
 }
 
 TEST_F(EwaldPMEMovesTest, ConstantGridResizingRejectionConsistency) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "GCMC does not perform volume moves";
+#endif
   uint box = 0;
   Simulation sim("in.conf");
   EwaldPME *pme = static_cast<EwaldPME *>(sim.GetEwald());
@@ -1048,15 +1123,20 @@ TEST_F(EwaldPMEMovesTest, ConstantGridResizingRejectionConsistency) {
 
 #if BOX_TOTAL >= 2
 TEST_F(EwaldPMEMovesTest, MultiBoxCacheConsistency) {
+#if ENSEMBLE == GCMC
+  GTEST_SKIP() << "MultiBox moves are not applicable to GCMC.";
+#endif
   Simulation sim("in.conf");
   EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
   ASSERT_NE(pme, nullptr);
 
-  // We are going to simulate a MoleculeTransfer move that touches box 0 and box 1
+  // We are going to simulate a MoleculeTransfer move that touches box 0 and box
+  // 1
   uint destBox = 0;
   uint sourceBox = 1;
 
-  // We manually ensure S_ref is accessible for box 1 to bypass the `S_ref[box] == nullptr` return.
+  // We manually ensure S_ref is accessible for box 1 to bypass the `S_ref[box]
+  // == nullptr` return.
   pme->RecipInit(sourceBox, sim.GetBoxDim());
   pme->BoxReciprocalSetup(sourceBox, sim.GetCoordinates());
   pme->UpdateRecipVec(sourceBox);
@@ -1076,25 +1156,32 @@ TEST_F(EwaldPMEMovesTest, MultiBoxCacheConsistency) {
   cbmc::TrialMol newMol(kind, sim.GetBoxDim(), destBox);
   newMol.SetCoords(sim.GetCoordinates(), startAtom);
 
-  // In GOMC, SwapDestRecip and SwapSourceRecip are evaluated sequentially before UpdateRecip.
+  // In GOMC, SwapDestRecip and SwapSourceRecip are evaluated sequentially
+  // before UpdateRecip.
   pme->SwapDestRecip(newMol, destBox, molIndex);
   pme->SwapSourceRecip(oldMol, sourceBox, molIndex);
 
   // Accept the move and apply updates to both boxes.
-  // Before the fix, the SwapSourceRecip (box 1) would overwrite SwapDestRecip (box 0)'s cache,
-  // causing UpdateRecip(box 0) to skip evaluating the grid.
+  // Before the fix, the SwapSourceRecip (box 1) would overwrite SwapDestRecip
+  // (box 0)'s cache, causing UpdateRecip(box 0) to skip evaluating the grid.
   pme->UpdateRecip(sourceBox);
   pme->UpdateRecip(destBox);
 
-  // Verify that the exact energy in the energy tracker matches a full rebuild for BOTH boxes
+  // Verify that the exact energy in the energy tracker matches a full rebuild
+  // for BOTH boxes
   pme->UpdateVectorsAndRecipTerms(false);
   sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
 
   double actualEnergyDest = sim.GetSystemEnergy().boxEnergy[destBox].recip;
-  double expectedEnergyDest = sim.GetSystemEnergy().boxEnergy[destBox].recip; // from the internal UpdateRecip
-  
-  // This expects the full rebuild (actual) matches the tracked energy (expected)
+  double expectedEnergyDest = sim.GetSystemEnergy()
+                                  .boxEnergy[destBox]
+                                  .recip; // from the internal UpdateRecip
+
+  // This expects the full rebuild (actual) matches the tracked energy
+  // (expected)
   EXPECT_NEAR(expectedEnergyDest, actualEnergyDest, 1e-1)
-      << "Box " << destBox << " reciprocal energy drifted! The multi-box cache was likely overwritten.";
+      << "Box " << destBox
+      << " reciprocal energy drifted! The multi-box cache was likely "
+         "overwritten.";
 }
 #endif
