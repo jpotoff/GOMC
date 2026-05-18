@@ -1185,3 +1185,55 @@ TEST_F(EwaldPMEMovesTest, MultiBoxCacheConsistency) {
          "overwritten.";
 }
 #endif
+
+#if ENSEMBLE == NPT
+TEST_F(EwaldPMEMovesTest, MultiParticleMoveConsistency) {
+  Simulation sim("in.conf");
+  EwaldPME *pme = dynamic_cast<EwaldPME *>(sim.GetEwald());
+  ASSERT_NE(pme, nullptr);
+
+  uint box = 0;
+  // Calculate initial energy
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double initialEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Initial Reciprocal Energy: " << initialEnergy << " K"
+            << std::endl;
+
+  // MultiParticle move operates on all particles in the box simultaneously.
+  // We simulate a rotation/translation by modifying all coordinates in the box.
+  XYZArray newCoords(sim.GetCoordinates().Count());
+  XYZ move(1.2, -0.5, 0.8); // Arbitrary translation for all particles
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    newCoords.Set(i, sim.GetCoordinates().Get(i) + move);
+  }
+
+  // MultiParticle move backs up the cache in CalcEn()
+  pme->backupMolCache();
+
+  // It then calculates the new reciprocal energy for the entire box
+  pme->BoxReciprocalSums(box, newCoords);
+  double trialEnergy = pme->BoxReciprocal(box, true);
+  std::cout << "Trial Reciprocal Energy (from EwaldPME): " << trialEnergy << " K"
+            << std::endl;
+
+  // Simulate Accept()
+  for (uint i = 0; i < newCoords.Count(); ++i) {
+    sim.GetCoordinates().Set(i, newCoords.Get(i));
+  }
+  pme->UpdateRecip(box);
+  sim.GetSystemEnergy().boxEnergy[box].recip = trialEnergy;
+
+  double expectedEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  // Now perform a full reciprocal sum to verify consistency
+  pme->UpdateVectorsAndRecipTerms(false);
+  sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
+  double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+  std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
+            << std::endl;
+
+  // Validate the incrementally tracked trial energy matches the exact full sum
+  EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
+  EXPECT_GT(actualEnergy, -1e5);
+}
+#endif
