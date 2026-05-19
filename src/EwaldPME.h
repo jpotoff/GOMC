@@ -15,6 +15,7 @@ public:
 
   // Full-box path (FFT)
   void Init() override;
+  void UpdateVectorsAndRecipTerms(bool output) override;
   void AllocMem() override;
   void RecipInit(uint box, BoxDimensions const &axes) override;
   void BoxReciprocalSetup(uint box, XYZArray const &molCoords) override;

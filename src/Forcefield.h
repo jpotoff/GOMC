@@ -72,7 +72,8 @@ public:
   bool isCHARMM;                 // Whether using CHARMM parameter format
   // PME-specific parameters
   int pmeSplineOrder;    // B-spline order for PME
-  double pmeGridSpacing; // Target mesh spacing (Angstroms)
+  double pmeGridSpacing[BOX_TOTAL]; // Target mesh spacing (Angstroms)
+  bool pmeGridSpacingRead[BOX_TOTAL];
   uint pmeRefreshFreq;   // Steps between full S_ref recomputes
 #if ENSEMBLE == GCMC
   bool isFugacity; // To check if we are using fugacity instead of chemical

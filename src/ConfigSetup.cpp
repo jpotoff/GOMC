@@ -721,9 +721,26 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       printf("%-40s %-d \n", "Info: PME B-Spline Order",
              sys.elect.pmeSplineOrder);
     } else if (CheckString(line[0], "PMEGridSpacing")) {
-      sys.elect.pmeGridSpacing = stringtod(line[1]);
-      printf("%-40s %-4.4f A\n", "Info: PME Grid Spacing",
-             sys.elect.pmeGridSpacing);
+      if (line.size() == 2) {
+        double val = stringtod(line[1]);
+        for (uint b = 0; b < BOX_TOTAL; b++) {
+          sys.elect.pmeGridSpacing[b] = val;
+          sys.elect.pmeGridSpacingRead[b] = true;
+        }
+        printf("%-40s %-4.4f A\n", "Info: PME Grid Spacing", val);
+      } else {
+        printf("%-41s", "Info: PME Grid Spacing");
+        for (uint i = 1; i < line.size(); i++) {
+          uint b = i - 1;
+          if (b < BOX_TOTAL) {
+            double val = stringtod(line[i]);
+            sys.elect.pmeGridSpacing[b] = val;
+            sys.elect.pmeGridSpacingRead[b] = true;
+            printf("%-6.3f ", val);
+          }
+        }
+        std::cout << "A\n";
+      }
     } else if (CheckString(line[0], "PMERefreshFreq")) {
       sys.elect.pmeRefreshFreq = stringtoi(line[1]);
       printf("%-40s %-d \n", "Info: PME Refresh Frequency",

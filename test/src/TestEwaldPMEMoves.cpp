@@ -12,6 +12,50 @@
 #include <string>
 #include <unistd.h>
 
+class CustomTestSummaryPrinter : public ::testing::EmptyTestEventListener {
+public:
+  void OnTestProgramEnd(const ::testing::UnitTest& unit_test) override {
+    printf("\n=================================================================\n");
+    printf("                  GOMC TEST EXECUTION SUMMARY                    \n");
+    printf("=================================================================\n");
+    
+    int passed_count = 0;
+    int failed_count = 0;
+    int skipped_count = 0;
+
+    for (int i = 0; i < unit_test.total_test_suite_count(); ++i) {
+      const ::testing::TestSuite* test_suite = unit_test.GetTestSuite(i);
+      for (int j = 0; j < test_suite->total_test_count(); ++j) {
+        const ::testing::TestInfo* test_info = test_suite->GetTestInfo(j);
+        
+        if (!test_info->should_run()) continue;
+
+        if (test_info->result()->Passed()) {
+          printf("[ PASSED ] %s.%s\n", test_suite->name(), test_info->name());
+          passed_count++;
+        } else if (test_info->result()->Failed()) {
+          printf("[ FAILED ] %s.%s\n", test_suite->name(), test_info->name());
+          failed_count++;
+        } else {
+          printf("[SKIPPED ] %s.%s\n", test_suite->name(), test_info->name());
+          skipped_count++;
+        }
+      }
+    }
+    
+    printf("-----------------------------------------------------------------\n");
+    printf("TOTAL: %d | PASSED: %d | FAILED: %d | SKIPPED: %d\n", 
+           passed_count + failed_count + skipped_count, passed_count, failed_count, skipped_count);
+    printf("=================================================================\n\n");
+  }
+};
+
+struct CustomListenerRegistrar {
+  CustomListenerRegistrar() {
+    ::testing::UnitTest::GetInstance()->listeners().Append(new CustomTestSummaryPrinter);
+  }
+} custom_listener_registrar_instance;
+
 class EwaldPMEMovesTest : public ::testing::Test {
 protected:
   void SetUp() override {
@@ -73,9 +117,6 @@ protected:
     fprintf(f, "Tolerance 1e-05\n");
     fprintf(f, "1-4scaling 0.0\n");
     fprintf(f, "PressureCalc False 10000000\n");
-    fprintf(f, "PMESplineOrder 4\n");
-    fprintf(f, "PMEGridSpacing 1.5\n");
-    fprintf(f, "PMERefreshFreq 100\n");
     fprintf(f, "RunSteps 2\n");
     fprintf(f, "EqSteps 1\n");
     fprintf(f, "AdjSteps 1\n");
@@ -90,26 +131,33 @@ protected:
     fprintf(f, "DisFreq 0.49\n");
     fprintf(f, "RotFreq 0.49\n");
     fprintf(f, "VolFreq 0.02\n");
+    fprintf(f, "PMESplineOrder 4\n");
+    fprintf(f, "PMEGridSpacing 1.5\n");
+    fprintf(f, "PMERefreshFreq 100\n");
     fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
     fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
     fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
 #elif ENSEMBLE == GEMC
+    fprintf(f, "Temperature 500.0\n");
     fprintf(f, "Coordinates 0 ./initial_box_0.pdb\n");
     fprintf(f, "Structure 0 ./initial_box_0.psf\n");
     fprintf(f, "Coordinates 1 ./initial_box_1.pdb\n");
     fprintf(f, "Structure 1 ./initial_box_1.psf\n");
-    fprintf(f, "ParaTypeMIE True\n");
+    fprintf(f, "ParaTypeCHARMM True\n");
     fprintf(f, "Parameters ./OPC_FF.inp\n");
     fprintf(f, "DisFreq 0.39\n");
     fprintf(f, "RotFreq 0.39\n");
     fprintf(f, "VolFreq 0.02\n");
     fprintf(f, "SwapFreq 0.20\n");
-    fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
-    fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
-    fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
-    fprintf(f, "CellBasisVector1 1 25.0 0.0 0.0\n");
-    fprintf(f, "CellBasisVector2 1 0.0 25.0 0.0\n");
-    fprintf(f, "CellBasisVector3 1 0.0 0.0 25.0\n");
+    fprintf(f, "PMESplineOrder 4\n");
+    fprintf(f, "PMEGridSpacing 1.5 4.0\n");
+    fprintf(f, "PMERefreshFreq 100\n");
+    fprintf(f, "CellBasisVector1 0 33.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 0 0.0 33.0 0.0\n");
+    fprintf(f, "CellBasisVector3 0 0.0 0.0 33.0\n");
+    fprintf(f, "CellBasisVector1 1 54.0 0.0 0.0\n");
+    fprintf(f, "CellBasisVector2 1 0.0 54.0 0.0\n");
+    fprintf(f, "CellBasisVector3 1 0.0 0.0 54.0\n");
 #elif ENSEMBLE == GCMC
     fprintf(f, "ParaTypeMIE True\n");
     fprintf(f, "Parameters ./OPC_FF.inp\n");
@@ -122,6 +170,9 @@ protected:
     fprintf(f, "SwapFreq 0.50\n");
     fprintf(f, "Temperature 650.0\n");
     fprintf(f, "ChemPot OPC -4750.0\n");
+    fprintf(f, "PMESplineOrder 4\n");
+    fprintf(f, "PMEGridSpacing 1.5\n");
+    fprintf(f, "PMERefreshFreq 100\n");
     fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
     fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
     fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
@@ -138,6 +189,9 @@ protected:
     fprintf(f, "DisFreq 0.49\n");
     fprintf(f, "RotFreq 0.49\n");
     fprintf(f, "VolFreq 0.02\n");
+    fprintf(f, "PMESplineOrder 4\n");
+    fprintf(f, "PMEGridSpacing 1.5\n");
+    fprintf(f, "PMERefreshFreq 100\n");
     fprintf(f, "CellBasisVector1 0 25.0 0.0 0.0\n");
     fprintf(f, "CellBasisVector2 0 0.0 25.0 0.0\n");
     fprintf(f, "CellBasisVector3 0 0.0 0.0 25.0\n");
@@ -1213,8 +1267,8 @@ TEST_F(EwaldPMEMovesTest, MultiParticleMoveConsistency) {
   // It then calculates the new reciprocal energy for the entire box
   pme->BoxReciprocalSums(box, newCoords);
   double trialEnergy = pme->BoxReciprocal(box, true);
-  std::cout << "Trial Reciprocal Energy (from EwaldPME): " << trialEnergy << " K"
-            << std::endl;
+  std::cout << "Trial Reciprocal Energy (from EwaldPME): " << trialEnergy
+            << " K" << std::endl;
 
   // Simulate Accept()
   for (uint i = 0; i < newCoords.Count(); ++i) {

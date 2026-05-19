@@ -77,7 +77,10 @@ void Forcefield::InitBasicVals(config_setup::SystemVals const &val,
   dielectric = val.elect.dielectric;
   // PME params
   pmeSplineOrder = val.elect.pmeSplineOrder;
-  pmeGridSpacing = val.elect.pmeGridSpacing;
+  for (uint b = 0; b < BOX_TOTAL; b++) {
+    pmeGridSpacing[b] = val.elect.pmeGridSpacing[b];
+    pmeGridSpacingRead[b] = val.elect.pmeGridSpacingRead[b];
+  }
   pmeRefreshFreq = val.elect.pmeRefreshFreq;
 
   if (val.freeEn.enable) {

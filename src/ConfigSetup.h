@@ -188,7 +188,8 @@ struct ElectroStatic {
   bool enable;
   std::string method;
   int pmeSplineOrder;
-  double pmeGridSpacing;
+  double pmeGridSpacing[BOX_TOTAL];
+  bool pmeGridSpacingRead[BOX_TOTAL];
   uint pmeRefreshFreq;
   bool cutoffCoulombRead[BOX_TOTAL];
   double tolerance;
@@ -198,7 +199,10 @@ struct ElectroStatic {
   ElectroStatic(void) {
     method = "NoEwald";
     pmeSplineOrder = 6;
-    pmeGridSpacing = 1.0;
+    for (uint b = 0; b < BOX_TOTAL; b++) {
+      pmeGridSpacing[b] = 1.0;
+      pmeGridSpacingRead[b] = false;
+    }
     pmeRefreshFreq = 1000;
     std::fill_n(cutoffCoulombRead, BOX_TOTAL, false);
     std::fill_n(cutoffCoulomb, BOX_TOTAL, 0.0);

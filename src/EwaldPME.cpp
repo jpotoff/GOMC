@@ -79,6 +79,17 @@ void EwaldPME::Init() {
   Ewald::Init();
 }
 
+void EwaldPME::UpdateVectorsAndRecipTerms(bool output) {
+  for (uint b = 0; b < BOXES_WITH_U_NB; ++b) {
+    RecipInit(b, currentAxes);
+    BoxReciprocalSetup(b, currentCoords);
+    SetRecipRef(b);
+    if (output) {
+      printf("Box: %d, PMEGridPoints: %d x %d x %d\n", b, K[b][0], K[b][1], K[b][2]);
+    }
+  }
+}
+
 void EwaldPME::AllocMem() {
   Ewald::AllocMem();
 
@@ -393,9 +404,9 @@ void EwaldPME::RecipInit(uint box, BoxDimensions const &axes) {
   Ewald::RecipInit(box, axes);
   trialAxes[box] = axes;
 
-  K_trial[box][0] = (int)round(axes.axis.Get(box).x / ff.pmeGridSpacing);
-  K_trial[box][1] = (int)round(axes.axis.Get(box).y / ff.pmeGridSpacing);
-  K_trial[box][2] = (int)round(axes.axis.Get(box).z / ff.pmeGridSpacing);
+  K_trial[box][0] = (int)round(axes.axis.Get(box).x / ff.pmeGridSpacing[box]);
+  K_trial[box][1] = (int)round(axes.axis.Get(box).y / ff.pmeGridSpacing[box]);
+  K_trial[box][2] = (int)round(axes.axis.Get(box).z / ff.pmeGridSpacing[box]);
 
   if (K_trial[box][0] < 1) K_trial[box][0] = 1;
   if (K_trial[box][1] < 1) K_trial[box][1] = 1;
