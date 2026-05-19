@@ -728,18 +728,18 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
           sys.elect.pmeGridSpacingRead[b] = true;
         }
         printf("%-40s %-4.4f A\n", "Info: PME Grid Spacing", val);
-      } else {
-        printf("%-41s", "Info: PME Grid Spacing");
-        for (uint i = 1; i < line.size(); i++) {
-          uint b = i - 1;
-          if (b < BOX_TOTAL) {
-            double val = stringtod(line[i]);
-            sys.elect.pmeGridSpacing[b] = val;
-            sys.elect.pmeGridSpacingRead[b] = true;
-            printf("%-6.3f ", val);
-          }
+      } else if (line.size() == 3) {
+        uint b = stringtoi(line[1]);
+        if (b < BOX_TOTAL) {
+          sys.elect.pmeGridSpacing[b] = stringtod(line[2]);
+          sys.elect.pmeGridSpacingRead[b] = true;
+          printf("%s %-d %-27s %4.4f A\n", "Info: Box ", b, " PMEGridSpacing",
+                 sys.elect.pmeGridSpacing[b]);
+        } else {
+          std::cout << "ERROR: This simulation requires only " << BOX_TOTAL
+                    << " sets of PMEGridSpacing!" << std::endl;
+          exit(EXIT_FAILURE);
         }
-        std::cout << "A\n";
       }
     } else if (CheckString(line[0], "PMERefreshFreq")) {
       sys.elect.pmeRefreshFreq = stringtoi(line[1]);
