@@ -2056,6 +2056,30 @@ void ConfigSetup::verifyInputs(void) {
     exit(EXIT_FAILURE);
   }
 
+  if (sys.memcVal.enable || sys.intraMemcVal.enable) {
+    int numMemc = 0;
+    if (sys.memcVal.MEMC1) numMemc++;
+    if (sys.memcVal.MEMC2) numMemc++;
+    if (sys.memcVal.MEMC3) numMemc++;
+    if (sys.memcVal.MEMC2Liq) numMemc++;
+    if (sys.memcVal.MEMC3Liq) numMemc++;
+    if (numMemc > 1) {
+      std::cout << "ERROR: Multiple MEMC methods were specified, but only one "
+                   "is allowed!\n";
+      exit(EXIT_FAILURE);
+    }
+
+    int numIntraMemc = 0;
+    if (sys.intraMemcVal.MEMC1) numIntraMemc++;
+    if (sys.intraMemcVal.MEMC2) numIntraMemc++;
+    if (sys.intraMemcVal.MEMC3) numIntraMemc++;
+    if (numIntraMemc > 1) {
+      std::cout << "ERROR: Multiple Intra-MEMC methods are specified, but only "
+                   "one is allowed!\n";
+      exit(EXIT_FAILURE);
+    }
+  }
+
   if (sys.moves.displace == DBL_MAX) {
     if (!exptMode) {
       std::cout << "ERROR: Displacement move frequency is not specified!\n";
@@ -2274,28 +2298,6 @@ void ConfigSetup::verifyInputs(void) {
     exit(EXIT_FAILURE);
   }
   if (sys.memcVal.enable || sys.intraMemcVal.enable) {
-    if ((sys.memcVal.MEMC1 && sys.memcVal.MEMC2) ||
-        (sys.memcVal.MEMC1 && sys.memcVal.MEMC3) ||
-        (sys.memcVal.MEMC2 && sys.memcVal.MEMC3)) {
-      std::cout << "ERROR: Multiple MEMC methods were specified, but only one "
-                   "is allowed!\n";
-      exit(EXIT_FAILURE);
-    }
-    if ((sys.memcVal.MEMC1 && sys.memcVal.MEMC2) ||
-        (sys.memcVal.MEMC1 && sys.memcVal.MEMC3) ||
-        (sys.memcVal.MEMC1 && sys.memcVal.MEMC2Liq) ||
-        (sys.memcVal.MEMC1 && sys.memcVal.MEMC3Liq) ||
-        (sys.memcVal.MEMC2 && sys.memcVal.MEMC3Liq)) {
-      std::cout << "Error: Multiple MEMC methods are specified!\n";
-      exit(EXIT_FAILURE);
-    }
-    if ((sys.intraMemcVal.MEMC1 && sys.intraMemcVal.MEMC2) ||
-        (sys.intraMemcVal.MEMC1 && sys.intraMemcVal.MEMC3) ||
-        (sys.intraMemcVal.MEMC2 && sys.intraMemcVal.MEMC3)) {
-      std::cout << "ERROR: Multiple Intra-MEMC methods are specified, but only "
-                   "one is allowed!\n";
-      exit(EXIT_FAILURE);
-    }
     if (!sys.memcVal.readVol || !sys.intraMemcVal.readVol) {
       std::cout
           << "ERROR: In the MEMC method, the Sub-Volume was not specified!\n";

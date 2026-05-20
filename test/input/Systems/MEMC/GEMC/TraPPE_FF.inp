@@ -1,0 +1,57 @@
+* initial_box_0 and initial_box_1 - created by MoSDeF-GOMC using the on 2025-02-15 21:08:39.171233
+* These parameters use the non-bonded Mie form --- with these force field(s) via MoSDef  {'DME': '../../trappe-mie.xml', 'SPCE': '../../SPCE_GMSO.xml'}.
+*  1-4 electrostatic scaling = {'DME': 0.0, 'SPCE': 0.0} , and 1-4 non-bonded scaling = {'DME': 0.0, 'SPCE': 0.0}, and non-bonded mixing rule = lorentz
+
+*            3000 atoms
+*            2000 bonds
+*            1000 angles
+*               0 dihedrals
+*               0 impropers
+
+
+* masses
+
+! atom_types      mass            ! atomClass_ResidueName
+* OE0             15.9994         ! DME_OE                   
+* CH3OE0          15.0344         ! DME_CH3_OE               
+* OW0             15.999          ! SPCE_OW                  
+* HW0             1.008           ! SPCE_HW                  
+
+BONDS * harmonic
+! 
+! V(bond) = Kb(b - b0)**2
+! 
+! Kb: kcal/mol/A**2 (LJ) and  K/A**2 (Mie and Exp6)
+! b0: A
+! Kb (kcal/mol) = Kb_K (K) * Boltz. const.; (9999999999 if no stretching)
+! 
+! type_1   type_2     Kb              b0              ! extended_type_1      extended_type_2     
+CH3OE0     OE0        999999999999    1.41            ! DME_CH3_OE           DME_OE              
+OW0        HW0        999999999999    1.0             ! SPCE_OW              SPCE_HW             
+
+ANGLES * harmonic
+! 
+! V(angle) = Ktheta(Theta - Theta0)**2
+! 
+! Ktheta: kcal/mol/rad**2 (LJ) and  K/rad**2 (Mie and Exp6)
+! Theta0: degrees
+! 
+!  Boltzmann = 0.0019872041 kcal / (mol * K)
+! 
+! Ktheta (kcal/mol) = Ktheta_K (K) * Boltz. const.
+! 
+! type_1   type_2     type_3     Ktheta          Theta0          ! extended_type_1      extended_type_2      extended_type_3     
+CH3OE0     OE0        CH3OE0     30200.0         112.0           ! DME_CH3_OE           DME_OE               DME_CH3_OE          
+HW0        OW0        HW0        120272361877860.58 109.47          ! SPCE_HW              SPCE_OW              SPCE_HW             
+
+NONBONDED_MIE * Mie
+! 
+! V(Mie) = (n/(n-6)) * (n/6)**(6/(n-6)) * Epsilon * ((sig/r)**n - (sig/r)**6)
+! 
+! type_1   epsilon         sigma           n               epsilon,1-4     sigma,1-4       n,1-4           ! extended_type_1      extended_type_2     
+OE0        55.0            2.8             12.0            0.0             2.8             12.0            ! DME_OE               DME_OE              
+CH3OE0     98.0            3.75            12.0            0.0             3.75            12.0            ! DME_CH3_OE           DME_CH3_OE          
+OW0        78.197431       3.165558        12.0            0.0             3.165558        12.0            ! SPCE_OW              SPCE_OW             
+HW0        0.0             1.0             12.0            0.0             1.0             12.0            ! SPCE_HW              SPCE_HW             
+
+END
