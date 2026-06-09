@@ -27,10 +27,28 @@ public:
     }
   }
 
-  ~BoxDimensionsNonOrth(){};
+  ~BoxDimensionsNonOrth() {};
 
   BoxDimensionsNonOrth &operator=(BoxDimensionsNonOrth const &other);
   bool operator==(BoxDimensionsNonOrth const &other);
+  // moved from Boxdimensions.h to support templates
+  //  Returns if within cutoff, if it is, gets distance --
+  //  with shortcut, same coordinate array
+  bool InRcut(double &distSq, XYZ &dist, XYZArray const &arr, const uint i,
+              const uint j, const uint b) const;
+
+  // Dist squared -- with shortcut, two different coordinate arrays
+  bool InRcut(double &distSq, XYZ &dist, XYZArray const &arr1, const uint i,
+              XYZArray const &arr2, const uint j, const uint b) const;
+
+  // Returns if within cutoff, if it is, gets distance --
+  // with shortcut, same coordinate array
+  bool InRcut(double &distSq, XYZArray const &arr, const uint i, const uint j,
+              const uint b) const;
+
+  // Dist squared -- with shortcut, two different coordinate arrays
+  bool InRcut(double &distSq, XYZArray const &arr1, const uint i,
+              XYZArray const &arr2, const uint j, const uint b) const;
 
   void Init(config_setup::RestartSettings const &restart,
             config_setup::Volume const &confVolume,
@@ -108,4 +126,36 @@ inline XYZ BoxDimensionsNonOrth::TransformSlant(const XYZ &A,
   return temp;
 }
 
+inline bool BoxDimensionsNonOrth::InRcut(double &distSq, XYZ &dist,
+                                         XYZArray const &arr, const uint i,
+                                         const uint j, const uint b) const {
+  dist = BoxDimensionsNonOrth::MinImage(arr.Difference(i, j), b);
+  distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
+  return (rCutSq[b] > distSq);
+}
+
+inline bool BoxDimensionsNonOrth::InRcut(double &distSq, XYZ &dist,
+                                         XYZArray const &arr1, const uint i,
+                                         XYZArray const &arr2, const uint j,
+                                         const uint b) const {
+  dist = BoxDimensionsNonOrth::MinImage(arr1.Difference(i, arr2, j), b);
+  distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
+  return (rCutSq[b] > distSq);
+}
+
+inline bool BoxDimensionsNonOrth::InRcut(double &distSq, XYZArray const &arr,
+                                         const uint i, const uint j,
+                                         const uint b) const {
+  XYZ dist = BoxDimensionsNonOrth::MinImage(arr.Difference(i, j), b);
+  distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
+  return (rCutSq[b] > distSq);
+}
+
+inline bool BoxDimensionsNonOrth::InRcut(double &distSq, XYZArray const &arr1,
+                                         const uint i, XYZArray const &arr2,
+                                         const uint j, const uint b) const {
+  XYZ dist = BoxDimensionsNonOrth::MinImage(arr1.Difference(i, arr2, j), b);
+  distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
+  return (rCutSq[b] > distSq);
+}
 #endif /*BOX_DIMENSIONS_NONORTHO_H*/
