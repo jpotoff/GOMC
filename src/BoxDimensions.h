@@ -299,4 +299,38 @@ inline XYZ BoxDimensions::TransformUnSlant(const XYZ &A, const uint b) const {
   return A;
 }
 
+inline XYZ BoxDimensions::MinImage_X(XYZ rawVec, const uint b) const {
+  rawVec.x = MinImageSigned(rawVec.x, axis.x[b], halfAx.x[b]);
+  return rawVec;
+}
+
+inline XYZ BoxDimensions::MinImage_Y(XYZ rawVec, const uint b) const {
+  rawVec.y = MinImageSigned(rawVec.y, axis.y[b], halfAx.y[b]);
+  return rawVec;
+}
+
+inline XYZ BoxDimensions::MinImage_Z(XYZ rawVec, const uint b) const {
+  rawVec.z = MinImageSigned(rawVec.z, axis.z[b], halfAx.z[b]);
+  return rawVec;
+}
+
+// Dist. btwn two points, accounting for PBC, on an individual axis
+//
+// Throws out sign (as per Brock's suggestion) as we don't care about it
+// and thus can eliminate a branch and (potentially) one compare.
+//
+inline double BoxDimensions::MinImage(double &raw, const double ax,
+                                      const double halfAx) const {
+  raw = std::fabs(raw);
+  // If shorter over periodic boundary, get that dist.
+#ifdef NO_BRANCHING_MIN_IMAGE
+  double rawDiff = ax - raw;
+  return (raw > halfAx) ? rawDiff : raw;
+#else
+  if (raw > halfAx)
+    raw = ax - raw;
+  return raw; //...just pass back if distance is already minimum
+#endif
+}
+
 #endif /*BOX_DIMENSIONS_H*/

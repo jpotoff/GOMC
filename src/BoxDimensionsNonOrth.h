@@ -158,4 +158,33 @@ inline bool BoxDimensionsNonOrth::InRcut(double &distSq, XYZArray const &arr1,
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
   return (rCutSq[b] > distSq);
 }
+
+inline XYZ BoxDimensionsNonOrth::MinImage(XYZ rawVecRef, const uint b) const {
+  XYZ rawVec = TransformUnSlant(rawVecRef, b);
+  rawVecRef = BoxDimensions::MinImage(rawVec, b);
+  rawVecRef = TransformSlant(rawVecRef, b);
+  return rawVecRef;
+}
+
+inline XYZ BoxDimensionsNonOrth::MinImage_X(XYZ rawVecRef, const uint b) const {
+  XYZ rawVec = TransformUnSlant(rawVecRef, b);
+  rawVecRef = BoxDimensions::MinImage_X(rawVec, b);
+  rawVecRef = TransformSlant(rawVecRef, b);
+  return rawVecRef;
+}
+
+inline XYZ BoxDimensionsNonOrth::MinImage_Y(XYZ rawVecRef, const uint b) const {
+  XYZ rawVec = TransformUnSlant(rawVecRef, b);
+  rawVecRef = BoxDimensions::MinImage_Y(rawVec, b);
+  rawVecRef = TransformSlant(rawVecRef, b);
+  return rawVecRef;
+}
+
+inline XYZ BoxDimensionsNonOrth::MinImage_Z(XYZ rawVecRef, const uint b) const {
+  XYZ rawVec = TransformUnSlant(rawVecRef, b);
+  rawVecRef = BoxDimensions::MinImage_Z(rawVec, b);
+  rawVecRef = TransformSlant(rawVecRef, b);
+  return rawVecRef;
+}
+
 #endif /*BOX_DIMENSIONS_NONORTHO_H*/

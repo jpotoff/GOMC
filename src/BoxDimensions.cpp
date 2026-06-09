@@ -318,36 +318,3 @@ double BoxDimensions::UnwrapPBC(double &v, const double ref, const double ax,
 #endif
 }
 
-XYZ BoxDimensions::MinImage_X(XYZ rawVec, const uint b) const {
-  rawVec.x = MinImageSigned(rawVec.x, axis.x[b], halfAx.x[b]);
-  return rawVec;
-}
-
-XYZ BoxDimensions::MinImage_Y(XYZ rawVec, const uint b) const {
-  rawVec.y = MinImageSigned(rawVec.y, axis.y[b], halfAx.y[b]);
-  return rawVec;
-}
-
-XYZ BoxDimensions::MinImage_Z(XYZ rawVec, const uint b) const {
-  rawVec.z = MinImageSigned(rawVec.z, axis.z[b], halfAx.z[b]);
-  return rawVec;
-}
-
-// Dist. btwn two points, accounting for PBC, on an individual axis
-//
-// Throws out sign (as per Brock's suggestion) as we don't care about it
-// and thus can eliminate a branch and (potentially) one compare.
-//
-double BoxDimensions::MinImage(double &raw, const double ax,
-                               const double halfAx) const {
-  raw = std::fabs(raw);
-  // If shorter over periodic boundary, get that dist.
-#ifdef NO_BRANCHING_MIN_IMAGE
-  rawDiff = ax - raw;
-  return (raw > halfAx) ? rawDiff : raw;
-#else
-  if (raw > halfAx)
-    raw = ax - raw;
-  return raw; //...just pass back if distance is already minimum
-#endif
-}

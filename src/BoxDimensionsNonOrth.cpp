@@ -237,33 +237,6 @@ void BoxDimensionsNonOrth::SetVolume(const uint b, const double vol) {
   CalcCellDimensions(b);
 }
 
-XYZ BoxDimensionsNonOrth::MinImage(XYZ rawVecRef, const uint b) const {
-  XYZ rawVec = TransformUnSlant(rawVecRef, b);
-  rawVecRef = BoxDimensions::MinImage(rawVec, b);
-  rawVecRef = TransformSlant(rawVecRef, b);
-  return rawVecRef;
-}
-
-XYZ BoxDimensionsNonOrth::MinImage_X(XYZ rawVecRef, const uint b) const {
-  XYZ rawVec = TransformUnSlant(rawVecRef, b);
-  rawVecRef = BoxDimensions::MinImage_X(rawVec, b);
-  rawVecRef = TransformSlant(rawVecRef, b);
-  return rawVecRef;
-}
-
-XYZ BoxDimensionsNonOrth::MinImage_Y(XYZ rawVecRef, const uint b) const {
-  XYZ rawVec = TransformUnSlant(rawVecRef, b);
-  rawVecRef = BoxDimensions::MinImage_Y(rawVec, b);
-  rawVecRef = TransformSlant(rawVecRef, b);
-  return rawVecRef;
-}
-
-XYZ BoxDimensionsNonOrth::MinImage_Z(XYZ rawVecRef, const uint b) const {
-  XYZ rawVec = TransformUnSlant(rawVecRef, b);
-  rawVecRef = BoxDimensions::MinImage_Z(rawVec, b);
-  rawVecRef = TransformSlant(rawVecRef, b);
-  return rawVecRef;
-}
 
 void BoxDimensionsNonOrth::WrapPBC(double &x, double &y, double &z,
                                    const uint b) const {
