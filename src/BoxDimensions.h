@@ -167,10 +167,10 @@ public:
   // Dist. btwn two points, accounting for PBC, on an individual axis
   double MinImage(double &raw, const double ax, const double halfAx) const;
   double MinImageSigned(double raw, double ax, double halfAx) const {
-    if (raw > halfAx)
-      raw -= ax;
-    else if (raw < -halfAx)
-      raw += ax;
+    double minus = raw - ax;
+    double plus = raw + ax;
+    raw = (raw > halfAx) ? minus : raw;
+    raw = (raw < -halfAx) ? plus : raw;
     return raw;
   }
 
@@ -231,7 +231,7 @@ inline void BoxDimensions::UnwrapPBC(XYZArray &arr, const uint start,
 inline bool BoxDimensions::InRcut(double &distSq, XYZ &dist,
                                   XYZArray const &arr, const uint i,
                                   const uint j, const uint b) const {
-  dist = MinImage(arr.Difference(i, j), b);
+  dist = BoxDimensions::MinImage(arr.Difference(i, j), b);
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
   return (rCutSq[b] > distSq);
 }
@@ -240,7 +240,7 @@ inline bool BoxDimensions::InRcut(double &distSq, XYZ &dist,
                                   XYZArray const &arr1, const uint i,
                                   XYZArray const &arr2, const uint j,
                                   const uint b) const {
-  dist = MinImage(arr1.Difference(i, arr2, j), b);
+  dist = BoxDimensions::MinImage(arr1.Difference(i, arr2, j), b);
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
   return (rCutSq[b] > distSq);
 }
@@ -248,7 +248,7 @@ inline bool BoxDimensions::InRcut(double &distSq, XYZ &dist,
 inline bool BoxDimensions::InRcut(double &distSq, XYZArray const &arr,
                                   const uint i, const uint j,
                                   const uint b) const {
-  XYZ dist = MinImage(arr.Difference(i, j), b);
+  XYZ dist = BoxDimensions::MinImage(arr.Difference(i, j), b);
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
   return (rCutSq[b] > distSq);
 }
@@ -256,7 +256,7 @@ inline bool BoxDimensions::InRcut(double &distSq, XYZArray const &arr,
 inline bool BoxDimensions::InRcut(double &distSq, XYZArray const &arr1,
                                   const uint i, XYZArray const &arr2,
                                   const uint j, const uint b) const {
-  XYZ dist = MinImage(arr1.Difference(i, arr2, j), b);
+  XYZ dist = BoxDimensions::MinImage(arr1.Difference(i, arr2, j), b);
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
   return (rCutSq[b] > distSq);
 }
@@ -264,14 +264,14 @@ inline bool BoxDimensions::InRcut(double &distSq, XYZArray const &arr1,
 inline void BoxDimensions::GetDistSq(double &distSq, XYZArray const &arr1,
                                      const uint i, XYZArray const &arr2,
                                      const uint j, const uint b) const {
-  XYZ dist = MinImage(arr1.Difference(i, arr2, j), b);
+  XYZ dist = BoxDimensions::MinImage(arr1.Difference(i, arr2, j), b);
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
 }
 
 inline void BoxDimensions::GetDistSq(double &distSq, XYZArray const &arr,
                                      const uint i, const uint j,
                                      const uint b) const {
-  XYZ dist = MinImage(arr.Difference(i, j), b);
+  XYZ dist = BoxDimensions::MinImage(arr.Difference(i, j), b);
   distSq = dist.x * dist.x + dist.y * dist.y + dist.z * dist.z;
 }
 
@@ -280,7 +280,7 @@ inline bool BoxDimensions::InCavity(XYZ const &arr, XYZ const &center,
                                     const uint b) const {
   XYZ halfDim = cavDim * 0.5;
   halfDim *= halfDim;
-  XYZ diff = MinImage(arr - center, b);
+  XYZ diff = BoxDimensions::MinImage(arr - center, b);
   diff = geom::Transform(invCav, diff);
   diff *= diff;
   if (diff.x > halfDim.x || diff.y > halfDim.y || diff.z > halfDim.z)
@@ -322,15 +322,9 @@ inline XYZ BoxDimensions::MinImage_Z(XYZ rawVec, const uint b) const {
 inline double BoxDimensions::MinImage(double &raw, const double ax,
                                       const double halfAx) const {
   raw = std::fabs(raw);
-  // If shorter over periodic boundary, get that dist.
-#ifdef NO_BRANCHING_MIN_IMAGE
   double rawDiff = ax - raw;
-  return (raw > halfAx) ? rawDiff : raw;
-#else
-  if (raw > halfAx)
-    raw = ax - raw;
-  return raw; //...just pass back if distance is already minimum
-#endif
+  raw = (raw > halfAx) ? rawDiff : raw;
+  return raw;
 }
 
 #endif /*BOX_DIMENSIONS_H*/
