@@ -407,12 +407,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         nIndex.push_back(*n);
         n.Next();
       }
-
-#ifdef _OPENMP
-#pragma omp parallel for default(none) shared(nIndex, boxAxes)                          \
-    firstprivate(atom, box, molIndex, num::qqFact)                             \
-    reduction(+ : tempREn, tempLJEn)
-#endif
+      // removing for performance testing.
+      // #ifdef _OPENMP
+      // #pragma omp parallel for default(none) shared(nIndex, boxAxes) \
+      //     firstprivate(atom, box, molIndex, num::qqFact) \ reduction(+ :
+      //     tempREn, tempLJEn)
+      // #endif
       for (int i = 0; i < (int)nIndex.size(); i++) {
         double distSq = 0.0;
         XYZ virComponents;
@@ -444,12 +444,13 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         nIndex.push_back(*n);
         n.Next();
       }
-
-#ifdef _OPENMP
-#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes)      \
-    reduction(+ : tempREn, tempLJEn)                                           \
-    firstprivate(atom, molIndex, p, box, num::qqFact)
-#endif
+      // removing for performance testing.
+      // #ifdef _OPENMP
+      // #pragma omp parallel for default(none) shared(molCoords, nIndex,
+      // overlap, boxAxes)      \
+      //     reduction(+ : tempREn, tempLJEn) \ firstprivate(atom, molIndex, p,
+      //     box, num::qqFact)
+      // #endif
       for (int i = 0; i < (int)nIndex.size(); i++) {
         double distSq = 0.0;
         XYZ virComponents;
@@ -535,18 +536,19 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
     return;
 
   GOMC_EVENT_START(1, GomcProfileEvent::EN_CBMC_INTER);
-  //double tempLJ, tempReal;
+  // double tempLJ, tempReal;
   MoleculeKind const &thisKind = mols.GetKind(molIndex);
   uint kindI = thisKind.AtomKind(partIndex);
   double kindICharge = thisKind.AtomCharge(partIndex);
- // std::vector<uint> nIndex;
-//use OpenMP to distribute the workload over CBMC trials
+  // std::vector<uint> nIndex;
+// use OpenMP to distribute the workload over CBMC trials
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(overlap, trialPos, boxAxes, en, real) \
+#pragma omp parallel for default(none)                                         \
+    shared(overlap, trialPos, boxAxes, en, real)                               \
     firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials)
 #endif
   for (uint t = 0; t < trials; ++t) {
-    //Each thread gets it's own copy of nIndex, tempReal and tempLJ
+    // Each thread gets it's own copy of nIndex, tempReal and tempLJ
     std::vector<uint> nIndex;
     double tempReal = 0.0;
     double tempLJ = 0.0;
@@ -559,13 +561,14 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
       n.Next();
     }
 
-    //distributing openmp thread over particle interactions lead to 
-    //substantial thread waiting.  Workload is too small.
-//#ifdef _OPENMP
-//#pragma omp parallel for default(none) shared(nIndex, overlap, trialPos, boxAxes)       \
-//    firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact)            \
-//    reduction(+ : tempLJ, tempReal)
-//#endif
+    // distributing openmp thread over particle interactions lead to
+    // substantial thread waiting.  Workload is too small.
+    // #ifdef _OPENMP
+    // #pragma omp parallel for default(none) shared(nIndex, overlap, trialPos,
+    // boxAxes)       \
+    //     firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact) \
+    //     reduction(+ : tempLJ, tempReal)
+    // #endif
     for (int i = 0; i < (int)nIndex.size(); i++) {
       double distSq = 0.0;
       if (boxAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i], box)) {
