@@ -256,11 +256,10 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
           double dotProduct =
               Dot(currentAtom, kx[box][i], ky[box][i], kz[box][i], molCoords);
 
-          // TODO: sincos() can be used to optimize (GNU compiler only)
-          // Windows doesn't have sincos() function and
-          // Intel compiler automatically optimizes this part
-          sumReal += (thisKind.AtomCharge(j) * cos(dotProduct));
-          sumImaginary += (thisKind.AtomCharge(j) * sin(dotProduct));
+          double s, c;
+          num::sincos(dotProduct, &s, &c);
+          sumReal += (thisKind.AtomCharge(j) * c);
+          sumImaginary += (thisKind.AtomCharge(j) * s);
         }
         // we assume all atom charges are scaled with lambda
         sumRnew[box][i] += (lambdaCoef * sumReal);
@@ -343,11 +342,10 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
           double dotProduct = Dot(currentAtom, kxRef[box][i], kyRef[box][i],
                                   kzRef[box][i], molCoords);
 
-          // TODO: sincos() can be used to optimize (GNU compiler only)
-          // Windows doesn't have sincos() function and
-          // Intel compiler automatically optimizes this part
-          sumReal += (thisKind.AtomCharge(j) * cos(dotProduct));
-          sumImaginary += (thisKind.AtomCharge(j) * sin(dotProduct));
+          double s, c;
+          num::sincos(dotProduct, &s, &c);
+          sumReal += (thisKind.AtomCharge(j) * c);
+          sumImaginary += (thisKind.AtomCharge(j) * s);
         }
         // we assume all atom charges are scaled with lambda
         sumRnew[box][i] += (lambdaCoef * sumReal);
@@ -449,11 +447,15 @@ double Ewald::MolReciprocal(XYZArray const &molCoords, const uint molIndex,
         double dotProductOld = Dot(currentAtom, kxRef[box][i], kyRef[box][i],
                                    kzRef[box][i], currentCoords);
 
-        sumRealNew += (thisKind.AtomCharge(p) * cos(dotProductNew));
-        sumImaginaryNew += (thisKind.AtomCharge(p) * sin(dotProductNew));
+        double sNew, cNew, sOld, cOld;
+        num::sincos(dotProductNew, &sNew, &cNew);
+        num::sincos(dotProductOld, &sOld, &cOld);
 
-        sumRealOld += (thisKind.AtomCharge(p) * cos(dotProductOld));
-        sumImaginaryOld += (thisKind.AtomCharge(p) * sin(dotProductOld));
+        sumRealNew += (thisKind.AtomCharge(p) * cNew);
+        sumImaginaryNew += (thisKind.AtomCharge(p) * sNew);
+
+        sumRealOld += (thisKind.AtomCharge(p) * cOld);
+        sumImaginaryOld += (thisKind.AtomCharge(p) * sOld);
       }
 
       sumRnew[box][i] =
@@ -511,8 +513,10 @@ double Ewald::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box,
         double dotProductNew =
             Dot(p, kxRef[box][i], kyRef[box][i], kzRef[box][i], molCoords);
 
-        sumRealNew += (thisKind.AtomCharge(p) * cos(dotProductNew));
-        sumImaginaryNew += (thisKind.AtomCharge(p) * sin(dotProductNew));
+        double s, c;
+        num::sincos(dotProductNew, &s, &c);
+        sumRealNew += (thisKind.AtomCharge(p) * c);
+        sumImaginaryNew += (thisKind.AtomCharge(p) * s);
       }
 
       sumRnew[box][i] = sumRref[box][i] + sumRealNew;
@@ -567,8 +571,10 @@ double Ewald::ChangeLambdaRecip(XYZArray const &molCoords,
         double dotProductNew =
             Dot(p, kxRef[box][i], kyRef[box][i], kzRef[box][i], molCoords);
 
-        sumRealNew += thisKind.AtomCharge(p) * cos(dotProductNew);
-        sumImaginaryNew += thisKind.AtomCharge(p) * sin(dotProductNew);
+        double s, c;
+        num::sincos(dotProductNew, &s, &c);
+        sumRealNew += thisKind.AtomCharge(p) * c;
+        sumImaginaryNew += thisKind.AtomCharge(p) * s;
       }
 
       // sumRealNew;
@@ -617,8 +623,10 @@ void Ewald::ChangeRecip(Energy *energyDiff, Energy &dUdL_Coul,
       }
       double dotProduct = Dot(p + startAtom, kxRef[box][i], kyRef[box][i],
                               kzRef[box][i], currentCoords);
-      sumReal += particleCharge[currentAtom] * cos(dotProduct);
-      sumImaginary += particleCharge[currentAtom] * sin(dotProduct);
+      double s, c;
+      num::sincos(dotProduct, &s, &c);
+      sumReal += particleCharge[currentAtom] * c;
+      sumImaginary += particleCharge[currentAtom] * s;
     }
     for (uint s = 0; s < lambdaSize; s++) {
       // Calculate the energy of other state
@@ -692,8 +700,10 @@ double Ewald::SwapSourceRecip(const cbmc::TrialMol &oldMol, const uint box,
         double dotProductNew =
             Dot(p, kxRef[box][i], kyRef[box][i], kzRef[box][i], molCoords);
 
-        sumRealNew += (thisKind.AtomCharge(p) * cos(dotProductNew));
-        sumImaginaryNew += (thisKind.AtomCharge(p) * sin(dotProductNew));
+        double s, c;
+        num::sincos(dotProductNew, &s, &c);
+        sumRealNew += (thisKind.AtomCharge(p) * c);
+        sumImaginaryNew += (thisKind.AtomCharge(p) * s);
       }
       sumRnew[box][i] = sumRref[box][i] - sumRealNew;
       sumInew[box][i] = sumIref[box][i] - sumImaginaryNew;
@@ -751,15 +761,10 @@ double Ewald::MolExchangeReciprocal(const std::vector<cbmc::TrialMol> &newMol,
           double dotProductNew = Dot(p, kxRef[box][i], kyRef[box][i],
                                      kzRef[box][i], newMol[m].GetCoords());
 
-          // TODO: Using GNU extension we could improve this part of the code
-          // by using sincos() function and merge sin() and cos() calculation
-          // However, this will not work with Visual studio
-          // Intel should automatically optimize this section by using
-          // internal functions like __svml_sincosf8..()
-          sumRealNew +=
-              (thisKindNew.AtomCharge(p) * lambdaCoef * cos(dotProductNew));
-          sumImaginaryNew +=
-              (thisKindNew.AtomCharge(p) * lambdaCoef * sin(dotProductNew));
+          double s, c;
+          num::sincos(dotProductNew, &s, &c);
+          sumRealNew += (thisKindNew.AtomCharge(p) * lambdaCoef * c);
+          sumImaginaryNew += (thisKindNew.AtomCharge(p) * lambdaCoef * s);
         }
       }
 
@@ -775,15 +780,10 @@ double Ewald::MolExchangeReciprocal(const std::vector<cbmc::TrialMol> &newMol,
           double dotProductOld = Dot(p, kxRef[box][i], kyRef[box][i],
                                      kzRef[box][i], oldMol[m].GetCoords());
 
-          // TODO: Using GNU extension we could improve this part of the code
-          // by using sincos() function and merge sin() and cos() calculation
-          // However, this will not work with Visual studio
-          // Intel should automatically optimize this section by using
-          // internal functions like __svml_sincosf8..()
-          sumRealNew -=
-              thisKindOld.AtomCharge(p) * lambdaCoef * cos(dotProductOld);
-          sumImaginaryNew -=
-              thisKindOld.AtomCharge(p) * lambdaCoef * sin(dotProductOld);
+          double s, c;
+          num::sincos(dotProductOld, &s, &c);
+          sumRealNew -= thisKindOld.AtomCharge(p) * lambdaCoef * c;
+          sumImaginaryNew -= thisKindOld.AtomCharge(p) * lambdaCoef * s;
         }
       }
 
@@ -1269,9 +1269,11 @@ Virial Ewald::VirialReciprocal(Virial &virial, uint box) const {
         double arg = Dot(atom, kxRef[box][i], kyRef[box][i], kzRef[box][i],
                          currentCoords);
 
+        double s, c;
+        num::sincos(arg, &s, &c);
         double factor =
             prefactRef[box][i] * 2.0 *
-            (sumIref[box][i] * cos(arg) - sumRref[box][i] * sin(arg)) * charge;
+            (sumIref[box][i] * c - sumRref[box][i] * s) * charge;
 
         wT11 += factor * (kxRef[box][i] * diffC.x);
 
@@ -1576,9 +1578,11 @@ void Ewald::BoxForceReciprocal(XYZArray const &molCoords,
             double dot =
                 Dot(p, kxRef[box][i], kyRef[box][i], kzRef[box][i], molCoords);
 
+            double s, c;
+            num::sincos(dot, &s, &c);
             double factor =
                 2.0 * particleCharge[p] * prefactRef[box][i] * lambdaCoef *
-                (sin(dot) * sumRnew[box][i] - cos(dot) * sumInew[box][i]);
+                (s * sumRnew[box][i] - c * sumInew[box][i]);
 
             X += factor * kxRef[box][i];
             Y += factor * kyRef[box][i];

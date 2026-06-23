@@ -18,7 +18,22 @@ A copy of the MIT License can be found in License.txt with this program or at
 #ifndef SMALL_WEIGHT
 #define SMALL_WEIGHT 1.0e-38
 #endif
+
+#include <cmath>
+
 namespace num {
+
+#if defined(__linux__) || defined(__GNU__) || defined(_GNU_SOURCE)
+inline void sincos(double x, double *s, double *c) {
+  ::sincos(x, s, c);
+}
+#else
+inline void sincos(double x, double *s, double *c) {
+  *s = std::sin(x);
+  *c = std::cos(x);
+}
+#endif
+
 static const double qqFact = 167103.208067979;
 static const double MIN_EXP_NONZERO_VAL = -708.4;
 static const double BIGNUM = DBL_MAX;
