@@ -161,7 +161,7 @@ void CalculateEnergy::BoxInterTemplate(
     const std::vector<std::vector<int>> &neighborList) {
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none)                                         \
+#pragma omp parallel for default(none) schedule(dynamic, 16)                   \
     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
                neighborList) reduction(+ : tempREn, tempLJEn)                  \
     firstprivate(box, num::qqFact)
