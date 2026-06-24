@@ -236,43 +236,46 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
 #endif
     // invert this loop so it's over k-vectors first, then over molecules.
 
+    // 1. Flatten the molecules into a contiguous list of charges and
+    // coordinates
+    std::vector<XYZ> flatCoords;
+    std::vector<double> flatCharges;
+
+    thisMol = molLookup.BoxBegin(box);
+    while (thisMol != end) {
+      MoleculeKind const &thisKind = mols.GetKind(*thisMol);
+      double lambdaCoef = GetLambdaCoef(*thisMol, box);
+      uint start = mols.MolStart(*thisMol);
+      for (uint j = 0; j < thisKind.NumAtoms(); j++) {
+        unsigned long currentAtom = start + j;
+        if (!particleHasNoCharge[currentAtom]) {
+          flatCoords.push_back(molCoords.Get(currentAtom));
+          flatCharges.push_back(thisKind.AtomCharge(j) * lambdaCoef);
+        }
+      }
+      thisMol++;
+    }
+    int numFlatAtoms = flatCoords.size();
+
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(box, molCoords, end)
+#pragma omp parallel for default(none)                                         \
+    shared(box, flatCoords, flatCharges, numFlatAtoms)
 #endif
     for (int i = 0; i < (int)imageSize[box]; i++) {
       double totalReal = 0.0;
       double totalImaginary = 0.0;
+
+      double kx_i = kx[box][i];
+      double ky_i = ky[box][i];
+      double kz_i = kz[box][i];
       // start at the first molecule in the box
-      MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
-      while (thisMol != end) {
-        MoleculeKind const &thisKind = mols.GetKind(*thisMol);
-        double lambdaCoef = GetLambdaCoef(*thisMol, box);
-        uint start = mols.MolStart(*thisMol);
-
-        double sumReal = 0.0;
-        double sumImaginary = 0.0;
-
-        for (uint j = 0; j < thisKind.NumAtoms(); j++) {
-          unsigned long currentAtom = start + j;
-          if (particleHasNoCharge[currentAtom]) {
-            continue;
-          }
-          double dotProduct =
-              Dot(currentAtom, kx[box][i], ky[box][i], kz[box][i], molCoords);
-
-          double s, c;
-          num::sincos(dotProduct, &s, &c);
-          sumReal += (thisKind.AtomCharge(j) * c);
-          sumImaginary += (thisKind.AtomCharge(j) * s);
-        }
-        // we assume all atom charges are scaled with lambda
-        // sumRnew[box][i] += (lambdaCoef * sumReal);
-        // sumInew[box][i] += (lambdaCoef * sumImaginary);
-        // add this molecule's sum to the total sum
-        totalReal += (lambdaCoef * sumReal);
-        totalImaginary += (lambdaCoef * sumImaginary);
-
-        thisMol++;
+      for (int j = 0; j < numFlatAtoms; j++) {
+        double dotProduct = kx_i * flatCoords[j].x + ky_i * flatCoords[j].y +
+                            kz_i * flatCoords[j].z;
+        double s, c;
+        num::sincos(dotProduct, &s, &c);
+        totalReal += flatCharges[j] * c;
+        totalImaginary += flatCharges[j] * s;
       }
       // add the total molecule energies to this k-vector
       sumRnew[box][i] = totalReal;
@@ -331,41 +334,45 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     std::memset(sumRnew[box], 0.0, sizeof(double) * imageSizeRef[box]);
     std::memset(sumInew[box], 0.0, sizeof(double) * imageSizeRef[box]);
 #endif
+    // 1. Flatten the molecules into a contiguous list of charges and
+    // coordinates
+    std::vector<XYZ> flatCoords;
+    std::vector<double> flatCharges;
 
+    thisMol = molLookup.BoxBegin(box);
+    while (thisMol != end) {
+      MoleculeKind const &thisKind = mols.GetKind(*thisMol);
+      double lambdaCoef = GetLambdaCoef(*thisMol, box);
+      uint start = mols.MolStart(*thisMol);
+      for (uint j = 0; j < thisKind.NumAtoms(); j++) {
+        unsigned long currentAtom = start + j;
+        if (!particleHasNoCharge[currentAtom]) {
+          flatCoords.push_back(molCoords.Get(currentAtom));
+          flatCharges.push_back(thisKind.AtomCharge(j) * lambdaCoef);
+        }
+      }
+      thisMol++;
+    }
+    int numFlatAtoms = flatCoords.size();
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(box, molCoords, end)
+#pragma omp parallel for default(none)                                         \
+    shared(box, flatCoords, flatCharges, numFlatAtoms)
 #endif
     for (int i = 0; i < (int)imageSizeRef[box]; i++) {
       double totalReal = 0.0;
       double totalImaginary = 0.0;
-      // start at the first molecule in the box
-      MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
-      while (thisMol != end) {
-        MoleculeKind const &thisKind = mols.GetKind(*thisMol);
-        double lambdaCoef = GetLambdaCoef(*thisMol, box);
-        uint startAtom = mols.MolStart(*thisMol);
 
-        double sumReal = 0.0;
-        double sumImaginary = 0.0;
+      double kx_i = kxRef[box][i];
+      double ky_i = kyRef[box][i];
+      double kz_i = kzRef[box][i];
 
-        for (uint j = 0; j < thisKind.NumAtoms(); j++) {
-          unsigned long currentAtom = startAtom + j;
-          if (particleHasNoCharge[currentAtom]) {
-            continue;
-          }
-          double dotProduct = Dot(currentAtom, kxRef[box][i], kyRef[box][i],
-                                  kzRef[box][i], molCoords);
-
-          double s, c;
-          num::sincos(dotProduct, &s, &c);
-          sumReal += (thisKind.AtomCharge(j) * c);
-          sumImaginary += (thisKind.AtomCharge(j) * s);
-        }
-        // we assume all atom charges are scaled with lambda
-        totalReal += (lambdaCoef * sumReal);
-        totalImaginary += (lambdaCoef * sumImaginary);
-
-        thisMol++;
+      for (int j = 0; j < numFlatAtoms; j++) {
+        double dotProduct = kx_i * flatCoords[j].x + ky_i * flatCoords[j].y +
+                            kz_i * flatCoords[j].z;
+        double s, c;
+        num::sincos(dotProduct, &s, &c);
+        totalReal += flatCharges[j] * c;
+        totalImaginary += flatCharges[j] * s;
       }
       // add the total molecule energies to this k-vector
       sumRnew[box][i] = totalReal;
