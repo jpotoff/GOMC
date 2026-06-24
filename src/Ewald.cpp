@@ -268,7 +268,8 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
       double kx_i = kx[box][i];
       double ky_i = ky[box][i];
       double kz_i = kz[box][i];
-      // start at the first molecule in the box
+// start at the first molecule in the box
+#pragma omp simd reduction(+ : totalReal, totalImaginary)
       for (int j = 0; j < numFlatAtoms; j++) {
         double dotProduct = kx_i * flatCoords[j].x + ky_i * flatCoords[j].y +
                             kz_i * flatCoords[j].z;
@@ -365,7 +366,7 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
       double kx_i = kxRef[box][i];
       double ky_i = kyRef[box][i];
       double kz_i = kzRef[box][i];
-
+#pragma omp simd reduction(+ : totalReal, totalImaginary)
       for (int j = 0; j < numFlatAtoms; j++) {
         double dotProduct = kx_i * flatCoords[j].x + ky_i * flatCoords[j].y +
                             kz_i * flatCoords[j].z;
