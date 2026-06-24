@@ -234,17 +234,21 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     std::memset(sumRnew[box], 0.0, sizeof(double) * imageSize[box]);
     std::memset(sumInew[box], 0.0, sizeof(double) * imageSize[box]);
 #endif
-
-    while (thisMol != end) {
-      MoleculeKind const &thisKind = mols.GetKind(*thisMol);
-      double lambdaCoef = GetLambdaCoef(*thisMol, box);
-      uint start = mols.MolStart(*thisMol);
+    // invert this loop so it's over k-vectors first, then over molecules.
 
 #ifdef _OPENMP
-#pragma omp parallel for default(none)                                         \
-    shared(box, lambdaCoef, molCoords, start, thisKind)
+#pragma omp parallel for default(none) shared(box, molCoords, end)
 #endif
-      for (int i = 0; i < (int)imageSize[box]; i++) {
+    for (int i = 0; i < (int)imageSize[box]; i++) {
+      double totalReal = 0.0;
+      double totalImaginary = 0.0;
+      // start at the first molecule in the box
+      MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
+      while (thisMol != end) {
+        MoleculeKind const &thisKind = mols.GetKind(*thisMol);
+        double lambdaCoef = GetLambdaCoef(*thisMol, box);
+        uint start = mols.MolStart(*thisMol);
+
         double sumReal = 0.0;
         double sumImaginary = 0.0;
 
@@ -262,10 +266,17 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
           sumImaginary += (thisKind.AtomCharge(j) * s);
         }
         // we assume all atom charges are scaled with lambda
-        sumRnew[box][i] += (lambdaCoef * sumReal);
-        sumInew[box][i] += (lambdaCoef * sumImaginary);
+        // sumRnew[box][i] += (lambdaCoef * sumReal);
+        // sumInew[box][i] += (lambdaCoef * sumImaginary);
+        // add this molecule's sum to the total sum
+        totalReal += (lambdaCoef * sumReal);
+        totalImaginary += (lambdaCoef * sumImaginary);
+
+        thisMol++;
       }
-      thisMol++;
+      // add the total molecule energies to this k-vector
+      sumRnew[box][i] = totalReal;
+      sumInew[box][i] = totalImaginary;
     }
 #endif
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_BOX_SETUP);
@@ -321,16 +332,19 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     std::memset(sumInew[box], 0.0, sizeof(double) * imageSizeRef[box]);
 #endif
 
-    while (thisMol != end) {
-      MoleculeKind const &thisKind = mols.GetKind(*thisMol);
-      double lambdaCoef = GetLambdaCoef(*thisMol, box);
-      uint startAtom = mols.MolStart(*thisMol);
-
 #ifdef _OPENMP
-#pragma omp parallel for default(none)                                         \
-    shared(box, lambdaCoef, molCoords, startAtom, thisKind)
+#pragma omp parallel for default(none) shared(box, molCoords, end)
 #endif
-      for (int i = 0; i < (int)imageSizeRef[box]; i++) {
+    for (int i = 0; i < (int)imageSizeRef[box]; i++) {
+      double totalReal = 0.0;
+      double totalImaginary = 0.0;
+      // start at the first molecule in the box
+      MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
+      while (thisMol != end) {
+        MoleculeKind const &thisKind = mols.GetKind(*thisMol);
+        double lambdaCoef = GetLambdaCoef(*thisMol, box);
+        uint startAtom = mols.MolStart(*thisMol);
+
         double sumReal = 0.0;
         double sumImaginary = 0.0;
 
@@ -348,10 +362,14 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
           sumImaginary += (thisKind.AtomCharge(j) * s);
         }
         // we assume all atom charges are scaled with lambda
-        sumRnew[box][i] += (lambdaCoef * sumReal);
-        sumInew[box][i] += (lambdaCoef * sumImaginary);
+        totalReal += (lambdaCoef * sumReal);
+        totalImaginary += (lambdaCoef * sumImaginary);
+
+        thisMol++;
       }
-      thisMol++;
+      // add the total molecule energies to this k-vector
+      sumRnew[box][i] = totalReal;
+      sumInew[box][i] = totalImaginary;
     }
 #endif
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_BOX_SETUP);
@@ -1271,9 +1289,8 @@ Virial Ewald::VirialReciprocal(Virial &virial, uint box) const {
 
         double s, c;
         num::sincos(arg, &s, &c);
-        double factor =
-            prefactRef[box][i] * 2.0 *
-            (sumIref[box][i] * c - sumRref[box][i] * s) * charge;
+        double factor = prefactRef[box][i] * 2.0 *
+                        (sumIref[box][i] * c - sumRref[box][i] * s) * charge;
 
         wT11 += factor * (kxRef[box][i] * diffC.x);
 
@@ -1580,9 +1597,9 @@ void Ewald::BoxForceReciprocal(XYZArray const &molCoords,
 
             double s, c;
             num::sincos(dot, &s, &c);
-            double factor =
-                2.0 * particleCharge[p] * prefactRef[box][i] * lambdaCoef *
-                (s * sumRnew[box][i] - c * sumInew[box][i]);
+            double factor = 2.0 * particleCharge[p] * prefactRef[box][i] *
+                            lambdaCoef *
+                            (s * sumRnew[box][i] - c * sumInew[box][i]);
 
             X += factor * kxRef[box][i];
             Y += factor * kyRef[box][i];
