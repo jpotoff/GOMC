@@ -245,4 +245,6 @@ BoxDimensions &Simulation::GetBoxDim() { return system->boxDimRef; }
 ulong Simulation::GetTrueStep() { return system->trueStep; }
 
 ulong Simulation::GetRunSteps() { return totalSteps - startStep; }
+Ewald *Simulation::GetEwald() { return system->GetEwald(); }
+CalculateEnergy &Simulation::GetCalcEnergy() { return system->calcEnergy; }
 #endif

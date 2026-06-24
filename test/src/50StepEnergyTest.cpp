@@ -34,4 +34,5 @@ TEST(50StepEnergyTest, CheckAR_KR) {
   // Run the main branch once
   double x2 = 123.00;
   EXPECT_EQ(total, x2);
+  chdir("../../../../..");
 }
