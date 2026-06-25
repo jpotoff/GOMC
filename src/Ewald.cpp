@@ -630,7 +630,7 @@ double Ewald::MolReciprocal(XYZArray const &molCoords, const uint molIndex,
       if (!particleHasNoCharge[currentAtom]) {
         coordsNew.push_back(molCoords.Get(p));
         coordsOld.push_back(currentCoords.Get(currentAtom));
-        charges.push_back(thisKind.AtomCharge(p));
+        charges.push_back(thisKind.AtomCharge(p) * lambdaCoef);
       }
     }
 
@@ -720,9 +720,9 @@ double Ewald::MolReciprocal(XYZArray const &molCoords, const uint molIndex,
       }
 
       sumRnew[box][i] =
-          sumRref[box][i] + lambdaCoef * (sumRealNew - sumRealOld);
+          sumRref[box][i] + (sumRealNew - sumRealOld);
       sumInew[box][i] =
-          sumIref[box][i] + lambdaCoef * (sumImaginaryNew - sumImaginaryOld);
+          sumIref[box][i] + (sumImaginaryNew - sumImaginaryOld);
 
       energyRecipNew += (sumRnew[box][i] * sumRnew[box][i] +
                          sumInew[box][i] * sumInew[box][i]) *
