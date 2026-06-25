@@ -207,6 +207,11 @@ protected:
   double **kx, **kxRef;
   double **ky, **kyRef;
   double **kz, **kzRef;
+
+  int **kx_ind, **kx_indRef;
+  int **ky_ind, **ky_indRef;
+  int **kz_ind, **kz_indRef;
+
   double **hsqr, **hsqrRef;
   double **prefact, **prefactRef;
 

@@ -64,11 +64,17 @@ Ewald::~Ewald() {
       delete[] kx[b];
       delete[] ky[b];
       delete[] kz[b];
+      delete[] kx_ind[b];
+      delete[] ky_ind[b];
+      delete[] kz_ind[b];
       delete[] hsqr[b];
       delete[] prefact[b];
       delete[] kxRef[b];
       delete[] kyRef[b];
       delete[] kzRef[b];
+      delete[] kx_indRef[b];
+      delete[] ky_indRef[b];
+      delete[] kz_indRef[b];
       delete[] hsqrRef[b];
       delete[] prefactRef[b];
       delete[] sumRnew[b];
@@ -81,11 +87,17 @@ Ewald::~Ewald() {
     delete[] kx;
     delete[] ky;
     delete[] kz;
+    delete[] kx_ind;
+    delete[] ky_ind;
+    delete[] kz_ind;
     delete[] hsqr;
     delete[] prefact;
     delete[] kxRef;
     delete[] kyRef;
     delete[] kzRef;
+    delete[] kx_indRef;
+    delete[] ky_indRef;
+    delete[] kz_indRef;
     delete[] hsqrRef;
     delete[] prefactRef;
     delete[] sumRnew;
@@ -151,11 +163,17 @@ void Ewald::AllocMem() {
   kx = new double *[BOXES_WITH_U_NB];
   ky = new double *[BOXES_WITH_U_NB];
   kz = new double *[BOXES_WITH_U_NB];
+  kx_ind = new int *[BOXES_WITH_U_NB];
+  ky_ind = new int *[BOXES_WITH_U_NB];
+  kz_ind = new int *[BOXES_WITH_U_NB];
   hsqr = new double *[BOXES_WITH_U_NB];
   prefact = new double *[BOXES_WITH_U_NB];
   kxRef = new double *[BOXES_WITH_U_NB];
   kyRef = new double *[BOXES_WITH_U_NB];
   kzRef = new double *[BOXES_WITH_U_NB];
+  kx_indRef = new int *[BOXES_WITH_U_NB];
+  ky_indRef = new int *[BOXES_WITH_U_NB];
+  kz_indRef = new int *[BOXES_WITH_U_NB];
   hsqrRef = new double *[BOXES_WITH_U_NB];
   prefactRef = new double *[BOXES_WITH_U_NB];
 
@@ -169,11 +187,17 @@ void Ewald::AllocMem() {
     kx[b] = new double[imageTotal];
     ky[b] = new double[imageTotal];
     kz[b] = new double[imageTotal];
+    kx_ind[b] = new int[imageTotal];
+    ky_ind[b] = new int[imageTotal];
+    kz_ind[b] = new int[imageTotal];
     hsqr[b] = new double[imageTotal];
     prefact[b] = new double[imageTotal];
     kxRef[b] = new double[imageTotal];
     kyRef[b] = new double[imageTotal];
     kzRef[b] = new double[imageTotal];
+    kx_indRef[b] = new int[imageTotal];
+    ky_indRef[b] = new int[imageTotal];
+    kz_indRef[b] = new int[imageTotal];
     hsqrRef[b] = new double[imageTotal];
     prefactRef[b] = new double[imageTotal];
     sumRnew[b] = new double[imageTotal];
@@ -257,28 +281,108 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     }
     int numFlatAtoms = flatCoords.size();
 
+    // Fill cache
+    int kmax_val = kmax[box];
+    int cacheSize = numFlatAtoms * (kmax_val + 1);
+
+    // Create 1D Caches for all atoms
+    std::vector<double> cos_x(cacheSize), sin_x(cacheSize);
+    std::vector<double> cos_y(cacheSize), sin_y(cacheSize);
+    std::vector<double> cos_z(cacheSize), sin_z(cacheSize);
+
+    XYZ b1, b2, b3;
+    if (currentAxes.orthogonal[box]) {
+      XYZ constValue = currentAxes.axis.Get(box);
+      constValue.Inverse();
+      constValue *= 2.0 * M_PI;
+      b1 = XYZ(constValue.x, 0.0, 0.0);
+      b2 = XYZ(0.0, constValue.y, 0.0);
+      b3 = XYZ(0.0, 0.0, constValue.z);
+    } else {
+      XYZArray cellB(currentAxes.cellBasis[box]);
+      cellB.Scale(0, currentAxes.axis.Get(box).x);
+      cellB.Scale(1, currentAxes.axis.Get(box).y);
+      cellB.Scale(2, currentAxes.axis.Get(box).z);
+      XYZArray cellB_Inv(3);
+      double det = cellB.AdjointMatrix(cellB_Inv);
+      cellB_Inv.ScaleRange(0, 3, (2.0 * M_PI) / det);
+      b1 = cellB_Inv.Get(0);
+      b2 = cellB_Inv.Get(1);
+      b3 = cellB_Inv.Get(2);
+    }
+
+      // We can parallelize the cache building over the atoms!
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(flatCoords, cos_x, sin_x, cos_y, sin_y, cos_z, sin_z, kmax_val, numFlatAtoms, b1, b2, b3)
+#endif
+    for (int i = 0; i < numFlatAtoms; i++) {
+        XYZ r = flatCoords[i];
+        double theta_x = b1.x * r.x + b1.y * r.y + b1.z * r.z;
+        double theta_y = b2.x * r.x + b2.y * r.y + b2.z * r.z;
+        double theta_z = b3.x * r.x + b3.y * r.y + b3.z * r.z;
+
+        double alpha_x = 2.0 * std::sin(theta_x / 2.0) * std::sin(theta_x / 2.0);
+        double beta_x = std::sin(theta_x);
+        double alpha_y = 2.0 * std::sin(theta_y / 2.0) * std::sin(theta_y / 2.0);
+        double beta_y = std::sin(theta_y);
+        double alpha_z = 2.0 * std::sin(theta_z / 2.0) * std::sin(theta_z / 2.0);
+        double beta_z = std::sin(theta_z);
+
+        int offset = i * (kmax_val + 1);
+        cos_x[offset] = 1.0; sin_x[offset] = 0.0;
+        cos_y[offset] = 1.0; sin_y[offset] = 0.0;
+        cos_z[offset] = 1.0; sin_z[offset] = 0.0;
+
+        cos_x[offset + 1] = std::cos(theta_x); sin_x[offset + 1] = beta_x;
+        cos_y[offset + 1] = std::cos(theta_y); sin_y[offset + 1] = beta_y;
+        cos_z[offset + 1] = std::cos(theta_z); sin_z[offset + 1] = beta_z;
+
+        for (int n = 1; n < kmax_val; n++) {
+            cos_x[offset + n + 1] = cos_x[offset + n] - (alpha_x * cos_x[offset + n] + beta_x * sin_x[offset + n]);
+            sin_x[offset + n + 1] = sin_x[offset + n] - (alpha_x * sin_x[offset + n] - beta_x * cos_x[offset + n]);
+
+            cos_y[offset + n + 1] = cos_y[offset + n] - (alpha_y * cos_y[offset + n] + beta_y * sin_y[offset + n]);
+            sin_y[offset + n + 1] = sin_y[offset + n] - (alpha_y * sin_y[offset + n] - beta_y * cos_y[offset + n]);
+
+            cos_z[offset + n + 1] = cos_z[offset + n] - (alpha_z * cos_z[offset + n] + beta_z * sin_z[offset + n]);
+            sin_z[offset + n + 1] = sin_z[offset + n] - (alpha_z * sin_z[offset + n] - beta_z * cos_z[offset + n]);
+        }
+    }
+
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
-    shared(box, flatCoords, flatCharges, numFlatAtoms)
+    shared(box, flatCharges, numFlatAtoms, kmax_val, kx_ind, ky_ind, kz_ind, sumRnew, sumInew, imageSize, cos_x, sin_x, cos_y, sin_y, cos_z, sin_z)
 #endif
     for (int i = 0; i < (int)imageSize[box]; i++) {
       double totalReal = 0.0;
       double totalImaginary = 0.0;
 
-      double kx_i = kx[box][i];
-      double ky_i = ky[box][i];
-      double kz_i = kz[box][i];
-// start at the first molecule in the box
+      int nx = std::abs(kx_ind[box][i]);
+      int ny = std::abs(ky_ind[box][i]);
+      int nz = std::abs(kz_ind[box][i]);
+      int sign_x = kx_ind[box][i] < 0 ? -1 : 1;
+      int sign_y = ky_ind[box][i] < 0 ? -1 : 1;
+      int sign_z = kz_ind[box][i] < 0 ? -1 : 1;
+
 #pragma omp simd reduction(+ : totalReal, totalImaginary)
       for (int j = 0; j < numFlatAtoms; j++) {
-        double dotProduct = kx_i * flatCoords[j].x + ky_i * flatCoords[j].y +
-                            kz_i * flatCoords[j].z;
-        double s, c;
-        num::sincos(dotProduct, &s, &c);
-        totalReal += flatCharges[j] * c;
-        totalImaginary += flatCharges[j] * s;
+         int offset = j * (kmax_val + 1);
+         double cx = cos_x[offset + nx];
+         double sx = sin_x[offset + nx] * sign_x;
+         double cy = cos_y[offset + ny];
+         double sy = sin_y[offset + ny] * sign_y;
+         double cz = cos_z[offset + nz];
+         double sz = sin_z[offset + nz] * sign_z;
+
+         double cxy = cx * cy - sx * sy;
+         double sxy = sx * cy + cx * sy;
+
+         double c = cxy * cz - sxy * sz;
+         double s = sxy * cz + cxy * sz;
+
+         totalReal += flatCharges[j] * c;
+         totalImaginary += flatCharges[j] * s;
       }
-      // add the total molecule energies to this k-vector
       sumRnew[box][i] = totalReal;
       sumInew[box][i] = totalImaginary;
     }
@@ -355,27 +459,108 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
       thisMol++;
     }
     int numFlatAtoms = flatCoords.size();
+    // Fill cache
+    int kmax_val = kmax[box];
+    int cacheSize = numFlatAtoms * (kmax_val + 1);
+
+    // Create 1D Caches for all atoms
+    std::vector<double> cos_x(cacheSize), sin_x(cacheSize);
+    std::vector<double> cos_y(cacheSize), sin_y(cacheSize);
+    std::vector<double> cos_z(cacheSize), sin_z(cacheSize);
+
+    XYZ b1, b2, b3;
+    if (currentAxes.orthogonal[box]) {
+      XYZ constValue = currentAxes.axis.Get(box);
+      constValue.Inverse();
+      constValue *= 2.0 * M_PI;
+      b1 = XYZ(constValue.x, 0.0, 0.0);
+      b2 = XYZ(0.0, constValue.y, 0.0);
+      b3 = XYZ(0.0, 0.0, constValue.z);
+    } else {
+      XYZArray cellB(currentAxes.cellBasis[box]);
+      cellB.Scale(0, currentAxes.axis.Get(box).x);
+      cellB.Scale(1, currentAxes.axis.Get(box).y);
+      cellB.Scale(2, currentAxes.axis.Get(box).z);
+      XYZArray cellB_Inv(3);
+      double det = cellB.AdjointMatrix(cellB_Inv);
+      cellB_Inv.ScaleRange(0, 3, (2.0 * M_PI) / det);
+      b1 = cellB_Inv.Get(0);
+      b2 = cellB_Inv.Get(1);
+      b3 = cellB_Inv.Get(2);
+    }
+
+      // We can parallelize the cache building over the atoms!
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(flatCoords, cos_x, sin_x, cos_y, sin_y, cos_z, sin_z, kmax_val, numFlatAtoms, b1, b2, b3)
+#endif
+    for (int i = 0; i < numFlatAtoms; i++) {
+        XYZ r = flatCoords[i];
+        double theta_x = b1.x * r.x + b1.y * r.y + b1.z * r.z;
+        double theta_y = b2.x * r.x + b2.y * r.y + b2.z * r.z;
+        double theta_z = b3.x * r.x + b3.y * r.y + b3.z * r.z;
+
+        double alpha_x = 2.0 * std::sin(theta_x / 2.0) * std::sin(theta_x / 2.0);
+        double beta_x = std::sin(theta_x);
+        double alpha_y = 2.0 * std::sin(theta_y / 2.0) * std::sin(theta_y / 2.0);
+        double beta_y = std::sin(theta_y);
+        double alpha_z = 2.0 * std::sin(theta_z / 2.0) * std::sin(theta_z / 2.0);
+        double beta_z = std::sin(theta_z);
+
+        int offset = i * (kmax_val + 1);
+        cos_x[offset] = 1.0; sin_x[offset] = 0.0;
+        cos_y[offset] = 1.0; sin_y[offset] = 0.0;
+        cos_z[offset] = 1.0; sin_z[offset] = 0.0;
+
+        cos_x[offset + 1] = std::cos(theta_x); sin_x[offset + 1] = beta_x;
+        cos_y[offset + 1] = std::cos(theta_y); sin_y[offset + 1] = beta_y;
+        cos_z[offset + 1] = std::cos(theta_z); sin_z[offset + 1] = beta_z;
+
+        for (int n = 1; n < kmax_val; n++) {
+            cos_x[offset + n + 1] = cos_x[offset + n] - (alpha_x * cos_x[offset + n] + beta_x * sin_x[offset + n]);
+            sin_x[offset + n + 1] = sin_x[offset + n] - (alpha_x * sin_x[offset + n] - beta_x * cos_x[offset + n]);
+
+            cos_y[offset + n + 1] = cos_y[offset + n] - (alpha_y * cos_y[offset + n] + beta_y * sin_y[offset + n]);
+            sin_y[offset + n + 1] = sin_y[offset + n] - (alpha_y * sin_y[offset + n] - beta_y * cos_y[offset + n]);
+
+            cos_z[offset + n + 1] = cos_z[offset + n] - (alpha_z * cos_z[offset + n] + beta_z * sin_z[offset + n]);
+            sin_z[offset + n + 1] = sin_z[offset + n] - (alpha_z * sin_z[offset + n] - beta_z * cos_z[offset + n]);
+        }
+    }
+
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
-    shared(box, flatCoords, flatCharges, numFlatAtoms)
+    shared(box, flatCharges, numFlatAtoms, kmax_val, kx_indRef, ky_indRef, kz_indRef, sumRnew, sumInew, imageSizeRef, cos_x, sin_x, cos_y, sin_y, cos_z, sin_z)
 #endif
     for (int i = 0; i < (int)imageSizeRef[box]; i++) {
       double totalReal = 0.0;
       double totalImaginary = 0.0;
 
-      double kx_i = kxRef[box][i];
-      double ky_i = kyRef[box][i];
-      double kz_i = kzRef[box][i];
+      int nx = std::abs(kx_indRef[box][i]);
+      int ny = std::abs(ky_indRef[box][i]);
+      int nz = std::abs(kz_indRef[box][i]);
+      int sign_x = kx_indRef[box][i] < 0 ? -1 : 1;
+      int sign_y = ky_indRef[box][i] < 0 ? -1 : 1;
+      int sign_z = kz_indRef[box][i] < 0 ? -1 : 1;
+
 #pragma omp simd reduction(+ : totalReal, totalImaginary)
       for (int j = 0; j < numFlatAtoms; j++) {
-        double dotProduct = kx_i * flatCoords[j].x + ky_i * flatCoords[j].y +
-                            kz_i * flatCoords[j].z;
-        double s, c;
-        num::sincos(dotProduct, &s, &c);
-        totalReal += flatCharges[j] * c;
-        totalImaginary += flatCharges[j] * s;
+         int offset = j * (kmax_val + 1);
+         double cx = cos_x[offset + nx];
+         double sx = sin_x[offset + nx] * sign_x;
+         double cy = cos_y[offset + ny];
+         double sy = sin_y[offset + ny] * sign_y;
+         double cz = cos_z[offset + nz];
+         double sz = sin_z[offset + nz] * sign_z;
+
+         double cxy = cx * cy - sx * sy;
+         double sxy = sx * cy + cx * sy;
+
+         double c = cxy * cz - sxy * sz;
+         double s = sxy * cz + cxy * sz;
+
+         totalReal += flatCharges[j] * c;
+         totalImaginary += flatCharges[j] * s;
       }
-      // add the total molecule energies to this k-vector
       sumRnew[box][i] = totalReal;
       sumInew[box][i] = totalImaginary;
     }
@@ -910,6 +1095,9 @@ void Ewald::RecipInitOrth(uint box, BoxDimensions const &boxAxes) {
           kx[box][counter] = kX;
           ky[box][counter] = kY;
           kz[box][counter] = kZ;
+          kx_ind[box][counter] = x;
+          ky_ind[box][counter] = y;
+          kz_ind[box][counter] = z;
           hsqr[box][counter] = ksqr;
           prefact[box][counter] =
               num::qqFact * exp(-ksqr * alpsqr4) / (ksqr * vol);
@@ -972,6 +1160,9 @@ void Ewald::RecipInitNonOrth(uint box, BoxDimensions const &boxAxes) {
           kx[box][counter] = kX;
           ky[box][counter] = kY;
           kz[box][counter] = kZ;
+          kx_ind[box][counter] = x;
+          ky_ind[box][counter] = y;
+          kz_ind[box][counter] = z;
           hsqr[box][counter] = ksqr;
           prefact[box][counter] =
               num::qqFact * exp(-ksqr * alpsqr4) / (ksqr * vol);
@@ -1059,6 +1250,12 @@ void Ewald::SetRecipRef(uint box) {
 #pragma omp section
     std::memcpy(kzRef[box], kz[box], sizeof(double) * imageSize[box]);
 #pragma omp section
+    std::memcpy(kx_indRef[box], kx_ind[box], sizeof(int) * imageSize[box]);
+#pragma omp section
+    std::memcpy(ky_indRef[box], ky_ind[box], sizeof(int) * imageSize[box]);
+#pragma omp section
+    std::memcpy(kz_indRef[box], kz_ind[box], sizeof(int) * imageSize[box]);
+#pragma omp section
     std::memcpy(hsqrRef[box], hsqr[box], sizeof(double) * imageSize[box]);
 #pragma omp section
     std::memcpy(prefactRef[box], prefact[box], sizeof(double) * imageSize[box]);
@@ -1069,6 +1266,9 @@ void Ewald::SetRecipRef(uint box) {
   std::memcpy(kxRef[box], kx[box], sizeof(double) * imageSize[box]);
   std::memcpy(kyRef[box], ky[box], sizeof(double) * imageSize[box]);
   std::memcpy(kzRef[box], kz[box], sizeof(double) * imageSize[box]);
+  std::memcpy(kx_indRef[box], kx_ind[box], sizeof(int) * imageSize[box]);
+  std::memcpy(ky_indRef[box], ky_ind[box], sizeof(int) * imageSize[box]);
+  std::memcpy(kz_indRef[box], kz_ind[box], sizeof(int) * imageSize[box]);
   std::memcpy(hsqrRef[box], hsqr[box], sizeof(double) * imageSize[box]);
   std::memcpy(prefactRef[box], prefact[box], sizeof(double) * imageSize[box]);
 #endif
