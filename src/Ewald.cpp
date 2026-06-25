@@ -241,9 +241,9 @@ build_tiny_cache(const std::vector<XYZ> &coords, int kmax_val, int numAtoms,
 #endif
   for (int i = 0; i < numAtoms; i++) {
     XYZ r = coords[i];
-    double theta_x = b1.x * r.x + b1.y * r.y + b1.z * r.z;
-    double theta_y = b2.x * r.x + b2.y * r.y + b2.z * r.z;
-    double theta_z = b3.x * r.x + b3.y * r.y + b3.z * r.z;
+    double theta_x = b1.x * r.x + b2.x * r.y + b3.x * r.z;
+    double theta_y = b1.y * r.x + b2.y * r.y + b3.y * r.z;
+    double theta_z = b1.z * r.x + b2.z * r.y + b3.z * r.z;
 
     double alpha_x = 2.0 * std::sin(theta_x / 2.0) * std::sin(theta_x / 2.0);
     double beta_x = std::sin(theta_x);
