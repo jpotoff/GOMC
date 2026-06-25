@@ -258,8 +258,6 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     std::memset(sumRnew[box], 0.0, sizeof(double) * imageSize[box]);
     std::memset(sumInew[box], 0.0, sizeof(double) * imageSize[box]);
 #endif
-    // invert this loop so it's over k-vectors first, then over molecules.
-
     // 1. Flatten the molecules into a contiguous list of charges and
     // coordinates
     std::vector<XYZ> flatCoords;
@@ -290,26 +288,9 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     std::vector<double> cos_y(cacheSize), sin_y(cacheSize);
     std::vector<double> cos_z(cacheSize), sin_z(cacheSize);
 
-    XYZ b1, b2, b3;
-    if (currentAxes.orthogonal[box]) {
-      XYZ constValue = currentAxes.axis.Get(box);
-      constValue.Inverse();
-      constValue *= 2.0 * M_PI;
-      b1 = XYZ(constValue.x, 0.0, 0.0);
-      b2 = XYZ(0.0, constValue.y, 0.0);
-      b3 = XYZ(0.0, 0.0, constValue.z);
-    } else {
-      XYZArray cellB(currentAxes.cellBasis[box]);
-      cellB.Scale(0, currentAxes.axis.Get(box).x);
-      cellB.Scale(1, currentAxes.axis.Get(box).y);
-      cellB.Scale(2, currentAxes.axis.Get(box).z);
-      XYZArray cellB_Inv(3);
-      double det = cellB.AdjointMatrix(cellB_Inv);
-      cellB_Inv.ScaleRange(0, 3, (2.0 * M_PI) / det);
-      b1 = cellB_Inv.Get(0);
-      b2 = cellB_Inv.Get(1);
-      b3 = cellB_Inv.Get(2);
-    }
+    XYZ b1 = b1_vec[box];
+    XYZ b2 = b2_vec[box];
+    XYZ b3 = b3_vec[box];
 
       // We can parallelize the cache building over the atoms!
 #ifdef _OPENMP
@@ -328,24 +309,23 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
         double alpha_z = 2.0 * std::sin(theta_z / 2.0) * std::sin(theta_z / 2.0);
         double beta_z = std::sin(theta_z);
 
-        int offset = i * (kmax_val + 1);
-        cos_x[offset] = 1.0; sin_x[offset] = 0.0;
-        cos_y[offset] = 1.0; sin_y[offset] = 0.0;
-        cos_z[offset] = 1.0; sin_z[offset] = 0.0;
+        cos_x[0 * numFlatAtoms + i] = 1.0; sin_x[0 * numFlatAtoms + i] = 0.0;
+        cos_y[0 * numFlatAtoms + i] = 1.0; sin_y[0 * numFlatAtoms + i] = 0.0;
+        cos_z[0 * numFlatAtoms + i] = 1.0; sin_z[0 * numFlatAtoms + i] = 0.0;
 
-        cos_x[offset + 1] = std::cos(theta_x); sin_x[offset + 1] = beta_x;
-        cos_y[offset + 1] = std::cos(theta_y); sin_y[offset + 1] = beta_y;
-        cos_z[offset + 1] = std::cos(theta_z); sin_z[offset + 1] = beta_z;
+        cos_x[1 * numFlatAtoms + i] = std::cos(theta_x); sin_x[1 * numFlatAtoms + i] = beta_x;
+        cos_y[1 * numFlatAtoms + i] = std::cos(theta_y); sin_y[1 * numFlatAtoms + i] = beta_y;
+        cos_z[1 * numFlatAtoms + i] = std::cos(theta_z); sin_z[1 * numFlatAtoms + i] = beta_z;
 
         for (int n = 1; n < kmax_val; n++) {
-            cos_x[offset + n + 1] = cos_x[offset + n] - (alpha_x * cos_x[offset + n] + beta_x * sin_x[offset + n]);
-            sin_x[offset + n + 1] = sin_x[offset + n] - (alpha_x * sin_x[offset + n] - beta_x * cos_x[offset + n]);
+            cos_x[(n + 1) * numFlatAtoms + i] = cos_x[n * numFlatAtoms + i] - (alpha_x * cos_x[n * numFlatAtoms + i] + beta_x * sin_x[n * numFlatAtoms + i]);
+            sin_x[(n + 1) * numFlatAtoms + i] = sin_x[n * numFlatAtoms + i] - (alpha_x * sin_x[n * numFlatAtoms + i] - beta_x * cos_x[n * numFlatAtoms + i]);
 
-            cos_y[offset + n + 1] = cos_y[offset + n] - (alpha_y * cos_y[offset + n] + beta_y * sin_y[offset + n]);
-            sin_y[offset + n + 1] = sin_y[offset + n] - (alpha_y * sin_y[offset + n] - beta_y * cos_y[offset + n]);
+            cos_y[(n + 1) * numFlatAtoms + i] = cos_y[n * numFlatAtoms + i] - (alpha_y * cos_y[n * numFlatAtoms + i] + beta_y * sin_y[n * numFlatAtoms + i]);
+            sin_y[(n + 1) * numFlatAtoms + i] = sin_y[n * numFlatAtoms + i] - (alpha_y * sin_y[n * numFlatAtoms + i] - beta_y * cos_y[n * numFlatAtoms + i]);
 
-            cos_z[offset + n + 1] = cos_z[offset + n] - (alpha_z * cos_z[offset + n] + beta_z * sin_z[offset + n]);
-            sin_z[offset + n + 1] = sin_z[offset + n] - (alpha_z * sin_z[offset + n] - beta_z * cos_z[offset + n]);
+            cos_z[(n + 1) * numFlatAtoms + i] = cos_z[n * numFlatAtoms + i] - (alpha_z * cos_z[n * numFlatAtoms + i] + beta_z * sin_z[n * numFlatAtoms + i]);
+            sin_z[(n + 1) * numFlatAtoms + i] = sin_z[n * numFlatAtoms + i] - (alpha_z * sin_z[n * numFlatAtoms + i] - beta_z * cos_z[n * numFlatAtoms + i]);
         }
     }
 
@@ -364,15 +344,18 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
       int sign_y = ky_ind[box][i] < 0 ? -1 : 1;
       int sign_z = kz_ind[box][i] < 0 ? -1 : 1;
 
+      int nx_offset = nx * numFlatAtoms;
+      int ny_offset = ny * numFlatAtoms;
+      int nz_offset = nz * numFlatAtoms;
+
 #pragma omp simd reduction(+ : totalReal, totalImaginary)
       for (int j = 0; j < numFlatAtoms; j++) {
-         int offset = j * (kmax_val + 1);
-         double cx = cos_x[offset + nx];
-         double sx = sin_x[offset + nx] * sign_x;
-         double cy = cos_y[offset + ny];
-         double sy = sin_y[offset + ny] * sign_y;
-         double cz = cos_z[offset + nz];
-         double sz = sin_z[offset + nz] * sign_z;
+         double cx = cos_x[nx_offset + j];
+         double sx = sin_x[nx_offset + j] * sign_x;
+         double cy = cos_y[ny_offset + j];
+         double sy = sin_y[ny_offset + j] * sign_y;
+         double cz = cos_z[nz_offset + j];
+         double sz = sin_z[nz_offset + j] * sign_z;
 
          double cxy = cx * cy - sx * sy;
          double sxy = sx * cy + cx * sy;
@@ -506,24 +489,23 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
         double alpha_z = 2.0 * std::sin(theta_z / 2.0) * std::sin(theta_z / 2.0);
         double beta_z = std::sin(theta_z);
 
-        int offset = i * (kmax_val + 1);
-        cos_x[offset] = 1.0; sin_x[offset] = 0.0;
-        cos_y[offset] = 1.0; sin_y[offset] = 0.0;
-        cos_z[offset] = 1.0; sin_z[offset] = 0.0;
+        cos_x[0 * numFlatAtoms + i] = 1.0; sin_x[0 * numFlatAtoms + i] = 0.0;
+        cos_y[0 * numFlatAtoms + i] = 1.0; sin_y[0 * numFlatAtoms + i] = 0.0;
+        cos_z[0 * numFlatAtoms + i] = 1.0; sin_z[0 * numFlatAtoms + i] = 0.0;
 
-        cos_x[offset + 1] = std::cos(theta_x); sin_x[offset + 1] = beta_x;
-        cos_y[offset + 1] = std::cos(theta_y); sin_y[offset + 1] = beta_y;
-        cos_z[offset + 1] = std::cos(theta_z); sin_z[offset + 1] = beta_z;
+        cos_x[1 * numFlatAtoms + i] = std::cos(theta_x); sin_x[1 * numFlatAtoms + i] = beta_x;
+        cos_y[1 * numFlatAtoms + i] = std::cos(theta_y); sin_y[1 * numFlatAtoms + i] = beta_y;
+        cos_z[1 * numFlatAtoms + i] = std::cos(theta_z); sin_z[1 * numFlatAtoms + i] = beta_z;
 
         for (int n = 1; n < kmax_val; n++) {
-            cos_x[offset + n + 1] = cos_x[offset + n] - (alpha_x * cos_x[offset + n] + beta_x * sin_x[offset + n]);
-            sin_x[offset + n + 1] = sin_x[offset + n] - (alpha_x * sin_x[offset + n] - beta_x * cos_x[offset + n]);
+            cos_x[(n + 1) * numFlatAtoms + i] = cos_x[n * numFlatAtoms + i] - (alpha_x * cos_x[n * numFlatAtoms + i] + beta_x * sin_x[n * numFlatAtoms + i]);
+            sin_x[(n + 1) * numFlatAtoms + i] = sin_x[n * numFlatAtoms + i] - (alpha_x * sin_x[n * numFlatAtoms + i] - beta_x * cos_x[n * numFlatAtoms + i]);
 
-            cos_y[offset + n + 1] = cos_y[offset + n] - (alpha_y * cos_y[offset + n] + beta_y * sin_y[offset + n]);
-            sin_y[offset + n + 1] = sin_y[offset + n] - (alpha_y * sin_y[offset + n] - beta_y * cos_y[offset + n]);
+            cos_y[(n + 1) * numFlatAtoms + i] = cos_y[n * numFlatAtoms + i] - (alpha_y * cos_y[n * numFlatAtoms + i] + beta_y * sin_y[n * numFlatAtoms + i]);
+            sin_y[(n + 1) * numFlatAtoms + i] = sin_y[n * numFlatAtoms + i] - (alpha_y * sin_y[n * numFlatAtoms + i] - beta_y * cos_y[n * numFlatAtoms + i]);
 
-            cos_z[offset + n + 1] = cos_z[offset + n] - (alpha_z * cos_z[offset + n] + beta_z * sin_z[offset + n]);
-            sin_z[offset + n + 1] = sin_z[offset + n] - (alpha_z * sin_z[offset + n] - beta_z * cos_z[offset + n]);
+            cos_z[(n + 1) * numFlatAtoms + i] = cos_z[n * numFlatAtoms + i] - (alpha_z * cos_z[n * numFlatAtoms + i] + beta_z * sin_z[n * numFlatAtoms + i]);
+            sin_z[(n + 1) * numFlatAtoms + i] = sin_z[n * numFlatAtoms + i] - (alpha_z * sin_z[n * numFlatAtoms + i] - beta_z * cos_z[n * numFlatAtoms + i]);
         }
     }
 
@@ -542,15 +524,18 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
       int sign_y = ky_indRef[box][i] < 0 ? -1 : 1;
       int sign_z = kz_indRef[box][i] < 0 ? -1 : 1;
 
+      int nx_offset = nx * numFlatAtoms;
+      int ny_offset = ny * numFlatAtoms;
+      int nz_offset = nz * numFlatAtoms;
+
 #pragma omp simd reduction(+ : totalReal, totalImaginary)
       for (int j = 0; j < numFlatAtoms; j++) {
-         int offset = j * (kmax_val + 1);
-         double cx = cos_x[offset + nx];
-         double sx = sin_x[offset + nx] * sign_x;
-         double cy = cos_y[offset + ny];
-         double sy = sin_y[offset + ny] * sign_y;
-         double cz = cos_z[offset + nz];
-         double sz = sin_z[offset + nz] * sign_z;
+         double cx = cos_x[nx_offset + j];
+         double sx = sin_x[nx_offset + j] * sign_x;
+         double cy = cos_y[ny_offset + j];
+         double sy = sin_y[ny_offset + j] * sign_y;
+         double cz = cos_z[nz_offset + j];
+         double sz = sin_z[nz_offset + j] * sign_z;
 
          double cxy = cx * cy - sx * sy;
          double sxy = sx * cy + cx * sy;
@@ -1063,6 +1048,9 @@ void Ewald::RecipInitOrth(uint box, BoxDimensions const &boxAxes) {
   XYZ constValue = boxAxes.axis.Get(box);
   constValue.Inverse();
   constValue *= 2.0 * M_PI;
+  b1_vec[box] = XYZ(constValue.x, 0.0, 0.0);
+  b2_vec[box] = XYZ(0.0, constValue.y, 0.0);
+  b3_vec[box] = XYZ(0.0, 0.0, constValue.z);
 
   double vol = boxAxes.volume[box] / (4.0 * M_PI);
   nkx_max =
@@ -1128,6 +1116,9 @@ void Ewald::RecipInitNonOrth(uint box, BoxDimensions const &boxAxes) {
   XYZArray cellB_Inv(3);
   double det = cellB.AdjointMatrix(cellB_Inv);
   cellB_Inv.ScaleRange(0, 3, (2.0 * M_PI) / det);
+  b1_vec[box] = cellB_Inv.Get(0);
+  b2_vec[box] = cellB_Inv.Get(1);
+  b3_vec[box] = cellB_Inv.Get(2);
 
   double vol = boxAxes.volume[box] / (4.0 * M_PI);
   nkx_max =
@@ -1272,6 +1263,9 @@ void Ewald::SetRecipRef(uint box) {
   std::memcpy(hsqrRef[box], hsqr[box], sizeof(double) * imageSize[box]);
   std::memcpy(prefactRef[box], prefact[box], sizeof(double) * imageSize[box]);
 #endif
+  b1_vecRef[box] = b1_vec[box];
+  b2_vecRef[box] = b2_vec[box];
+  b3_vecRef[box] = b3_vec[box];
 #ifdef GOMC_CUDA
   CopyCurrentToRefCUDA(ff.particles->getCUDAVars(), box, imageSize[box]);
 #endif
