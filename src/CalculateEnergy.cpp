@@ -398,7 +398,13 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
     uint length = mols.GetKind(molIndex).NumAtoms();
     uint start = mols.MolStart(molIndex);
 
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
+    firstprivate(box, molIndex, num::qqFact, length, start)                    \
+    reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
+#endif
     for (uint p = 0; p < length; ++p) {
+      double pREn = 0.0, pLJEn = 0.0;
       uint atom = start + p;
       CellList::Neighbors n = cellList.EnumerateLocal(currentCoords[atom], box);
 
@@ -408,11 +414,6 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         n.Next();
       }
 
-#ifdef _OPENMP
-#pragma omp parallel for default(none) shared(nIndex, boxAxes) \
-    firstprivate(atom, box, molIndex, num::qqFact) \
-    reduction(+ : tempREn, tempLJEn)
-#endif
       for (int i = 0; i < (int)nIndex.size(); i++) {
         double distSq = 0.0;
         XYZ virComponents;
@@ -428,12 +429,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
 
             if (qi_qj_fact != 0.0) {
-              tempREn += -forcefield.particles->CalcCoulomb(
+              pREn += -forcefield.particles->CalcCoulomb(
                   distSq, particleKind[atom], particleKind[nIndex[i]],
                   qi_qj_fact, lambdaCoulomb, box);
             }
           }
-          tempLJEn += -forcefield.particles->CalcEn(
+          pLJEn += -forcefield.particles->CalcEn(
               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
         }
       }
@@ -445,11 +446,6 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         n.Next();
       }
 
-#ifdef _OPENMP
-#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes) \
-    reduction(+ : tempREn, tempLJEn) \
-    firstprivate(atom, molIndex, p, box, num::qqFact)
-#endif
       for (int i = 0; i < (int)nIndex.size(); i++) {
         double distSq = 0.0;
         XYZ virComponents;
@@ -469,15 +465,18 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
 
             if (qi_qj_fact != 0.0) {
-              tempREn += forcefield.particles->CalcCoulomb(
+              pREn += forcefield.particles->CalcCoulomb(
                   distSq, particleKind[atom], particleKind[nIndex[i]],
                   qi_qj_fact, lambdaCoulomb, box);
             }
           }
-          tempLJEn += forcefield.particles->CalcEn(
+          pLJEn += forcefield.particles->CalcEn(
               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
         }
       }
+
+      tempREn += pREn;
+      tempLJEn += pLJEn;
     }
     GOMC_EVENT_STOP(1, GomcProfileEvent::EN_MOL_INTER);
   }
