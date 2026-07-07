@@ -407,12 +407,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         nIndex.push_back(*n);
         n.Next();
       }
-      // removing for performance testing.
-      // #ifdef _OPENMP
-      // #pragma omp parallel for default(none) shared(nIndex, boxAxes) \
-      //     firstprivate(atom, box, molIndex, num::qqFact) \ reduction(+ :
-      //     tempREn, tempLJEn)
-      // #endif
+
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(nIndex, boxAxes) \
+    firstprivate(atom, box, molIndex, num::qqFact) \
+    reduction(+ : tempREn, tempLJEn)
+#endif
       for (int i = 0; i < (int)nIndex.size(); i++) {
         double distSq = 0.0;
         XYZ virComponents;
@@ -444,13 +444,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         nIndex.push_back(*n);
         n.Next();
       }
-      // removing for performance testing.
-      // #ifdef _OPENMP
-      // #pragma omp parallel for default(none) shared(molCoords, nIndex,
-      // overlap, boxAxes)      \
-      //     reduction(+ : tempREn, tempLJEn) \ firstprivate(atom, molIndex, p,
-      //     box, num::qqFact)
-      // #endif
+
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes) \
+    reduction(+ : tempREn, tempLJEn) \
+    firstprivate(atom, molIndex, p, box, num::qqFact)
+#endif
       for (int i = 0; i < (int)nIndex.size(); i++) {
         double distSq = 0.0;
         XYZ virComponents;
