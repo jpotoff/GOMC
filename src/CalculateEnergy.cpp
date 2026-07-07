@@ -398,13 +398,6 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
     uint length = mols.GetKind(molIndex).NumAtoms();
     uint start = mols.MolStart(molIndex);
 
-// Added to test performance.
-#ifdef _OPENMP
-#pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
-    firstprivate(box, molIndex, num::qqFact, length, start)                    \
-    reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
-#endif
-
     for (uint p = 0; p < length; ++p) {
       uint atom = start + p;
       CellList::Neighbors n = cellList.EnumerateLocal(currentCoords[atom], box);
