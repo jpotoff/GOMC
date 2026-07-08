@@ -161,7 +161,7 @@ void CalculateEnergy::BoxInterTemplate(
     const std::vector<std::vector<int>> &neighborList) {
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none) schedule(dynamic, 16)                   \
+#pragma omp parallel for default(none) schedule(static, 16)                    \
     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
                neighborList) reduction(+ : tempREn, tempLJEn)                  \
     firstprivate(box, num::qqFact)
@@ -233,7 +233,7 @@ void CalculateEnergy::BoxForceTemplate(
   int molCount = molForce.Count();
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none) schedule(dynamic, 16)                   \
+#pragma omp parallel for default(none) schedule(static, 16)                    \
     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
                neighborList)                                                   \
     firstprivate(box, atomCount, molCount, num::qqFact)                        \
@@ -316,7 +316,7 @@ void CalculateEnergy::VirialCalcTemplate(
     const std::vector<std::vector<int>> &neighborList) {
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none) schedule(dynamic, 16) shared(           \
+#pragma omp parallel for default(none) schedule(static, 16) shared(            \
         cellStartIndex, cellVector, mapParticleToCell, neighborList, boxAxes)  \
     firstprivate(box) reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11,  \
                                     rT12, rT13, rT22, rT23, rT33)

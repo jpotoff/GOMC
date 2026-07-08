@@ -1,0 +1,1207 @@
+commit cdc39ee6eea770a98bdd12ce58f36a24803987f7
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Tue Jul 7 14:45:40 2026 -0400
+
+    put MoleculeInter back the way it was
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index 9a0fdac6..59b792f7 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -398,7 +398,13 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+     uint length = mols.GetKind(molIndex).NumAtoms();
+     uint start = mols.MolStart(molIndex);
+ 
++#ifdef _OPENMP
++#pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
++    firstprivate(box, molIndex, num::qqFact, length, start)                    \
++    reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
++#endif
+     for (uint p = 0; p < length; ++p) {
++      double pREn = 0.0, pLJEn = 0.0;
+       uint atom = start + p;
+       CellList::Neighbors n = cellList.EnumerateLocal(currentCoords[atom], box);
+ 
+@@ -408,11 +414,6 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+         n.Next();
+       }
+ 
+-#ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(nIndex, boxAxes) \
+-    firstprivate(atom, box, molIndex, num::qqFact) \
+-    reduction(+ : tempREn, tempLJEn)
+-#endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+@@ -428,12 +429,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
+ 
+             if (qi_qj_fact != 0.0) {
+-              tempREn += -forcefield.particles->CalcCoulomb(
++              pREn += -forcefield.particles->CalcCoulomb(
+                   distSq, particleKind[atom], particleKind[nIndex[i]],
+                   qi_qj_fact, lambdaCoulomb, box);
+             }
+           }
+-          tempLJEn += -forcefield.particles->CalcEn(
++          pLJEn += -forcefield.particles->CalcEn(
+               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
+         }
+       }
+@@ -445,11 +446,6 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+         n.Next();
+       }
+ 
+-#ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes) \
+-    reduction(+ : tempREn, tempLJEn) \
+-    firstprivate(atom, molIndex, p, box, num::qqFact)
+-#endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+@@ -469,15 +465,18 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
+ 
+             if (qi_qj_fact != 0.0) {
+-              tempREn += forcefield.particles->CalcCoulomb(
++              pREn += forcefield.particles->CalcCoulomb(
+                   distSq, particleKind[atom], particleKind[nIndex[i]],
+                   qi_qj_fact, lambdaCoulomb, box);
+             }
+           }
+-          tempLJEn += forcefield.particles->CalcEn(
++          pLJEn += forcefield.particles->CalcEn(
+               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
+         }
+       }
++
++      tempREn += pREn;
++      tempLJEn += pLJEn;
+     }
+     GOMC_EVENT_STOP(1, GomcProfileEvent::EN_MOL_INTER);
+   }
+
+commit a79463f0fb881e95071a27cc2315aac61f32af0b
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Tue Jul 7 14:25:19 2026 -0400
+
+    OpenMP change to MoleculeInter
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index 6acc3ba8..9a0fdac6 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -407,12 +407,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+         nIndex.push_back(*n);
+         n.Next();
+       }
+-      // removing for performance testing.
+-      // #ifdef _OPENMP
+-      // #pragma omp parallel for default(none) shared(nIndex, boxAxes) \
+-      //     firstprivate(atom, box, molIndex, num::qqFact) \ reduction(+ :
+-      //     tempREn, tempLJEn)
+-      // #endif
++
++#ifdef _OPENMP
++#pragma omp parallel for default(none) shared(nIndex, boxAxes) \
++    firstprivate(atom, box, molIndex, num::qqFact) \
++    reduction(+ : tempREn, tempLJEn)
++#endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+@@ -444,13 +444,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+         nIndex.push_back(*n);
+         n.Next();
+       }
+-      // removing for performance testing.
+-      // #ifdef _OPENMP
+-      // #pragma omp parallel for default(none) shared(molCoords, nIndex,
+-      // overlap, boxAxes)      \
+-      //     reduction(+ : tempREn, tempLJEn) \ firstprivate(atom, molIndex, p,
+-      //     box, num::qqFact)
+-      // #endif
++
++#ifdef _OPENMP
++#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes) \
++    reduction(+ : tempREn, tempLJEn) \
++    firstprivate(atom, molIndex, p, box, num::qqFact)
++#endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+
+commit 1e9da3dffb614fb86d53436684e15d3b175c2acc
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Tue Jul 7 13:55:20 2026 -0400
+
+    remove OpenMP from MoleculeInter
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index 3df28db8..6acc3ba8 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -398,13 +398,6 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+     uint length = mols.GetKind(molIndex).NumAtoms();
+     uint start = mols.MolStart(molIndex);
+ 
+-// Added to test performance.
+-#ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
+-    firstprivate(box, molIndex, num::qqFact, length, start)                    \
+-    reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
+-#endif
+-
+     for (uint p = 0; p < length; ++p) {
+       uint atom = start + p;
+       CellList::Neighbors n = cellList.EnumerateLocal(currentCoords[atom], box);
+
+commit c3b4d6a34b0e078b88c76b8a2618fc143bdc053e
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Wed Jun 24 16:13:01 2026 -0400
+
+    add more dynamic scheduling
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index 483456c5..3df28db8 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -233,7 +233,7 @@ void CalculateEnergy::BoxForceTemplate(
+   int molCount = molForce.Count();
+ 
+ #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+-#pragma omp parallel for default(none)                                         \
++#pragma omp parallel for default(none) schedule(dynamic, 16)                   \
+     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
+                neighborList)                                                   \
+     firstprivate(box, atomCount, molCount, num::qqFact)                        \
+@@ -316,7 +316,7 @@ void CalculateEnergy::VirialCalcTemplate(
+     const std::vector<std::vector<int>> &neighborList) {
+ 
+ #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+-#pragma omp parallel for default(none) shared(                                 \
++#pragma omp parallel for default(none) schedule(dynamic, 16) shared(           \
+         cellStartIndex, cellVector, mapParticleToCell, neighborList, boxAxes)  \
+     firstprivate(box) reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11,  \
+                                     rT12, rT13, rT22, rT23, rT33)
+
+commit 2b8868f9e69675d597de79d7b39223b8330d2403
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Wed Jun 24 16:03:55 2026 -0400
+
+    dynamic scheduling for BoxInterTemplate
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index d1e0fc18..483456c5 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -161,7 +161,7 @@ void CalculateEnergy::BoxInterTemplate(
+     const std::vector<std::vector<int>> &neighborList) {
+ 
+ #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+-#pragma omp parallel for default(none)                                         \
++#pragma omp parallel for default(none) schedule(dynamic, 16)                   \
+     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
+                neighborList) reduction(+ : tempREn, tempLJEn)                  \
+     firstprivate(box, num::qqFact)
+
+commit e30ff112d10c21bd6d618893c4e167940298a168
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Mon Jun 22 11:38:41 2026 -0400
+
+    modify openmp in MoleculeInter
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index 4c8ad7fc..d1e0fc18 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -398,6 +398,13 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+     uint length = mols.GetKind(molIndex).NumAtoms();
+     uint start = mols.MolStart(molIndex);
+ 
++// Added to test performance.
++#ifdef _OPENMP
++#pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
++    firstprivate(box, molIndex, num::qqFact, length, start)                    \
++    reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
++#endif
++
+     for (uint p = 0; p < length; ++p) {
+       uint atom = start + p;
+       CellList::Neighbors n = cellList.EnumerateLocal(currentCoords[atom], box);
+
+commit 7fdbb1e90896c2a0ca263cf0fa3ade0da9c2de0c
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Mon Jun 22 11:18:21 2026 -0400
+
+    MoleculeInter OpenMP mod
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index bddb6dd5..4c8ad7fc 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -407,12 +407,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+         nIndex.push_back(*n);
+         n.Next();
+       }
+-
+-#ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(nIndex, boxAxes)                          \
+-    firstprivate(atom, box, molIndex, num::qqFact)                             \
+-    reduction(+ : tempREn, tempLJEn)
+-#endif
++      // removing for performance testing.
++      // #ifdef _OPENMP
++      // #pragma omp parallel for default(none) shared(nIndex, boxAxes) \
++      //     firstprivate(atom, box, molIndex, num::qqFact) \ reduction(+ :
++      //     tempREn, tempLJEn)
++      // #endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+@@ -444,12 +444,13 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+         nIndex.push_back(*n);
+         n.Next();
+       }
+-
+-#ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes)      \
+-    reduction(+ : tempREn, tempLJEn)                                           \
+-    firstprivate(atom, molIndex, p, box, num::qqFact)
+-#endif
++      // removing for performance testing.
++      // #ifdef _OPENMP
++      // #pragma omp parallel for default(none) shared(molCoords, nIndex,
++      // overlap, boxAxes)      \
++      //     reduction(+ : tempREn, tempLJEn) \ firstprivate(atom, molIndex, p,
++      //     box, num::qqFact)
++      // #endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+@@ -535,18 +536,19 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
+     return;
+ 
+   GOMC_EVENT_START(1, GomcProfileEvent::EN_CBMC_INTER);
+-  //double tempLJ, tempReal;
++  // double tempLJ, tempReal;
+   MoleculeKind const &thisKind = mols.GetKind(molIndex);
+   uint kindI = thisKind.AtomKind(partIndex);
+   double kindICharge = thisKind.AtomCharge(partIndex);
+- // std::vector<uint> nIndex;
+-//use OpenMP to distribute the workload over CBMC trials
++  // std::vector<uint> nIndex;
++// use OpenMP to distribute the workload over CBMC trials
+ #ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(overlap, trialPos, boxAxes, en, real) \
++#pragma omp parallel for default(none)                                         \
++    shared(overlap, trialPos, boxAxes, en, real)                               \
+     firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials)
+ #endif
+   for (uint t = 0; t < trials; ++t) {
+-    //Each thread gets it's own copy of nIndex, tempReal and tempLJ
++    // Each thread gets it's own copy of nIndex, tempReal and tempLJ
+     std::vector<uint> nIndex;
+     double tempReal = 0.0;
+     double tempLJ = 0.0;
+@@ -559,13 +561,14 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
+       n.Next();
+     }
+ 
+-    //distributing openmp thread over particle interactions lead to 
+-    //substantial thread waiting.  Workload is too small.
+-//#ifdef _OPENMP
+-//#pragma omp parallel for default(none) shared(nIndex, overlap, trialPos, boxAxes)       \
+-//    firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact)            \
+-//    reduction(+ : tempLJ, tempReal)
+-//#endif
++    // distributing openmp thread over particle interactions lead to
++    // substantial thread waiting.  Workload is too small.
++    // #ifdef _OPENMP
++    // #pragma omp parallel for default(none) shared(nIndex, overlap, trialPos,
++    // boxAxes)       \
++    //     firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact) \
++    //     reduction(+ : tempLJ, tempReal)
++    // #endif
+     for (int i = 0; i < (int)nIndex.size(); i++) {
+       double distSq = 0.0;
+       if (boxAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i], box)) {
+
+commit f6d6f21c8b45637abb51995dabd072408165cd54
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Mon Jun 22 09:23:56 2026 -0400
+
+    parallelize over CBMC trials
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index aac0f77b..bddb6dd5 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -535,13 +535,21 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
+     return;
+ 
+   GOMC_EVENT_START(1, GomcProfileEvent::EN_CBMC_INTER);
+-  double tempLJ, tempReal;
++  //double tempLJ, tempReal;
+   MoleculeKind const &thisKind = mols.GetKind(molIndex);
+   uint kindI = thisKind.AtomKind(partIndex);
+   double kindICharge = thisKind.AtomCharge(partIndex);
+-  std::vector<uint> nIndex;
+-
++ // std::vector<uint> nIndex;
++//use OpenMP to distribute the workload over CBMC trials
++#ifdef _OPENMP
++#pragma omp parallel for default(none) shared(overlap, trialPos, boxAxes, en, real) \
++    firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials)
++#endif
+   for (uint t = 0; t < trials; ++t) {
++    //Each thread gets it's own copy of nIndex, tempReal and tempLJ
++    std::vector<uint> nIndex;
++    double tempReal = 0.0;
++    double tempLJ = 0.0;
+     nIndex.clear();
+     tempReal = 0.0;
+     tempLJ = 0.0;
+@@ -551,11 +559,13 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
+       n.Next();
+     }
+ 
+-#ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(nIndex, overlap, trialPos, boxAxes)       \
+-    firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact)            \
+-    reduction(+ : tempLJ, tempReal)
+-#endif
++    //distributing openmp thread over particle interactions lead to 
++    //substantial thread waiting.  Workload is too small.
++//#ifdef _OPENMP
++//#pragma omp parallel for default(none) shared(nIndex, overlap, trialPos, boxAxes)       \
++//    firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact)            \
++//    reduction(+ : tempLJ, tempReal)
++//#endif
+     for (int i = 0; i < (int)nIndex.size(); i++) {
+       double distSq = 0.0;
+       if (boxAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i], box)) {
+
+commit e7c699d33422560b2f4e71c5cc46492b23d30f4c
+Author: jpotoff <jpotoff@wayne.edu>
+Date:   Tue Jun 9 15:57:29 2026 -0400
+
+    add templates for CalculateEnergy
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index d10a288a..aac0f77b 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -152,49 +152,14 @@ SystemPotential CalculateEnergy::SystemInter(SystemPotential potential,
+   return potential;
+ }
+ 
+-// Calculate the inter energy for Box. Fractional molecule are not allowed in
+-// this function. Need to implement the GPU function
+-SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
+-                                          XYZArray const &coords,
+-                                          BoxDimensions const &boxAxes,
+-                                          const uint box) {
+-  // Handles reservoir box case, returning zeroed structure if
+-  // interactions are off.
+-  if (box >= BOXES_WITH_U_NB)
+-    return potential;
+-
+-  GOMC_EVENT_START(1, GomcProfileEvent::EN_BOX_INTER);
+-  double tempREn = 0.0, tempLJEn = 0.0;
+-
+-  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
+-  std::vector<std::vector<int>> neighborList;
+-  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
+-                               cellStartIndex, mapParticleToCell);
+-  neighborList = cellList.GetNeighborList(box);
+-
+-#ifdef GOMC_CUDA
+-  // update unitcell in GPU
+-  UpdateCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
+-                      boxAxes.cellBasis[box].x, boxAxes.cellBasis[box].y,
+-                      boxAxes.cellBasis[box].z);
++template <typename BoxType>
++void CalculateEnergy::BoxInterTemplate(
++    XYZArray const &coords, const BoxType &boxAxes, const uint box,
++    double &tempREn, double &tempLJEn, const std::vector<int> &cellVector,
++    const std::vector<int> &cellStartIndex,
++    const std::vector<int> &mapParticleToCell,
++    const std::vector<std::vector<int>> &neighborList) {
+ 
+-  if (!boxAxes.orthogonal[box]) {
+-    // In this case, boxAxes is really an object of type BoxDimensionsNonOrth,
+-    // so cast and copy the additional data to the GPU
+-    const BoxDimensionsNonOrth *NonOrthAxes =
+-        static_cast<const BoxDimensionsNonOrth *>(&boxAxes);
+-    UpdateInvCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
+-                           NonOrthAxes->cellBasis_Inv[box].x,
+-                           NonOrthAxes->cellBasis_Inv[box].y,
+-                           NonOrthAxes->cellBasis_Inv[box].z);
+-  }
+-
+-  CallBoxInterGPU(forcefield.particles->getCUDAVars(), cellVector,
+-                  cellStartIndex, neighborList, coords, boxAxes, electrostatic,
+-                  particleCharge, particleKind, particleMol, tempREn, tempLJEn,
+-                  forcefield.sc_coul, forcefield.sc_sigma_6,
+-                  forcefield.sc_alpha, forcefield.sc_power, box);
+-#else
+ #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+ #pragma omp parallel for default(none)                                         \
+     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
+@@ -248,36 +213,16 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
+       }
+     }
+   }
+-#endif
+-
+-  // setting energy and virial of LJ interaction
+-  potential.boxEnergy[box].inter = tempLJEn;
+-  // setting energy and virial of coulomb interaction
+-  potential.boxEnergy[box].real = tempREn;
+-
+-  GOMC_EVENT_STOP(1, GomcProfileEvent::EN_BOX_INTER);
+-  // set correction energy and virial
+-  if (forcefield.useLRC) {
+-    EnergyCorrection(potential, boxAxes, box);
+-  }
+-
+-  potential.Total();
+-  return potential;
+ }
+ 
+-SystemPotential
+-CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
+-                          XYZArray &atomForce, XYZArray &molForce,
+-                          BoxDimensions const &boxAxes, const uint box) {
+-  // Handles reservoir box case, returning zeroed structure if
+-  // interactions are off.
+-  if (box >= BOXES_WITH_U_NB)
+-    return potential;
+-
+-  GOMC_EVENT_START(1, GomcProfileEvent::EN_BOX_FORCE);
++template <typename BoxType>
++void CalculateEnergy::BoxForceTemplate(
++    XYZArray const &coords, XYZArray &atomForce, XYZArray &molForce,
++    const BoxType &boxAxes, const uint box, double &tempREn, double &tempLJEn,
++    const std::vector<int> &cellVector, const std::vector<int> &cellStartIndex,
++    const std::vector<int> &mapParticleToCell,
++    const std::vector<std::vector<int>> &neighborList) {
+ 
+-  double tempREn = 0.0, tempLJEn = 0.0;
+-  // make a pointer to atom force and mol force for OpenMP
+   double *aForcex = atomForce.x;
+   double *aForcey = atomForce.y;
+   double *aForcez = atomForce.z;
+@@ -287,41 +232,6 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
+   int atomCount = atomForce.Count();
+   int molCount = molForce.Count();
+ 
+-  // Reset Force Arrays
+-  ResetForce(atomForce, molForce, box);
+-
+-  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
+-  std::vector<std::vector<int>> neighborList;
+-  cellList.GetCellListNeighbor(box, coords.Count(), cellVector, cellStartIndex,
+-                               mapParticleToCell);
+-  neighborList = cellList.GetNeighborList(box);
+-
+-#ifdef GOMC_CUDA
+-  // update unitcell in GPU
+-  UpdateCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
+-                      boxAxes.cellBasis[box].x, boxAxes.cellBasis[box].y,
+-                      boxAxes.cellBasis[box].z);
+-
+-  if (!boxAxes.orthogonal[box]) {
+-    // In this case, boxAxes is really an object of type BoxDimensionsNonOrth,
+-    // so cast and copy the additional data to the GPU
+-    const BoxDimensionsNonOrth *NonOrthAxes =
+-        static_cast<const BoxDimensionsNonOrth *>(&boxAxes);
+-    UpdateInvCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
+-                           NonOrthAxes->cellBasis_Inv[box].x,
+-                           NonOrthAxes->cellBasis_Inv[box].y,
+-                           NonOrthAxes->cellBasis_Inv[box].z);
+-  }
+-
+-  CallBoxForceGPU(forcefield.particles->getCUDAVars(), cellVector,
+-                  cellStartIndex, neighborList, mapParticleToCell, coords,
+-                  boxAxes, electrostatic, particleCharge, particleKind,
+-                  particleMol, tempREn, tempLJEn, aForcex, aForcey, aForcez,
+-                  mForcex, mForcey, mForcez, atomCount, molCount,
+-                  forcefield.sc_coul, forcefield.sc_sigma_6,
+-                  forcefield.sc_alpha, forcefield.sc_power, box);
+-
+-#else
+ #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+ #pragma omp parallel for default(none)                                         \
+     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
+@@ -394,70 +304,20 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
+       }
+     }
+   }
+-#endif
+-
+-  // setting energy and virial of LJ interaction
+-  potential.boxEnergy[box].inter = tempLJEn;
+-  // setting energy and virial of coulomb interaction
+-  potential.boxEnergy[box].real = tempREn;
+-
+-  GOMC_EVENT_STOP(1, GomcProfileEvent::EN_BOX_FORCE);
+-  return potential;
+ }
+ 
+-// NOTE: The calculation of W12, W13, and W23 is expensive and would not be
+-// required for pressure and surface tension calculation. So, they have been
+-// commented out. If you need to calculate them, uncomment them.
+-Virial CalculateEnergy::VirialCalc(const uint box) {
+-  // store virial and energy of reference and modify the virial
+-  Virial tempVir;
+-  // no need to calculate the virial for reservoir
+-  if (box >= BOXES_WITH_U_NB)
+-    return tempVir;
++template <typename BoxType>
++void CalculateEnergy::VirialCalcTemplate(
++    const BoxType &boxAxes, const uint box, double &vT11, double &vT12,
++    double &vT13, double &vT22, double &vT23, double &vT33, double &rT11,
++    double &rT12, double &rT13, double &rT22, double &rT23, double &rT33,
++    const std::vector<int> &cellVector, const std::vector<int> &cellStartIndex,
++    const std::vector<int> &mapParticleToCell,
++    const std::vector<std::vector<int>> &neighborList) {
+ 
+-  GOMC_EVENT_START(1, GomcProfileEvent::EN_BOX_VIRIAL);
+-
+-  // tensors for VDW and real part of electrostatic
+-  double vT11 = 0.0, vT12 = 0.0, vT13 = 0.0;
+-  double vT22 = 0.0, vT23 = 0.0, vT33 = 0.0;
+-  double rT11 = 0.0, rT12 = 0.0, rT13 = 0.0;
+-  double rT22 = 0.0, rT23 = 0.0, rT33 = 0.0;
+-
+-  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
+-  std::vector<std::vector<int>> neighborList;
+-  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
+-                               cellStartIndex, mapParticleToCell);
+-  neighborList = cellList.GetNeighborList(box);
+-
+-#ifdef GOMC_CUDA
+-  // update unitcell in GPU
+-  UpdateCellBasisCUDA(
+-      forcefield.particles->getCUDAVars(), box, currentAxes.cellBasis[box].x,
+-      currentAxes.cellBasis[box].y, currentAxes.cellBasis[box].z);
+-
+-  if (!currentAxes.orthogonal[box]) {
+-    // In this case, currentAxes is really an object of type
+-    // BoxDimensionsNonOrth,
+-    // so cast and copy the additional data to the GPU
+-    const BoxDimensionsNonOrth *NonOrthAxes =
+-        static_cast<const BoxDimensionsNonOrth *>(&currentAxes);
+-    UpdateInvCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
+-                           NonOrthAxes->cellBasis_Inv[box].x,
+-                           NonOrthAxes->cellBasis_Inv[box].y,
+-                           NonOrthAxes->cellBasis_Inv[box].z);
+-  }
+-
+-  CallBoxInterForceGPU(forcefield.particles->getCUDAVars(), cellVector,
+-                       cellStartIndex, neighborList, mapParticleToCell,
+-                       currentCoords, currentCOM, currentAxes, electrostatic,
+-                       particleCharge, particleKind, particleMol, rT11, rT12,
+-                       rT13, rT22, rT23, rT33, vT11, vT12, vT13, vT22, vT23,
+-                       vT33, forcefield.sc_coul, forcefield.sc_sigma_6,
+-                       forcefield.sc_alpha, forcefield.sc_power, box);
+-#else
+ #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+-#pragma omp parallel for default(none)                                         \
+-    shared(cellStartIndex, cellVector, mapParticleToCell, neighborList)        \
++#pragma omp parallel for default(none) shared(                                 \
++        cellStartIndex, cellVector, mapParticleToCell, neighborList, boxAxes)  \
+     firstprivate(box) reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11,  \
+                                     rT12, rT13, rT22, rT23, rT33)
+ #endif
+@@ -480,13 +340,13 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
+             particleMol[currParticle] != particleMol[nParticle]) {
+           double distSq;
+           XYZ virC;
+-          if (currentAxes.InRcut(distSq, virC, currentCoords, currParticle,
+-                                 nParticle, box)) {
++          if (boxAxes.InRcut(distSq, virC, currentCoords, currParticle,
++                             nParticle, box)) {
+             // calculate the distance between com of two molecules
+             XYZ comC = currentCOM.Difference(particleMol[currParticle],
+                                              particleMol[nParticle]);
+             // calculate the minimum image between com of two molecules
+-            comC = currentAxes.MinImage(comC, box);
++            comC = boxAxes.BoxType::MinImage(comC, box);
+             double lambdaVDW = GetLambdaVDW(particleMol[currParticle],
+                                             particleMol[nParticle], box);
+ 
+@@ -503,12 +363,7 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
+                     qi_qj, lambdaCoulomb, box);
+                 // calculate the top diagonal of pressure tensor
+                 rT11 += pRF * (virC.x * comC.x);
+-                // rT12 += pRF * (0.5 * (virC.x * comC.y + virC.y * comC.x));
+-                // rT13 += pRF * (0.5 * (virC.x * comC.z + virC.z * comC.x));
+-
+                 rT22 += pRF * (virC.y * comC.y);
+-                // rT23 += pRF * (0.5 * (virC.y * comC.z + virC.z * comC.y));
+-
+                 rT33 += pRF * (virC.z * comC.z);
+               }
+             }
+@@ -518,70 +373,23 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
+                 lambdaVDW);
+             // calculate the top diagonal of pressure tensor
+             vT11 += pVF * (virC.x * comC.x);
+-            // vT12 += pVF * (0.5 * (virC.x * comC.y + virC.y * comC.x));
+-            // vT13 += pVF * (0.5 * (virC.x * comC.z + virC.z * comC.x));
+-
+             vT22 += pVF * (virC.y * comC.y);
+-            // vT23 += pVF * (0.5 * (virC.y * comC.z + virC.z * comC.y));
+-
+             vT33 += pVF * (virC.z * comC.z);
+           }
+         }
+       }
+     }
+   }
+-#endif
+-
+-  // set the all tensor values
+-  tempVir.interTens[0][0] = vT11;
+-  tempVir.interTens[0][1] = vT12;
+-  tempVir.interTens[0][2] = vT13;
+-
+-  tempVir.interTens[1][0] = vT12;
+-  tempVir.interTens[1][1] = vT22;
+-  tempVir.interTens[1][2] = vT23;
+-
+-  tempVir.interTens[2][0] = vT13;
+-  tempVir.interTens[2][1] = vT23;
+-  tempVir.interTens[2][2] = vT33;
+-
+-  if (electrostatic) {
+-    // real part of electrostatic
+-    tempVir.realTens[0][0] = rT11 * num::qqFact;
+-    tempVir.realTens[0][1] = rT12 * num::qqFact;
+-    tempVir.realTens[0][2] = rT13 * num::qqFact;
+-
+-    tempVir.realTens[1][0] = rT12 * num::qqFact;
+-    tempVir.realTens[1][1] = rT22 * num::qqFact;
+-    tempVir.realTens[1][2] = rT23 * num::qqFact;
+-
+-    tempVir.realTens[2][0] = rT13 * num::qqFact;
+-    tempVir.realTens[2][1] = rT23 * num::qqFact;
+-    tempVir.realTens[2][2] = rT33 * num::qqFact;
+-  }
+-
+-  // setting virial of LJ
+-  tempVir.inter = vT11 + vT22 + vT33;
+-  // setting virial of coulomb
+-  tempVir.real = (rT11 + rT22 + rT33) * num::qqFact;
+-
+-  GOMC_EVENT_STOP(1, GomcProfileEvent::EN_BOX_VIRIAL);
+-
+-  if (forcefield.useLRC || forcefield.useIPC) {
+-    VirialCorrection(tempVir, currentAxes, box);
+-  }
+-
+-  // calculate reciprocal term of force
+-  tempVir = calcEwald->VirialReciprocal(tempVir, box);
+-
+-  tempVir.Total();
+-  return tempVir;
+ }
+ 
+-bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
+-                                    Intermolecular &inter_coulomb,
+-                                    XYZArray const &molCoords,
+-                                    const uint molIndex, const uint box) const {
++// templates functions for intermolecular interactions for single
++// molecule moves.  Replacing currentAxes with boxAxes
++template <typename BoxType>
++bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
++                                            Intermolecular &inter_coulomb,
++                                            XYZArray const &molCoords,
++                                            const uint molIndex, const uint box,
++                                            const BoxType &boxAxes) const {
+   double tempREn = 0.0, tempLJEn = 0.0;
+   bool overlap = false;
+ 
+@@ -595,23 +403,21 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
+       CellList::Neighbors n = cellList.EnumerateLocal(currentCoords[atom], box);
+ 
+       std::vector<uint> nIndex;
+-      // store atom index in neighboring cell
+       while (!n.Done()) {
+         nIndex.push_back(*n);
+         n.Next();
+       }
+ 
+ #ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(nIndex)                          \
++#pragma omp parallel for default(none) shared(nIndex, boxAxes)                          \
+     firstprivate(atom, box, molIndex, num::qqFact)                             \
+     reduction(+ : tempREn, tempLJEn)
+ #endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+-        // Subtract old energy
+-        if (currentAxes.InRcut(distSq, virComponents, currentCoords, atom,
+-                               nIndex[i], box)) {
++        if (boxAxes.InRcut(distSq, virComponents, currentCoords, atom,
++                           nIndex[i], box)) {
+           double lambdaVDW =
+               GetLambdaVDW(molIndex, particleMol[nIndex[i]], box);
+ 
+@@ -627,15 +433,12 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
+                   qi_qj_fact, lambdaCoulomb, box);
+             }
+           }
+-
+           tempLJEn += -forcefield.particles->CalcEn(
+               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
+         }
+       }
+ 
+-      // add new energy
+       n = cellList.EnumerateLocal(molCoords[p], box);
+-      // store atom index in neighboring cell
+       nIndex.clear();
+       while (!n.Done()) {
+         nIndex.push_back(*n);
+@@ -643,15 +446,15 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
+       }
+ 
+ #ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap)      \
++#pragma omp parallel for default(none) shared(molCoords, nIndex, overlap, boxAxes)      \
+     reduction(+ : tempREn, tempLJEn)                                           \
+     firstprivate(atom, molIndex, p, box, num::qqFact)
+ #endif
+       for (int i = 0; i < (int)nIndex.size(); i++) {
+         double distSq = 0.0;
+         XYZ virComponents;
+-        if (currentAxes.InRcut(distSq, virComponents, molCoords, p,
+-                               currentCoords, nIndex[i], box)) {
++        if (boxAxes.InRcut(distSq, virComponents, molCoords, p, currentCoords,
++                           nIndex[i], box)) {
+           double lambdaVDW =
+               GetLambdaVDW(molIndex, particleMol[nIndex[i]], box);
+ 
+@@ -671,7 +474,6 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
+                   qi_qj_fact, lambdaCoulomb, box);
+             }
+           }
+-
+           tempLJEn += forcefield.particles->CalcEn(
+               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
+         }
+@@ -685,26 +487,24 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
+   return overlap;
+ }
+ 
+-// Calculate 1-N nonbonded intra energy
+-void CalculateEnergy::ParticleNonbonded(double *inter,
+-                                        cbmc::TrialMol const &trialMol,
+-                                        XYZArray const &trialPos,
+-                                        const uint partIndex, const uint box,
+-                                        const uint trials) const {
++template <typename BoxType>
++void CalculateEnergy::ParticleNonbondedTemplate(
++    double *inter, cbmc::TrialMol const &trialMol, XYZArray const &trialPos,
++    const uint partIndex, const uint box, const uint trials,
++    const BoxType &boxAxes) const {
+   if (box >= BOXES_WITH_U_B)
+     return;
+ 
+   GOMC_EVENT_START(1, GomcProfileEvent::EN_CBMC_INTRA_NB);
+   const MoleculeKind &kind = trialMol.GetKind();
+-  // loop over all partners of the trial particle
+   const uint *partner = kind.sortedNB.Begin(partIndex);
+   const uint *end = kind.sortedNB.End(partIndex);
+   while (partner != end) {
+     if (trialMol.AtomExists(*partner)) {
+       for (uint t = 0; t < trials; ++t) {
+         double distSq;
+-        if (currentAxes.InRcut(distSq, trialPos, t, trialMol.GetCoords(),
+-                               *partner, box)) {
++        if (boxAxes.InRcut(distSq, trialPos, t, trialMol.GetCoords(), *partner,
++                           box)) {
+           inter[t] += forcefield.particles->CalcEn(
+               distSq, kind.AtomKind(partIndex), kind.AtomKind(*partner), 1.0);
+           if (electrostatic) {
+@@ -724,10 +524,13 @@ void CalculateEnergy::ParticleNonbonded(double *inter,
+   GOMC_EVENT_STOP(1, GomcProfileEvent::EN_CBMC_INTRA_NB);
+ }
+ 
+-void CalculateEnergy::ParticleInter(double *en, double *real,
+-                                    XYZArray const &trialPos, bool *overlap,
+-                                    const uint partIndex, const uint molIndex,
+-                                    const uint box, const uint trials) const {
++template <typename BoxType>
++void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
++                                            XYZArray const &trialPos,
++                                            bool *overlap, const uint partIndex,
++                                            const uint molIndex, const uint box,
++                                            const uint trials,
++                                            const BoxType &boxAxes) const {
+   if (box >= BOXES_WITH_U_NB)
+     return;
+ 
+@@ -749,14 +552,13 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
+     }
+ 
+ #ifdef _OPENMP
+-#pragma omp parallel for default(none) shared(nIndex, overlap, trialPos)       \
++#pragma omp parallel for default(none) shared(nIndex, overlap, trialPos, boxAxes)       \
+     firstprivate(kindICharge, kindI, t, box, molIndex, num::qqFact)            \
+     reduction(+ : tempLJ, tempReal)
+ #endif
+     for (int i = 0; i < (int)nIndex.size(); i++) {
+       double distSq = 0.0;
+-      if (currentAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i],
+-                             box)) {
++      if (boxAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i], box)) {
+         double lambdaVDW = GetLambdaVDW(molIndex, particleMol[nIndex[i]], box);
+ 
+         if (distSq < forcefield.rCutLowSq) {
+@@ -784,6 +586,312 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
+   GOMC_EVENT_STOP(1, GomcProfileEvent::EN_CBMC_INTER);
+ }
+ 
++// Calculate the inter energy for Box. Fractional molecule are not allowed in
++// this function. Need to implement the GPU function
++SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
++                                          XYZArray const &coords,
++                                          BoxDimensions const &boxAxes,
++                                          const uint box) {
++  // Handles reservoir box case, returning zeroed structure if
++  // interactions are off.
++  if (box >= BOXES_WITH_U_NB)
++    return potential;
++
++  GOMC_EVENT_START(1, GomcProfileEvent::EN_BOX_INTER);
++  double tempREn = 0.0, tempLJEn = 0.0;
++
++  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
++  std::vector<std::vector<int>> neighborList;
++  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
++                               cellStartIndex, mapParticleToCell);
++  neighborList = cellList.GetNeighborList(box);
++
++#ifdef GOMC_CUDA
++  // update unitcell in GPU
++  UpdateCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
++                      boxAxes.cellBasis[box].x, boxAxes.cellBasis[box].y,
++                      boxAxes.cellBasis[box].z);
++
++  if (!boxAxes.orthogonal[box]) {
++    // In this case, boxAxes is really an object of type BoxDimensionsNonOrth,
++    // so cast and copy the additional data to the GPU
++    const BoxDimensionsNonOrth *NonOrthAxes =
++        static_cast<const BoxDimensionsNonOrth *>(&boxAxes);
++    UpdateInvCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
++                           NonOrthAxes->cellBasis_Inv[box].x,
++                           NonOrthAxes->cellBasis_Inv[box].y,
++                           NonOrthAxes->cellBasis_Inv[box].z);
++  }
++
++  CallBoxInterGPU(forcefield.particles->getCUDAVars(), cellVector,
++                  cellStartIndex, neighborList, coords, boxAxes, electrostatic,
++                  particleCharge, particleKind, particleMol, tempREn, tempLJEn,
++                  forcefield.sc_coul, forcefield.sc_sigma_6,
++                  forcefield.sc_alpha, forcefield.sc_power, box);
++#else
++  // Use templated function for orthogonal and non-orthogonal boxes
++  if (boxAxes.orthogonal[box]) {
++    BoxInterTemplate<BoxDimensions>(coords, boxAxes, box, tempREn, tempLJEn,
++                                    cellVector, cellStartIndex,
++                                    mapParticleToCell, neighborList);
++  } else {
++    BoxInterTemplate<BoxDimensionsNonOrth>(
++        coords, static_cast<const BoxDimensionsNonOrth &>(boxAxes), box,
++        tempREn, tempLJEn, cellVector, cellStartIndex, mapParticleToCell,
++        neighborList);
++  }
++#endif
++
++  // setting energy and virial of LJ interaction
++  potential.boxEnergy[box].inter = tempLJEn;
++  // setting energy and virial of coulomb interaction
++  potential.boxEnergy[box].real = tempREn;
++
++  GOMC_EVENT_STOP(1, GomcProfileEvent::EN_BOX_INTER);
++  // set correction energy and virial
++  if (forcefield.useLRC) {
++    EnergyCorrection(potential, boxAxes, box);
++  }
++
++  potential.Total();
++  return potential;
++}
++
++SystemPotential
++CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
++                          XYZArray &atomForce, XYZArray &molForce,
++                          BoxDimensions const &boxAxes, const uint box) {
++  // Handles reservoir box case, returning zeroed structure if
++  // interactions are off.
++  if (box >= BOXES_WITH_U_NB)
++    return potential;
++
++  GOMC_EVENT_START(1, GomcProfileEvent::EN_BOX_FORCE);
++
++  double tempREn = 0.0, tempLJEn = 0.0;
++  // make a pointer to atom force and mol force for OpenMP
++  double *aForcex = atomForce.x;
++  double *aForcey = atomForce.y;
++  double *aForcez = atomForce.z;
++  double *mForcex = molForce.x;
++  double *mForcey = molForce.y;
++  double *mForcez = molForce.z;
++  int atomCount = atomForce.Count();
++  int molCount = molForce.Count();
++
++  // Reset Force Arrays
++  ResetForce(atomForce, molForce, box);
++
++  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
++  std::vector<std::vector<int>> neighborList;
++  cellList.GetCellListNeighbor(box, coords.Count(), cellVector, cellStartIndex,
++                               mapParticleToCell);
++  neighborList = cellList.GetNeighborList(box);
++
++#ifdef GOMC_CUDA
++  // update unitcell in GPU
++  UpdateCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
++                      boxAxes.cellBasis[box].x, boxAxes.cellBasis[box].y,
++                      boxAxes.cellBasis[box].z);
++
++  if (!boxAxes.orthogonal[box]) {
++    // In this case, boxAxes is really an object of type BoxDimensionsNonOrth,
++    // so cast and copy the additional data to the GPU
++    const BoxDimensionsNonOrth *NonOrthAxes =
++        static_cast<const BoxDimensionsNonOrth *>(&boxAxes);
++    UpdateInvCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
++                           NonOrthAxes->cellBasis_Inv[box].x,
++                           NonOrthAxes->cellBasis_Inv[box].y,
++                           NonOrthAxes->cellBasis_Inv[box].z);
++  }
++
++  CallBoxForceGPU(forcefield.particles->getCUDAVars(), cellVector,
++                  cellStartIndex, neighborList, mapParticleToCell, coords,
++                  boxAxes, electrostatic, particleCharge, particleKind,
++                  particleMol, tempREn, tempLJEn, aForcex, aForcey, aForcez,
++                  mForcex, mForcey, mForcez, atomCount, molCount,
++                  forcefield.sc_coul, forcefield.sc_sigma_6,
++                  forcefield.sc_alpha, forcefield.sc_power, box);
++
++#else
++  if (boxAxes.orthogonal[box]) {
++    BoxForceTemplate<BoxDimensions>(
++        coords, atomForce, molForce, boxAxes, box, tempREn, tempLJEn,
++        cellVector, cellStartIndex, mapParticleToCell, neighborList);
++  } else {
++    BoxForceTemplate<BoxDimensionsNonOrth>(
++        coords, atomForce, molForce,
++        static_cast<const BoxDimensionsNonOrth &>(boxAxes), box, tempREn,
++        tempLJEn, cellVector, cellStartIndex, mapParticleToCell, neighborList);
++  }
++#endif
++
++  // setting energy and virial of LJ interaction
++  potential.boxEnergy[box].inter = tempLJEn;
++  // setting energy and virial of coulomb interaction
++  potential.boxEnergy[box].real = tempREn;
++
++  GOMC_EVENT_STOP(1, GomcProfileEvent::EN_BOX_FORCE);
++  return potential;
++}
++
++// NOTE: The calculation of W12, W13, and W23 is expensive and would not be
++// required for pressure and surface tension calculation. So, they have been
++// commented out. If you need to calculate them, uncomment them.
++Virial CalculateEnergy::VirialCalc(const uint box) {
++  // store virial and energy of reference and modify the virial
++  Virial tempVir;
++  // no need to calculate the virial for reservoir
++  if (box >= BOXES_WITH_U_NB)
++    return tempVir;
++
++  GOMC_EVENT_START(1, GomcProfileEvent::EN_BOX_VIRIAL);
++
++  // tensors for VDW and real part of electrostatic
++  double vT11 = 0.0, vT12 = 0.0, vT13 = 0.0;
++  double vT22 = 0.0, vT23 = 0.0, vT33 = 0.0;
++  double rT11 = 0.0, rT12 = 0.0, rT13 = 0.0;
++  double rT22 = 0.0, rT23 = 0.0, rT33 = 0.0;
++
++  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
++  std::vector<std::vector<int>> neighborList;
++  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
++                               cellStartIndex, mapParticleToCell);
++  neighborList = cellList.GetNeighborList(box);
++
++#ifdef GOMC_CUDA
++  // update unitcell in GPU
++  UpdateCellBasisCUDA(
++      forcefield.particles->getCUDAVars(), box, currentAxes.cellBasis[box].x,
++      currentAxes.cellBasis[box].y, currentAxes.cellBasis[box].z);
++
++  if (!currentAxes.orthogonal[box]) {
++    // In this case, currentAxes is really an object of type
++    // BoxDimensionsNonOrth,
++    // so cast and copy the additional data to the GPU
++    const BoxDimensionsNonOrth *NonOrthAxes =
++        static_cast<const BoxDimensionsNonOrth *>(&currentAxes);
++    UpdateInvCellBasisCUDA(forcefield.particles->getCUDAVars(), box,
++                           NonOrthAxes->cellBasis_Inv[box].x,
++                           NonOrthAxes->cellBasis_Inv[box].y,
++                           NonOrthAxes->cellBasis_Inv[box].z);
++  }
++
++  CallBoxInterForceGPU(forcefield.particles->getCUDAVars(), cellVector,
++                       cellStartIndex, neighborList, mapParticleToCell,
++                       currentCoords, currentCOM, currentAxes, electrostatic,
++                       particleCharge, particleKind, particleMol, rT11, rT12,
++                       rT13, rT22, rT23, rT33, vT11, vT12, vT13, vT22, vT23,
++                       vT33, forcefield.sc_coul, forcefield.sc_sigma_6,
++                       forcefield.sc_alpha, forcefield.sc_power, box);
++#else
++  if (currentAxes.orthogonal[box]) {
++    VirialCalcTemplate<BoxDimensions>(currentAxes, box, vT11, vT12, vT13, vT22,
++                                      vT23, vT33, rT11, rT12, rT13, rT22, rT23,
++                                      rT33, cellVector, cellStartIndex,
++                                      mapParticleToCell, neighborList);
++  }
++
++  else {
++    VirialCalcTemplate<BoxDimensionsNonOrth>(
++        static_cast<const BoxDimensionsNonOrth &>(currentAxes), box, vT11, vT12,
++        vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22, rT23, rT33, cellVector,
++        cellStartIndex, mapParticleToCell, neighborList);
++  }
++
++#endif
++
++  // set the all tensor values
++  tempVir.interTens[0][0] = vT11;
++  tempVir.interTens[0][1] = vT12;
++  tempVir.interTens[0][2] = vT13;
++
++  tempVir.interTens[1][0] = vT12;
++  tempVir.interTens[1][1] = vT22;
++  tempVir.interTens[1][2] = vT23;
++
++  tempVir.interTens[2][0] = vT13;
++  tempVir.interTens[2][1] = vT23;
++  tempVir.interTens[2][2] = vT33;
++
++  if (electrostatic) {
++    // real part of electrostatic
++    tempVir.realTens[0][0] = rT11 * num::qqFact;
++    tempVir.realTens[0][1] = rT12 * num::qqFact;
++    tempVir.realTens[0][2] = rT13 * num::qqFact;
++
++    tempVir.realTens[1][0] = rT12 * num::qqFact;
++    tempVir.realTens[1][1] = rT22 * num::qqFact;
++    tempVir.realTens[1][2] = rT23 * num::qqFact;
++
++    tempVir.realTens[2][0] = rT13 * num::qqFact;
++    tempVir.realTens[2][1] = rT23 * num::qqFact;
++    tempVir.realTens[2][2] = rT33 * num::qqFact;
++  }
++
++  // setting virial of LJ
++  tempVir.inter = vT11 + vT22 + vT33;
++  // setting virial of coulomb
++  tempVir.real = (rT11 + rT22 + rT33) * num::qqFact;
++
++  GOMC_EVENT_STOP(1, GomcProfileEvent::EN_BOX_VIRIAL);
++
++  if (forcefield.useLRC || forcefield.useIPC) {
++    VirialCorrection(tempVir, currentAxes, box);
++  }
++
++  // calculate reciprocal term of force
++  tempVir = calcEwald->VirialReciprocal(tempVir, box);
++
++  tempVir.Total();
++  return tempVir;
++}
++
++bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
++                                    Intermolecular &inter_coulomb,
++                                    XYZArray const &molCoords,
++                                    const uint molIndex, const uint box) const {
++  if (currentAxes.orthogonal[box]) {
++    return MoleculeInterTemplate<BoxDimensions>(
++        inter_LJ, inter_coulomb, molCoords, molIndex, box, currentAxes);
++  }
++
++  else {
++    return MoleculeInterTemplate<BoxDimensionsNonOrth>(
++        inter_LJ, inter_coulomb, molCoords, molIndex, box,
++        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
++  }
++}
++
++void CalculateEnergy::ParticleNonbonded(double *inter,
++                                        cbmc::TrialMol const &trialMol,
++                                        XYZArray const &trialPos,
++                                        const uint partIndex, const uint box,
++                                        const uint trials) const {
++  if (currentAxes.orthogonal[box]) {
++    ParticleNonbondedTemplate<BoxDimensions>(
++        inter, trialMol, trialPos, partIndex, box, trials, currentAxes);
++  } else {
++    ParticleNonbondedTemplate<BoxDimensionsNonOrth>(
++        inter, trialMol, trialPos, partIndex, box, trials,
++        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
++  }
++}
++
++void CalculateEnergy::ParticleInter(double *en, double *real,
++                                    XYZArray const &trialPos, bool *overlap,
++                                    const uint partIndex, const uint molIndex,
++                                    const uint box, const uint trials) const {
++  if (currentAxes.orthogonal[box]) {
++    ParticleInterTemplate<BoxDimensions>(en, real, trialPos, overlap, partIndex,
++                                         molIndex, box, trials, currentAxes);
++  } else {
++    ParticleInterTemplate<BoxDimensionsNonOrth>(
++        en, real, trialPos, overlap, partIndex, molIndex, box, trials,
++        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
++  }
++}
++
+ // Calculates the change in the TC from adding numChange atoms of a kind
+ Intermolecular CalculateEnergy::MoleculeTailChange(const uint box,
+                                                    const uint kind,
+
+commit fa285ff70db5e355adf06903cacd4b6669cea3cd
+Author: LSchwiebert <loren@wayne.edu>
+Date:   Fri Nov 28 16:56:49 2025 -0500
+
+    Update change log and copyright notice for new release
+
+diff --git a/src/CalculateEnergy.cpp b/src/CalculateEnergy.cpp
+index b6307271..d10a288a 100644
+--- a/src/CalculateEnergy.cpp
++++ b/src/CalculateEnergy.cpp
+@@ -1,10 +1,8 @@
+-/*******************************************************************************
+-GPU OPTIMIZED MONTE CARLO (GOMC) 2.75
+-Copyright (C) 2022 GOMC Group
+-A copy of the MIT License can be found in License.txt
+-along with this program, also can be found at
++/******************************************************************************
++GPU OPTIMIZED MONTE CARLO (GOMC) Copyright (C) GOMC Group
++A copy of the MIT License can be found in License.txt with this program or at
+ <https://opensource.org/licenses/MIT>.
+-********************************************************************************/
++******************************************************************************/
+ #include "CalculateEnergy.h" //header for this
+ 
+ #include <cassert>
