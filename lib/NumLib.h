@@ -365,12 +365,27 @@ inline double erfc_cody(double x) {
       3.9486954827591489e-13,
       -7.2263214406337637e-15,
   };
-  double p = c[25];
-  p = p * x + c[24]; p = p * x + c[23]; p = p * x + c[22]; p = p * x + c[21]; p = p * x + c[20];
-  p = p * x + c[19]; p = p * x + c[18]; p = p * x + c[17]; p = p * x + c[16]; p = p * x + c[15];
-  p = p * x + c[14]; p = p * x + c[13]; p = p * x + c[12]; p = p * x + c[11]; p = p * x + c[10];
-  p = p * x + c[9];  p = p * x + c[8];  p = p * x + c[7];  p = p * x + c[6];  p = p * x + c[5];
-  p = p * x + c[4];  p = p * x + c[3];  p = p * x + c[2];  p = p * x + c[1];  p = p * x + c[0];
+  double x2 = x * x;
+  double x3 = x2 * x;
+  double x4 = x2 * x2;
+  double x8 = x4 * x4;
+  double x16 = x8 * x8;
+
+  double p0_3   = c[0] + x * c[1] + x2 * c[2] + x3 * c[3];
+  double p4_7   = c[4] + x * c[5] + x2 * c[6] + x3 * c[7];
+  double p8_11  = c[8] + x * c[9] + x2 * c[10] + x3 * c[11];
+  double p12_15 = c[12] + x * c[13] + x2 * c[14] + x3 * c[15];
+  double p16_19 = c[16] + x * c[17] + x2 * c[18] + x3 * c[19];
+  double p20_23 = c[20] + x * c[21] + x2 * c[22] + x3 * c[23];
+  double p24_25 = c[24] + x * c[25];
+
+  double p0_7   = p0_3 + x4 * p4_7;
+  double p8_15  = p8_11 + x4 * p12_15;
+  double p16_25 = p16_19 + x4 * p20_23 + x8 * p24_25;
+
+  double p0_15  = p0_7 + x8 * p8_15;
+  double p      = p0_15 + x16 * p16_25;
+
   return p * std::exp(-x * x);
 }
 
