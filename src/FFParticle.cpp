@@ -467,7 +467,7 @@ inline double FFParticle::CalcCoulomb(const double distSq,
   if (forcefield.ewald) {
     double dist = sqrt(distSq);
     double val = forcefield.alpha[b] * dist;
-    return qi_qj_Fact * erfc(val) / dist;
+    return qi_qj_Fact * num::erfc_cody(val) / dist;
   } else {
     double dist = sqrt(distSq);
     return qi_qj_Fact / dist;
@@ -512,7 +512,7 @@ inline double FFParticle::CalcCoulombVir(const double distSq,
     // M_2_SQRTPI is 2/sqrt(PI)
     double constValue = forcefield.alpha[b] * M_2_SQRTPI;
     double expConstValue = exp(-1.0 * forcefield.alphaSq[b] * distSq);
-    double temp = 1.0 - erf(forcefield.alpha[b] * dist);
+    double temp = num::erfc_cody(forcefield.alpha[b] * dist);
     return qi_qj * (temp / dist + constValue * expConstValue) / distSq;
   } else {
     double dist = sqrt(distSq);

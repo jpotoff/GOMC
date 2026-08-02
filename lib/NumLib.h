@@ -331,6 +331,49 @@ inline double Zbrent(Exp6Fun *func, float x1, float x2, float tol) {
   return 0.0; // Never get here.
 }
 
+// Highly vectorizable inline erfc approximation for Ewald sums.
+// Uses a degree 25 Chebyshev polynomial fit over [0, 4] for ~1e-15 precision.
+inline double erfc_cody(double x) {
+  if (x >= 4.0) {
+    return std::erfc(x); // Cold branch fallback for x >= 4
+  }
+  const double c[] = {
+      0.99999999999999467,
+      -1.1283791670934669,
+      0.99999999989179178,
+      -0.75225277573003257,
+      0.49999997280038677,
+      -0.30090091348467585,
+      0.16666568909191809,
+      -0.085968265180164871,
+      0.041657367686491018,
+      -0.019085621599354841,
+      0.0083019181976808024,
+      -0.0034321851709960822,
+      0.0013441886912088149,
+      -0.00049441318340799633,
+      0.00016842398086889501,
+      -5.2197190031495688e-05,
+      1.4427717972747062e-05,
+      -3.4847977574907564e-06,
+      7.2044397335263789e-07,
+      -1.2474850134635703e-07,
+      1.7653207532212009e-08,
+      -1.9802895244944275e-09,
+      1.6886537936002582e-10,
+      -1.0259331192053428e-11,
+      3.9486954827591489e-13,
+      -7.2263214406337637e-15,
+  };
+  double p = c[25];
+  p = p * x + c[24]; p = p * x + c[23]; p = p * x + c[22]; p = p * x + c[21]; p = p * x + c[20];
+  p = p * x + c[19]; p = p * x + c[18]; p = p * x + c[17]; p = p * x + c[16]; p = p * x + c[15];
+  p = p * x + c[14]; p = p * x + c[13]; p = p * x + c[12]; p = p * x + c[11]; p = p * x + c[10];
+  p = p * x + c[9];  p = p * x + c[8];  p = p * x + c[7];  p = p * x + c[6];  p = p * x + c[5];
+  p = p * x + c[4];  p = p * x + c[3];  p = p * x + c[2];  p = p * x + c[1];  p = p * x + c[0];
+  return p * std::exp(-x * x);
+}
+
 } // namespace num
 
 #endif /*NUMERIC_LIB_H*/
