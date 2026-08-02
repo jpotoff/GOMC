@@ -14,7 +14,8 @@ FFParticle::FFParticle(Forcefield &ff)
     : forcefield(ff), mass(NULL), nameFirst(NULL), nameSec(NULL), n(NULL),
       n_1_4(NULL), sigmaSq(NULL), sigmaSq_1_4(NULL), epsilon(NULL),
       epsilon_1_4(NULL), epsilon_cn(NULL), epsilon_cn_1_4(NULL),
-      epsilon_cn_6(NULL), epsilon_cn_6_1_4(NULL), nOver6(NULL), nOver6_1_4(NULL)
+      epsilon_cn_6(NULL), epsilon_cn_6_1_4(NULL), nOver6(NULL), nOver6_1_4(NULL),
+      nHalf(NULL), nHalf_1_4(NULL)
 #ifdef GOMC_CUDA
       ,
       varCUDA(NULL)
@@ -42,6 +43,8 @@ FFParticle::~FFParticle(void) {
   delete[] epsilon_cn_1_4;
   delete[] epsilon_cn_6_1_4;
   delete[] nOver6_1_4;
+  delete[] nHalf;
+  delete[] nHalf_1_4;
 
 #ifdef GOMC_CUDA
   DestroyCUDAVars(varCUDA);
@@ -76,6 +79,9 @@ void FFParticle::Init(ff_setup::Particle const &mie,
   epsilon_cn_6_1_4 = new double[size];
   nOver6_1_4 = new double[size];
   sigmaSq_1_4 = new double[size];
+
+  nHalf = new uint[size];
+  nHalf_1_4 = new uint[size];
 
   // Combining VDW parameter
   Blend(mie);
@@ -196,6 +202,20 @@ void FFParticle::Blend(ff_setup::Particle const &mie) {
       epsilon_cn_6_1_4[idx] = epsilon_cn_1_4[idx] * 6;
       nOver6[idx] = n[idx] / 6;
       nOver6_1_4[idx] = n_1_4[idx] / 6;
+
+      uint n_int = (uint)n[idx];
+      if (n[idx] == (double)n_int && n_int >= 7 && n_int <= 50) {
+        nHalf[idx] = n_int / 2;
+      } else {
+        nHalf[idx] = 0xFFFFFFFF;
+      }
+
+      uint n_int_1_4 = (uint)n_1_4[idx];
+      if (n_1_4[idx] == (double)n_int_1_4 && n_int_1_4 >= 7 && n_int_1_4 <= 50) {
+        nHalf_1_4[idx] = n_int_1_4 / 2;
+      } else {
+        nHalf_1_4[idx] = 0xFFFFFFFF;
+      }
     }
   }
 }
@@ -221,6 +241,20 @@ void FFParticle::AdjNBfix(ff_setup::NBfix const &nbfix) {
         epsilon_cn_6_1_4[j] = epsilon_cn_1_4[j] * 6;
         nOver6[j] = n[j] / 6;
         nOver6_1_4[j] = n_1_4[j] / 6;
+
+        uint n_int = (uint)n[j];
+        if (n[j] == (double)n_int && n_int >= 7 && n_int <= 50) {
+          nHalf[j] = n_int / 2;
+        } else {
+          nHalf[j] = 0xFFFFFFFF;
+        }
+
+        uint n_int_1_4 = (uint)n_1_4[j];
+        if (n_1_4[j] == (double)n_int_1_4 && n_int_1_4 >= 7 && n_int_1_4 <= 50) {
+          nHalf_1_4[j] = n_int_1_4 / 2;
+        } else {
+          nHalf_1_4[j] = 0xFFFFFFFF;
+        }
       }
     }
   }
@@ -272,8 +306,23 @@ inline void FFParticle::CalcAdd_1_4(double &en, const double distSq,
 
   uint index = FlatIndex(kind1, kind2);
   double rRat2 = sigmaSq_1_4[index] / distSq;
-  double attract = rRat2 * rRat2 * rRat2;
-  double repulse = pow(sqrt(rRat2), n_1_4[index]);
+  double rRat4 = rRat2 * rRat2;
+  double attract = rRat4 * rRat2;
+  
+  double repulse;
+  uint nh = nHalf_1_4[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n_1_4[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n_1_4[index] * 0.5);
+  }
 
   en += epsilon_cn_1_4[index] * (repulse - attract);
 }
@@ -318,8 +367,21 @@ inline double FFParticle::CalcEn(const double distSq, const uint index) const {
   double rRat2 = sigmaSq[index] / distSq;
   double rRat4 = rRat2 * rRat2;
   double attract = rRat4 * rRat2;
-  double n_ij = n[index];
-  double repulse = pow(rRat2, (n_ij * 0.5));
+  
+  double repulse;
+  uint nh = nHalf[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n[index] * 0.5);
+  }
 
   return (epsilon_cn[index] * (repulse - attract));
 }
@@ -352,8 +414,22 @@ inline double FFParticle::CalcVir(const double distSq, const uint index) const {
   double rRat2 = rNeg2 * sigmaSq[index];
   double rRat4 = rRat2 * rRat2;
   double attract = rRat4 * rRat2;
-  double n_ij = n[index];
-  double repulse = pow(rRat2, (n_ij * 0.5));
+  
+  double repulse;
+  uint nh = nHalf[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n[index] * 0.5);
+  }
+  
   // Virial is F.r = -dE/dr * 1/r
   return epsilon_cn_6[index] * (nOver6[index] * repulse - attract) * rNeg2;
 }

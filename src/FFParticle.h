@@ -125,6 +125,7 @@ protected:
   // For LJ eps_cn(en) --> 4eps, eps_cn_6 --> 24eps, eps_cn_n --> 48eps
   double *sigmaSq, *sigmaSq_1_4, *epsilon, *epsilon_1_4, *epsilon_cn,
       *epsilon_cn_1_4, *epsilon_cn_6, *epsilon_cn_6_1_4, *nOver6, *nOver6_1_4;
+  uint *nHalf, *nHalf_1_4;
 #ifdef GOMC_CUDA
   VariablesCUDA *varCUDA;
 #endif

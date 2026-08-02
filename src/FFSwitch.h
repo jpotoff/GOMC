@@ -115,8 +115,23 @@ inline void FF_SWITCH::CalcAdd_1_4(double &en, const double distSq,
   double rCutSq_rijSq_Sq = rCutSq_rijSq * rCutSq_rijSq;
 
   double rRat2 = sigmaSq_1_4[index] / distSq;
-  double attract = rRat2 * rRat2 * rRat2;
-  double repulse = pow(sqrt(rRat2), n_1_4[index]);
+  double rRat4 = rRat2 * rRat2;
+  double attract = rRat4 * rRat2;
+
+  double repulse;
+  uint nh = nHalf_1_4[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n_1_4[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n_1_4[index] * 0.5);
+  }
 
   double fE = rCutSq_rijSq_Sq * factor2 * (factor1 + 2.0 * distSq);
 
@@ -164,8 +179,23 @@ inline double FF_SWITCH::CalcEn(const double distSq, const uint index) const {
   double rCutSq_rijSq = forcefield.rCutSq - distSq;
   double rCutSq_rijSq_Sq = rCutSq_rijSq * rCutSq_rijSq;
   double rRat2 = sigmaSq[index] / distSq;
-  double attract = rRat2 * rRat2 * rRat2;
-  double repulse = pow(rRat2, (n[index] * 0.5));
+  double rRat4 = rRat2 * rRat2;
+  double attract = rRat4 * rRat2;
+  
+  double repulse;
+  uint nh = nHalf[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n[index] * 0.5);
+  }
 
   double fE = rCutSq_rijSq_Sq * factor2 * (factor1 + 2.0 * distSq);
   const double factE = (distSq > rOnSq ? fE : 1.0);
@@ -202,8 +232,23 @@ inline double FF_SWITCH::CalcVir(const double distSq, const uint index) const {
 
   double rNeg2 = 1.0 / distSq;
   double rRat2 = rNeg2 * sigmaSq[index];
-  double attract = rRat2 * rRat2 * rRat2;
-  double repulse = pow(rRat2, (n[index] * 0.5));
+  double rRat4 = rRat2 * rRat2;
+  double attract = rRat4 * rRat2;
+  
+  double repulse;
+  uint nh = nHalf[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n[index] * 0.5);
+  }
 
   double fE = rCutSq_rijSq_Sq * factor2 * (factor1 + 2.0 * distSq);
   double fW = 12.0 * factor2 * rCutSq_rijSq * (rOnSq - distSq);

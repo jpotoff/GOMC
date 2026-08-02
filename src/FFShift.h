@@ -123,8 +123,23 @@ inline void FF_SHIFT::CalcAdd_1_4(double &en, const double distSq,
 
   uint index = FlatIndex(kind1, kind2);
   double rRat2 = sigmaSq_1_4[index] / distSq;
-  double attract = rRat2 * rRat2 * rRat2;
-  double repulse = pow(sqrt(rRat2), n_1_4[index]);
+  double rRat4 = rRat2 * rRat2;
+  double attract = rRat4 * rRat2;
+  
+  double repulse;
+  uint nh = nHalf_1_4[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n_1_4[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n_1_4[index] * 0.5);
+  }
 
   en += (epsilon_cn_1_4[index] * (repulse - attract) - shiftConst_1_4[index]);
 }
@@ -168,8 +183,21 @@ inline double FF_SHIFT::CalcEn(const double distSq, const uint index) const {
   double rRat2 = sigmaSq[index] / distSq;
   double rRat4 = rRat2 * rRat2;
   double attract = rRat4 * rRat2;
-  double n_ij = n[index];
-  double repulse = pow(rRat2, (n_ij * 0.5));
+  
+  double repulse;
+  uint nh = nHalf[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n[index] * 0.5);
+  }
 
   return (epsilon_cn[index] * (repulse - attract) - shiftConst[index]);
 }
@@ -202,8 +230,21 @@ inline double FF_SHIFT::CalcVir(const double distSq, const uint index) const {
   double rRat2 = rNeg2 * sigmaSq[index];
   double rRat4 = rRat2 * rRat2;
   double attract = rRat4 * rRat2;
-  double n_ij = n[index];
-  double repulse = pow(rRat2, (n_ij * 0.5));
+  
+  double repulse;
+  uint nh = nHalf[index];
+  if (nh == 6) {
+    repulse = attract * attract;
+  } else if (nh != 0xFFFFFFFF) {
+    double rRat6 = attract;
+    repulse = num::POW(rRat2, rRat4, rRat6, nh);
+    uint n_int = (uint)n[index];
+    if (n_int & 1) {
+      repulse *= sqrt(rRat2);
+    }
+  } else {
+    repulse = pow(rRat2, n[index] * 0.5);
+  }
 
   // Virial is the derivative of the pressure... mu
   return epsilon_cn_6[index] * (nOver6[index] * repulse - attract) * rNeg2;
