@@ -42,60 +42,60 @@ void BlockAverage::Init(std::ofstream *file0, std::ofstream *file1,
 }
 
 void BlockAverage::Sum(void) {
+  // This block is for tracking integer values.
   if (enable && uintSrc[0] != NULL) {
     for (uint b = 0; b < tot; ++b) {
-      // We use a pointer because you can't pass
-      // references in the constructor since
-      // initializing an array of objects
-      // requires the default constructor.
-      // This could be fixed by using vectors..
-      if (*first)
-        block[b] += (double)(*uintSrc[b]) * fp_scl;
-      else
-        block[b] += (double)(*uintSrc[b]) * scl;
+      // Accumulate raw unscaled values so we can calculate the true average
+      // later
+      block[b] += (double)(*uintSrc[b]);
     }
+    // Track the exact number of samples observed in the current block
+    samples++;
+    // This block is for tracking double values.
   } else if (enable) {
     for (uint b = 0; b < tot; ++b) {
-      // We use a pointer because you can't pass
-      // references in the constructor since
-      // initializing an array of objects
-      // requires the default constructor.
-      // This could be fixed by using vectors..
-      if (*first)
-        block[b] += *dblSrc[b] * fp_scl;
-      else
-        block[b] += *dblSrc[b] * scl;
+      // Accumulate raw unscaled values so we can calculate the true average
+      // later
+      block[b] += *dblSrc[b];
     }
+    // Track the exact number of samples observed in the current block
+    samples++;
   }
 }
 
 void BlockAverage::DoWrite(uint precision) {
+  // Calculate the average using the actual number of samples in the block.
+  // This properly accounts for the final block in the simulation, which may
+  // be truncated and contain fewer samples than a full block.
+  double divisor = (samples > 0) ? (double)samples : 1.0;
   if (tot >= 1) {
     if (outBlock0->is_open()) {
-      if (std::abs(block[0]) > 1e99) {
+      double val = block[0] / divisor;
+      if (std::abs(val) > 1e99) {
         (*outBlock0) << std::right << std::scientific
                      << std::setprecision(precision - 1)
                      << std::setw(OUTPUTWIDTH);
-        (*outBlock0) << block[0];
+        (*outBlock0) << val;
       } else {
         (*outBlock0) << std::right << std::scientific
                      << std::setprecision(precision) << std::setw(OUTPUTWIDTH);
-        (*outBlock0) << block[0];
+        (*outBlock0) << val;
       }
     } else
       std::cerr << "Unable to write to Box_0 output file" << std::endl;
   }
   if (tot >= 2) {
     if (outBlock1->is_open()) {
-      if (std::abs(block[0]) > 1e99) {
+      double val = block[1] / divisor;
+      if (std::abs(val) > 1e99) {
         (*outBlock1) << std::right << std::scientific
                      << std::setprecision(precision - 1)
                      << std::setw(OUTPUTWIDTH);
-        (*outBlock1) << block[1];
+        (*outBlock1) << val;
       } else {
         (*outBlock1) << std::right << std::scientific
                      << std::setprecision(precision) << std::setw(OUTPUTWIDTH);
-        (*outBlock1) << block[1];
+        (*outBlock1) << val;
       }
     } else
       std::cerr << "Unable to write to Box_1 output file" << std::endl;
