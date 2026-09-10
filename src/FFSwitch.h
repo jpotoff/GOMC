@@ -295,7 +295,7 @@ inline double FF_SWITCH::CalcCoulomb(const double distSq,
   if (forcefield.ewald) {
     double dist = sqrt(distSq);
     double val = forcefield.alpha[b] * dist;
-    return qi_qj_Fact * num::erfc_cody(val) / dist;
+    return qi_qj_Fact * std::erfc(val) / dist;
   } else {
     double dist = sqrt(distSq);
     double switchVal = distSq / forcefield.rCutSq - 1.0;
@@ -341,7 +341,7 @@ inline double FF_SWITCH::CalcCoulombVir(const double distSq, const double qi_qj,
     // M_2_SQRTPI is 2/sqrt(PI)
     double constValue = forcefield.alpha[b] * M_2_SQRTPI;
     double expConstValue = exp(-1.0 * forcefield.alphaSq[b] * distSq);
-    double temp = num::erfc_cody(forcefield.alpha[b] * dist);
+    double temp = std::erfc(forcefield.alpha[b] * dist);
     return qi_qj * (temp / dist + constValue * expConstValue) / distSq;
   } else {
     double dist = sqrt(distSq);

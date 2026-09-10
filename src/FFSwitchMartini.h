@@ -426,7 +426,7 @@ inline double FF_SWITCH_MARTINI::CalcCoulomb(const double distSq,
   if (forcefield.ewald) {
     double dist = sqrt(distSq);
     double val = forcefield.alpha[b] * dist;
-    return qi_qj_Fact * num::erfc_cody(val) / dist;
+    return qi_qj_Fact * std::erfc(val) / dist;
   } else {
     // in Martini, the Coulomb switching distance is zero, so we will have
     // sqrt(distSq) - rOnCoul =  sqrt(distSq)
@@ -477,7 +477,7 @@ inline double FF_SWITCH_MARTINI::CalcCoulombVir(const double distSq,
     // M_2_SQRTPI is 2/sqrt(PI)
     double constValue = forcefield.alpha[b] * M_2_SQRTPI;
     double expConstValue = exp(-1.0 * forcefield.alphaSq[b] * distSq);
-    double temp = num::erfc_cody(forcefield.alpha[b] * dist);
+    double temp = std::erfc(forcefield.alpha[b] * dist);
     return qi_qj * (temp / dist + constValue * expConstValue) / distSq;
   } else {
     // in Martini, the Coulomb switching distance is zero, so we will have
