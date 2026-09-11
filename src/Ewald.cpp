@@ -759,20 +759,22 @@ double Ewald::MolReciprocal(XYZArray const &molCoords, const uint molIndex,
         sumImaginaryOld += charges[j] * sOld;
       }
 
-      sumRnew[box][i] =
-          sumRref[box][i] + (sumRealNew - sumRealOld);
-      sumInew[box][i] =
-          sumIref[box][i] + (sumImaginaryNew - sumImaginaryOld);
+      double deltaR = sumRealNew - sumRealOld;
+      double deltaI = sumImaginaryNew - sumImaginaryOld;
 
-      energyRecipNew += (sumRnew[box][i] * sumRnew[box][i] +
-                         sumInew[box][i] * sumInew[box][i]) *
+      sumRnew[box][i] = sumRref[box][i] + deltaR;
+      sumInew[box][i] = sumIref[box][i] + deltaI;
+
+      energyRecipNew += (deltaR * (2.0 * sumRref[box][i] + deltaR) +
+                         deltaI * (2.0 * sumIref[box][i] + deltaI)) *
                         prefactRef[box][i];
     }
 #endif
-    energyRecipOld = sysPotRef.boxEnergy[box].recip;
+    // energyRecipOld is not needed for the analytical difference, 
+    // but the GOMC_EVENT_STOP remains.
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_MOL_ENERGY);
   }
-  return energyRecipNew - energyRecipOld;
+  return energyRecipNew;
 }
 
 // calculate reciprocal term in destination box for swap move
@@ -865,19 +867,21 @@ double Ewald::SwapDestRecip(const cbmc::TrialMol &newMol, const uint box,
         sumImaginaryNew += charges[j] * sNew;
       }
 
-      sumRnew[box][i] = sumRref[box][i] + sumRealNew;
-      sumInew[box][i] = sumIref[box][i] + sumImaginaryNew;
+      double deltaR = sumRealNew;
+      double deltaI = sumImaginaryNew;
 
-      energyRecipNew += (sumRnew[box][i] * sumRnew[box][i] +
-                         sumInew[box][i] * sumInew[box][i]) *
+      sumRnew[box][i] = sumRref[box][i] + deltaR;
+      sumInew[box][i] = sumIref[box][i] + deltaI;
+
+      energyRecipNew += (deltaR * (2.0 * sumRref[box][i] + deltaR) +
+                         deltaI * (2.0 * sumIref[box][i] + deltaI)) *
                         prefactRef[box][i];
     }
 #endif
-    energyRecipOld = sysPotRef.boxEnergy[box].recip;
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_SWAP_ENERGY);
   }
 
-  return energyRecipNew - energyRecipOld;
+  return energyRecipNew;
 }
 
 // calculate reciprocal term for lambdaNew and Old with same coordinates
@@ -968,21 +972,23 @@ double Ewald::ChangeLambdaRecip(XYZArray const &molCoords,
         sumImaginaryNew += charges[j] * sNew;
       }
 
-      // sumRealNew;
-      sumRnew[box][i] = sumRref[box][i] + lambdaCoef * sumRealNew;
-      // sumImaginaryNew;
-      sumInew[box][i] = sumIref[box][i] + lambdaCoef * sumImaginaryNew;
+      double deltaR = lambdaCoef * sumRealNew;
+      double deltaI = lambdaCoef * sumImaginaryNew;
 
-      energyRecipNew += (sumRnew[box][i] * sumRnew[box][i] +
-                         sumInew[box][i] * sumInew[box][i]) *
+      // sumRealNew;
+      sumRnew[box][i] = sumRref[box][i] + deltaR;
+      // sumImaginaryNew;
+      sumInew[box][i] = sumIref[box][i] + deltaI;
+
+      energyRecipNew += (deltaR * (2.0 * sumRref[box][i] + deltaR) +
+                         deltaI * (2.0 * sumIref[box][i] + deltaI)) *
                         prefactRef[box][i];
     }
 #endif
-    energyRecipOld = sysPotRef.boxEnergy[box].recip;
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_NEMTMC_ENERGY);
   }
 
-  return energyRecipNew - energyRecipOld;
+  return energyRecipNew;
 }
 
 // calculate reciprocal term for lambdaNew and Old with same coordinates
@@ -1184,18 +1190,20 @@ double Ewald::SwapSourceRecip(const cbmc::TrialMol &oldMol, const uint box,
         sumImaginaryNew += charges[j] * sNew;
       }
 
-      sumRnew[box][i] = sumRref[box][i] - sumRealNew;
-      sumInew[box][i] = sumIref[box][i] - sumImaginaryNew;
+      double deltaR = -sumRealNew;
+      double deltaI = -sumImaginaryNew;
 
-      energyRecipNew += (sumRnew[box][i] * sumRnew[box][i] +
-                         sumInew[box][i] * sumInew[box][i]) *
+      sumRnew[box][i] = sumRref[box][i] + deltaR;
+      sumInew[box][i] = sumIref[box][i] + deltaI;
+
+      energyRecipNew += (deltaR * (2.0 * sumRref[box][i] + deltaR) +
+                         deltaI * (2.0 * sumIref[box][i] + deltaI)) *
                         prefactRef[box][i];
     }
 #endif
-    energyRecipOld = sysPotRef.boxEnergy[box].recip;
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_SWAP_ENERGY);
   }
-  return energyRecipNew - energyRecipOld;
+  return energyRecipNew;
 }
 
 // calculate reciprocal term for inserting some molecules (kindA) in destination
@@ -1342,20 +1350,22 @@ double Ewald::MolExchangeReciprocal(const std::vector<cbmc::TrialMol> &newMol,
       if (first_call) {
         sumRnew[box][i] = sumRref[box][i] + sumRealNew;
         sumInew[box][i] = sumIref[box][i] + sumImaginaryNew;
+
+        energyRecipNew += (sumRealNew * (2.0 * sumRref[box][i] + sumRealNew) +
+                           sumImaginaryNew * (2.0 * sumIref[box][i] + sumImaginaryNew)) *
+                          prefactRef[box][i];
       } else {
+        double oldR = sumRnew[box][i];
+        double oldI = sumInew[box][i];
         sumRnew[box][i] += sumRealNew;
         sumInew[box][i] += sumImaginaryNew;
-      }
 
-      // Calculate new energy recip based on the new sum real and imaginary
-      // values
-      energyRecipNew += (sumRnew[box][i] * sumRnew[box][i] +
-                         sumInew[box][i] * sumInew[box][i]) *
-                        prefactRef[box][i];
+        energyRecipNew += (sumRealNew * (2.0 * oldR + sumRealNew) +
+                           sumImaginaryNew * (2.0 * oldI + sumImaginaryNew)) *
+                          prefactRef[box][i];
+      }
     }
 
-    // Keep hold of the old recip value
-    energyRecipOld = sysPotRef.boxEnergy[box].recip;
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_MEMC_ENERGY);
   }
 
@@ -1370,7 +1380,7 @@ double Ewald::MolExchangeReciprocal(const std::vector<cbmc::TrialMol> &newMol,
 #endif
 
   // Return the difference between old and new reciprocal energies
-  return energyRecipNew - energyRecipOld;
+  return energyRecipNew;
 }
 
 // restore cosMol and sinMol
