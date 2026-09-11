@@ -473,22 +473,28 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     std::memset(sumInew[box], 0.0, sizeof(double) * imageSizeRef[box]);
 #endif
     // 1. Flatten the molecules into a contiguous list of charges and
-    // coordinates
+    // coordinates. We also track the number of charged atoms per molecule
+    // (molLengths) so that we can accumulate structure factors on a per-molecule
+    // basis later, avoiding catastrophic cancellation issues.
     std::vector<XYZ> flatCoords;
     std::vector<double> flatCharges;
+    std::vector<uint> molLengths;
 
     thisMol = molLookup.BoxBegin(box);
     while (thisMol != end) {
       MoleculeKind const &thisKind = mols.GetKind(*thisMol);
       double lambdaCoef = GetLambdaCoef(*thisMol, box);
       uint start = mols.MolStart(*thisMol);
+      uint mol_len = 0;
       for (uint j = 0; j < thisKind.NumAtoms(); j++) {
         unsigned long currentAtom = start + j;
         if (!particleHasNoCharge[currentAtom]) {
           flatCoords.push_back(molCoords.Get(currentAtom));
           flatCharges.push_back(thisKind.AtomCharge(j) * lambdaCoef);
+          mol_len++;
         }
       }
+      if (mol_len > 0) molLengths.push_back(mol_len);
       thisMol++;
     }
     int numFlatAtoms = flatCoords.size();
@@ -512,7 +518,7 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
 #pragma omp parallel for default(none)                                         \
     shared(box, flatCharges, numFlatAtoms, kmax_val, kx_indRef, ky_indRef,     \
                kz_indRef, sumRnew, sumInew, imageSizeRef, cos_x, sin_x, cos_y, \
-               sin_y, cos_z, sin_z)
+               sin_y, cos_z, sin_z, molLengths)
 #endif
     for (int i = 0; i < (int)imageSizeRef[box]; i++) {
       double totalReal = 0.0;
@@ -529,23 +535,37 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
       int ny_offset = ny * numFlatAtoms;
       int nz_offset = nz * numFlatAtoms;
 
-#pragma omp simd reduction(+ : totalReal, totalImaginary)
-      for (int j = 0; j < numFlatAtoms; j++) {
-        double cx = cos_x[nx_offset + j];
-        double sx = sin_x[nx_offset + j] * sign_x;
-        double cy = cos_y[ny_offset + j];
-        double sy = sin_y[ny_offset + j] * sign_y;
-        double cz = cos_z[nz_offset + j];
-        double sz = sin_z[nz_offset + j] * sign_z;
+      // Accumulate structure factors molecule-by-molecule to prevent catastrophic
+      // cancellation. Grouping by neutral molecules keeps the partial sums small
+      // and preserves double precision when adding to the global sum.
+      int numMolecules = molLengths.size();
+      int atomIdx = 0;
+      for (int m = 0; m < numMolecules; m++) {
+        double molReal = 0.0;
+        double molImaginary = 0.0;
+        int len = molLengths[m];
+        
+        for (int k = 0; k < len; k++) {
+          int j = atomIdx + k;
+          double cx = cos_x[nx_offset + j];
+          double sx = sin_x[nx_offset + j] * sign_x;
+          double cy = cos_y[ny_offset + j];
+          double sy = sin_y[ny_offset + j] * sign_y;
+          double cz = cos_z[nz_offset + j];
+          double sz = sin_z[nz_offset + j] * sign_z;
 
-        double cxy = cx * cy - sx * sy;
-        double sxy = sx * cy + cx * sy;
+          double cxy = cx * cy - sx * sy;
+          double sxy = sx * cy + cx * sy;
 
-        double c = cxy * cz - sxy * sz;
-        double s = sxy * cz + cxy * sz;
+          double c = cxy * cz - sxy * sz;
+          double s = sxy * cz + cxy * sz;
 
-        totalReal += flatCharges[j] * c;
-        totalImaginary += flatCharges[j] * s;
+          molReal += flatCharges[j] * c;
+          molImaginary += flatCharges[j] * s;
+        }
+        totalReal += molReal;
+        totalImaginary += molImaginary;
+        atomIdx += len;
       }
       sumRnew[box][i] = totalReal;
       sumInew[box][i] = totalImaginary;
