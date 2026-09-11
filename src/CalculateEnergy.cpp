@@ -162,8 +162,10 @@ void CalculateEnergy::BoxInterTemplate(
 
   const bool hasFraction = lambdaRef.HasFraction(box);
   const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
-  const double fracVDW = hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
-  const double fracCoul = hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+  const double fracVDW =
+      hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+  const double fracCoul =
+      hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) schedule(static, 16)                    \
@@ -198,7 +200,7 @@ void CalculateEnergy::BoxInterTemplate(
           XYZ virComponents;
           if (boxAxes.InRcut(distSq, virComponents, coords, currParticle,
                              nParticle, box)) {
-            
+
             double lambdaVDW = 1.0;
             double lambdaCoulomb = 1.0;
             if (hasFraction) {
@@ -246,14 +248,17 @@ void CalculateEnergy::BoxForceTemplate(
 
   const bool hasFraction = lambdaRef.HasFraction(box);
   const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
-  const double fracVDW = hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
-  const double fracCoul = hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+  const double fracVDW =
+      hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+  const double fracCoul =
+      hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) schedule(static, 16)                    \
     shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
                neighborList)                                                   \
-    firstprivate(box, atomCount, molCount, num::qqFact, hasFraction, fracMol, fracVDW, fracCoul) \
+    firstprivate(box, atomCount, molCount, num::qqFact, hasFraction, fracMol,  \
+                     fracVDW, fracCoul)                                        \
     reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
                   aForcey[ : atomCount], aForcez[ : atomCount],                \
                   mForcex[ : molCount], mForcey[ : molCount],                  \
@@ -280,7 +285,7 @@ void CalculateEnergy::BoxForceTemplate(
           XYZ virComponents, forceLJ, forceReal;
           if (boxAxes.InRcut(distSq, virComponents, coords, currParticle,
                              nParticle, box)) {
-            
+
             double lambdaVDW = 1.0;
             double lambdaCoulomb = 1.0;
             if (hasFraction) {
@@ -341,14 +346,17 @@ void CalculateEnergy::VirialCalcTemplate(
 
   const bool hasFraction = lambdaRef.HasFraction(box);
   const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
-  const double fracVDW = hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
-  const double fracCoul = hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+  const double fracVDW =
+      hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+  const double fracCoul =
+      hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) schedule(static, 16) shared(            \
         cellStartIndex, cellVector, mapParticleToCell, neighborList, boxAxes)  \
-    firstprivate(box, hasFraction, fracMol, fracVDW, fracCoul) reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11,  \
-                                    rT12, rT13, rT22, rT23, rT33)
+    firstprivate(box, hasFraction, fracMol, fracVDW, fracCoul)                 \
+    reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22,  \
+                  rT23, rT33)
 #endif
   for (int currParticleIdx = 0; currParticleIdx < (int)cellVector.size();
        currParticleIdx++) {
@@ -376,7 +384,7 @@ void CalculateEnergy::VirialCalcTemplate(
             XYZ comC = currentCOM.Difference(currMol, nMol);
             // calculate the minimum image between com of two molecules
             comC = boxAxes.BoxType::MinImage(comC, box);
-            
+
             double lambdaVDW = 1.0;
             double lambdaCoulomb = 1.0;
             if (hasFraction) {
@@ -431,15 +439,20 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
     GOMC_EVENT_START(1, GomcProfileEvent::EN_MOL_INTER);
     uint length = mols.GetKind(molIndex).NumAtoms();
     uint start = mols.MolStart(molIndex);
-
+    // Check to see if we have a fract  ional molecule in the box outside
+    // and identify it outside of the main energy loop.
+    // we do this lookup once instead of each time through the loop.
     const bool hasFraction = lambdaRef.HasFraction(box);
     const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
-    const double fracVDW = hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
-    const double fracCoul = hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+    const double fracVDW =
+        hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+    const double fracCoul =
+        hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
 #ifdef _OPENMP
 #pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
-    firstprivate(box, molIndex, num::qqFact, length, start, hasFraction, fracMol, fracVDW, fracCoul) \
+    firstprivate(box, molIndex, num::qqFact, length, start, hasFraction,       \
+                     fracMol, fracVDW, fracCoul)                               \
     reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
 #endif
     for (uint p = 0; p < length; ++p) {
@@ -458,12 +471,15 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         XYZ virComponents;
         if (boxAxes.InRcut(distSq, virComponents, currentCoords, atom,
                            nIndex[i], box)) {
-          
+
           double lambdaVDW = 1.0;
           double lambdaCoulomb = 1.0;
           if (hasFraction) {
             int nMol = particleMol[nIndex[i]];
-            if (molIndex == fracMol || nMol == fracMol) {
+            if (molIndex == fracMol && nMol == fracMol) {
+              lambdaVDW = fracVDW * fracVDW;
+              lambdaCoulomb = fracCoul * fracCoul;
+            } else if (molIndex == fracMol || nMol == fracMol) {
               lambdaVDW = fracVDW;
               lambdaCoulomb = fracCoul;
             }
@@ -496,16 +512,24 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         XYZ virComponents;
         if (boxAxes.InRcut(distSq, virComponents, molCoords, p, currentCoords,
                            nIndex[i], box)) {
-          double lambdaVDW =
-              GetLambdaVDW(molIndex, particleMol[nIndex[i]], box);
+          double lambdaVDW = 1.0;
+          double lambdaCoulomb = 1.0;
+          if (hasFraction) {
+            int nMol = particleMol[nIndex[i]];
+            if (molIndex == fracMol && nMol == fracMol) {
+              lambdaVDW = fracVDW * fracVDW;
+              lambdaCoulomb = fracCoul * fracCoul;
+            } else if (molIndex == fracMol || nMol == fracMol) {
+              lambdaVDW = fracVDW;
+              lambdaCoulomb = fracCoul;
+            }
+          }
 
           if (distSq < forcefield.rCutLowSq) {
             overlap |= true;
           }
 
           if (electrostatic) {
-            double lambdaCoulomb =
-                GetLambdaCoulomb(molIndex, particleMol[nIndex[i]], box);
             double qi_qj_fact =
                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
 
@@ -584,17 +608,20 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
   uint kindI = thisKind.AtomKind(partIndex);
   double kindICharge = thisKind.AtomCharge(partIndex);
   // std::vector<uint> nIndex;
-  
+
   const bool hasFraction = lambdaRef.HasFraction(box);
   const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
-  const double fracVDW = hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
-  const double fracCoul = hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+  const double fracVDW =
+      hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+  const double fracCoul =
+      hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
 // use OpenMP to distribute the workload over CBMC trials
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
     shared(overlap, trialPos, boxAxes, en, real)                               \
-    firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials, hasFraction, fracMol, fracVDW, fracCoul)
+    firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials,       \
+                     hasFraction, fracMol, fracVDW, fracCoul)
 #endif
   for (uint t = 0; t < trials; ++t) {
     // Each thread gets it's own copy of nIndex, tempReal and tempLJ
@@ -613,12 +640,15 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
     for (int i = 0; i < (int)nIndex.size(); i++) {
       double distSq = 0.0;
       if (boxAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i], box)) {
-        
+
         double lambdaVDW = 1.0;
         double lambdaCoulomb = 1.0;
         if (hasFraction) {
           int nMol = particleMol[nIndex[i]];
-          if (molIndex == fracMol || nMol == fracMol) {
+          if (molIndex == fracMol && nMol == fracMol) {
+            lambdaVDW = fracVDW * fracVDW;
+            lambdaCoulomb = fracCoul * fracCoul;
+          } else if (molIndex == fracMol || nMol == fracMol) {
             lambdaVDW = fracVDW;
             lambdaCoulomb = fracCoul;
           }
