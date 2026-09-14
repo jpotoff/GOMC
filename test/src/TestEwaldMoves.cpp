@@ -449,12 +449,23 @@ TEST_F(EwaldMovesTest, VolumeMoveConsistency) {
   std::cout << "Expected Total Reciprocal Energy: " << expectedEnergy << " K"
             << std::endl;
 
+  // Test the state of the cache BEFORE the full rebuild
+  uint testMolIndex = 0;
+  double cachedMolEnergy =
+      ewald->MolReciprocal(sim.GetCoordinates(), testMolIndex, box);
+
   // Now perform a full reciprocal sum to verify consistency
   ewald->UpdateVectorsAndRecipTerms(false);
   sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
   double actualEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
   std::cout << "Actual Full Sum Reciprocal Energy: " << actualEnergy << " K"
             << std::endl;
+
+  double rebuiltMolEnergy =
+      ewald->MolReciprocal(sim.GetCoordinates(), testMolIndex, box);
+  EXPECT_NEAR(cachedMolEnergy, rebuiltMolEnergy, 1e-4)
+      << "Cache corruption: MolReciprocal energy differs before and after full "
+         "rebuild.";
 
   // If there is a massive bug, this will fail spectacularly
   EXPECT_NEAR(expectedEnergy, actualEnergy, 1e-1);
@@ -1043,9 +1054,20 @@ TEST_F(EwaldMovesTest, SmallVolumeMoveConsistency) {
   ewald->UpdateRecip(box);
   ewald->UpdateRecipVec(box);
 
+  // Test the state of the cache BEFORE the full rebuild
+  uint testMolIndex = 0;
+  double cachedMolEnergy =
+      ewald->MolReciprocal(sim.GetCoordinates(), testMolIndex, box);
+
   ewald->UpdateVectorsAndRecipTerms(false);
   sim.GetSystemEnergy() = sim.GetCalcEnergy().SystemTotal();
   double fullRebuildEnergy = sim.GetSystemEnergy().boxEnergy[box].recip;
+
+  double rebuiltMolEnergy =
+      ewald->MolReciprocal(sim.GetCoordinates(), testMolIndex, box);
+  EXPECT_NEAR(cachedMolEnergy, rebuiltMolEnergy, 1e-4)
+      << "Cache corruption: MolReciprocal energy differs before and after full "
+         "rebuild.";
 
   EXPECT_NEAR(trialEnergy, fullRebuildEnergy, 1e-1)
       << "Reciprocal energy from small volumetric scaled trial does not match "
