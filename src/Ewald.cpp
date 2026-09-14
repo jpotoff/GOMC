@@ -2097,23 +2097,44 @@ void Ewald::CopyRecip(uint box) {
 
 void Ewald::UpdateRecipVec(uint box) {
   double *tempKx, *tempKy, *tempKz, *tempHsqr, *tempPrefact;
+  int *tempKx_ind, *tempKy_ind, *tempKz_ind;
+  XYZ tempB1, tempB2, tempB3;
+
   tempKx = kxRef[box];
   tempKy = kyRef[box];
   tempKz = kzRef[box];
   tempHsqr = hsqrRef[box];
   tempPrefact = prefactRef[box];
+  tempKx_ind = kx_indRef[box];
+  tempKy_ind = ky_indRef[box];
+  tempKz_ind = kz_indRef[box];
+  tempB1 = b1_vecRef[box];
+  tempB2 = b2_vecRef[box];
+  tempB3 = b3_vecRef[box];
 
   kxRef[box] = kx[box];
   kyRef[box] = ky[box];
   kzRef[box] = kz[box];
   hsqrRef[box] = hsqr[box];
   prefactRef[box] = prefact[box];
+  kx_indRef[box] = kx_ind[box];
+  ky_indRef[box] = ky_ind[box];
+  kz_indRef[box] = kz_ind[box];
+  b1_vecRef[box] = b1_vec[box];
+  b2_vecRef[box] = b2_vec[box];
+  b3_vecRef[box] = b3_vec[box];
 
   kx[box] = tempKx;
   ky[box] = tempKy;
   kz[box] = tempKz;
   hsqr[box] = tempHsqr;
   prefact[box] = tempPrefact;
+  kx_ind[box] = tempKx_ind;
+  ky_ind[box] = tempKy_ind;
+  kz_ind[box] = tempKz_ind;
+  b1_vec[box] = tempB1;
+  b2_vec[box] = tempB2;
+  b3_vec[box] = tempB3;
 
   imageSizeRef[box] = imageSize[box];
 
