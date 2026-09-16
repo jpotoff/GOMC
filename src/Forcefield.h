@@ -9,6 +9,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 // Member classes
 #include "FFAngles.h"
 #include "FFBonds.h"
+#include "EwaldRealTable.h"
 #include "FFDihedrals.h"
 #include "FFParticle.h"
 
@@ -47,6 +48,8 @@ public:
   double rCutCoulombSq[BOX_TOTAL]; //!< Cutoff Coulomb interaction(angstroms)
   double alpha[BOX_TOTAL];         // Ewald sum terms
   double alphaSq[BOX_TOTAL];       // Ewald sum terms
+  // Tabulated erfc-based real-space kernels; see EwaldRealTable.h
+  EwaldRealTable realTable;
   double recip_rcut[BOX_TOTAL];    // Ewald sum terms
   double recip_rcut_Sq[BOX_TOTAL]; // Ewald sum terms
   double tolerance;                // Ewald sum terms

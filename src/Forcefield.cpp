@@ -83,6 +83,11 @@ void Forcefield::InitBasicVals(config_setup::SystemVals const &val,
     recip_rcut_Sq[b] = recip_rcut[b] * recip_rcut[b];
   }
 
+  // alpha and the Coulomb cutoff are fixed for the run, so the real-space
+  // kernels can be tabulated once here.
+  if (ewald)
+    realTable.Init(alpha, rCutCoulombSq, rCutLowSq);
+
   vdwGeometricSigma = val.ff.vdwGeometricSigma;
   isMartini = ffKind.isMARTINI;
   exp6 = (vdwKind == val.ff.VDW_EXP6_KIND);

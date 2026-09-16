@@ -7,12 +7,14 @@ set(TestSources
     test/src/ConsistentTrajectoryTest.cpp
     test/src/CheckpointTest.cpp
     test/src/MieExponentTest.cpp
+    test/src/EwaldRealTableTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )
 
 set(TestHeaders
     lib/NumLib.h
+    src/EwaldRealTable.h
 )
 
 set(GOMCSources 

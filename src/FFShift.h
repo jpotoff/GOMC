@@ -269,6 +269,10 @@ inline double FF_SHIFT::CalcCoulomb(const double distSq,
                                     const double qi_qj_Fact,
                                     const uint b) const {
   if (forcefield.ewald) {
+    double tab;
+    if (forcefield.realTable.Energy(distSq, b, tab))
+      return qi_qj_Fact * tab;
+    // below the table floor: overlapping pair, exact form
     double dist = sqrt(distSq);
     double val = forcefield.alpha[b] * dist;
     return qi_qj_Fact * std::erfc(val) / dist;
@@ -311,6 +315,10 @@ inline double FF_SHIFT::CalcCoulombVir(const double distSq, const uint kind1,
 inline double FF_SHIFT::CalcCoulombVir(const double distSq, const double qi_qj,
                                        uint b) const {
   if (forcefield.ewald) {
+    double tab;
+    if (forcefield.realTable.Virial(distSq, b, tab))
+      return qi_qj * tab;
+    // below the table floor: overlapping pair, exact form
     double dist = sqrt(distSq);
     // M_2_SQRTPI is 2/sqrt(PI)
     double constValue = forcefield.alpha[b] * M_2_SQRTPI;
