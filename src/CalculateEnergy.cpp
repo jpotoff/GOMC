@@ -233,9 +233,10 @@ void CalculateEnergy::BoxInterTemplate(
   }
 }
 
-template <typename BoxType>
+template <typename BoxType, typename FFType>
 void CalculateEnergy::BoxForceTemplate(
-    XYZArray const &coords, XYZArray &atomForce, XYZArray &molForce,
+    const FFType &ff, XYZArray const &coords, XYZArray &atomForce,
+    XYZArray &molForce,
     const BoxType &boxAxes, const uint box, double &tempREn, double &tempLJEn,
     const std::vector<int> &cellVector, const std::vector<int> &cellStartIndex,
     const std::vector<int> &mapParticleToCell,
@@ -259,8 +260,8 @@ void CalculateEnergy::BoxForceTemplate(
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none)                                         \
-    shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
-               neighborList)                                                   \
+    shared(boxAxes, cellStartIndex, cellVector, coords, ff,                    \
+               mapParticleToCell, neighborList)                                \
     firstprivate(box, atomCount, molCount, num::qqFact, hasFraction, fracMol,  \
                      fracVDW, fracCoul)                                        \
     reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
@@ -303,21 +304,21 @@ void CalculateEnergy::BoxForceTemplate(
               double qi_qj_fact = particleCharge[currParticle] *
                                   particleCharge[nParticle] * num::qqFact;
               if (qi_qj_fact != 0.0) {
-                tempREn += forcefield.particles->CalcCoulomb(
+                tempREn += ff.FFType::CalcCoulomb(
                     distSq, particleKind[currParticle], particleKind[nParticle],
                     qi_qj_fact, lambdaCoulomb, box);
                 // Calculating the force
                 forceReal =
-                    virComponents * forcefield.particles->CalcCoulombVir(
+                    virComponents * ff.FFType::CalcCoulombVir(
                                         distSq, particleKind[currParticle],
                                         particleKind[nParticle], qi_qj_fact,
                                         lambdaCoulomb, box);
               }
             }
-            tempLJEn += forcefield.particles->CalcEn(
+            tempLJEn += ff.FFType::CalcEn(
                 distSq, particleKind[currParticle], particleKind[nParticle],
                 lambdaVDW);
-            forceLJ = virComponents * forcefield.particles->CalcVir(
+            forceLJ = virComponents * ff.FFType::CalcVir(
                                           distSq, particleKind[currParticle],
                                           particleKind[nParticle], lambdaVDW);
             aForcex[currParticle] += forceLJ.x + forceReal.x;
@@ -339,9 +340,10 @@ void CalculateEnergy::BoxForceTemplate(
   }
 }
 
-template <typename BoxType>
+template <typename BoxType, typename FFType>
 void CalculateEnergy::VirialCalcTemplate(
-    const BoxType &boxAxes, const uint box, double &vT11, double &vT12,
+    const FFType &ff, const BoxType &boxAxes, const uint box, double &vT11,
+    double &vT12,
     double &vT13, double &vT22, double &vT23, double &vT33, double &rT11,
     double &rT12, double &rT13, double &rT22, double &rT23, double &rT33,
     const std::vector<int> &cellVector, const std::vector<int> &cellStartIndex,
@@ -357,7 +359,8 @@ void CalculateEnergy::VirialCalcTemplate(
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) shared(                                 \
-        cellStartIndex, cellVector, mapParticleToCell, neighborList, boxAxes)  \
+        cellStartIndex, cellVector, ff, mapParticleToCell, neighborList,       \
+            boxAxes)                                                           \
     firstprivate(box, hasFraction, fracMol, fracVDW, fracCoul)                 \
     reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22,  \
                   rT23, rT33)
@@ -404,7 +407,7 @@ void CalculateEnergy::VirialCalcTemplate(
 
               // skip particle pairs with no charge
               if (qi_qj != 0.0) {
-                double pRF = forcefield.particles->CalcCoulombVir(
+                double pRF = ff.FFType::CalcCoulombVir(
                     distSq, particleKind[currParticle], particleKind[nParticle],
                     qi_qj, lambdaCoulomb, box);
                 // calculate the top diagonal of pressure tensor
@@ -414,7 +417,7 @@ void CalculateEnergy::VirialCalcTemplate(
               }
             }
 
-            double pVF = forcefield.particles->CalcVir(
+            double pVF = ff.FFType::CalcVir(
                 distSq, particleKind[currParticle], particleKind[nParticle],
                 lambdaVDW);
             // calculate the top diagonal of pressure tensor
@@ -430,8 +433,9 @@ void CalculateEnergy::VirialCalcTemplate(
 
 // templates functions for intermolecular interactions for single
 // molecule moves.  Replacing currentAxes with boxAxes
-template <typename BoxType>
-bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
+template <typename BoxType, typename FFType>
+bool CalculateEnergy::MoleculeInterTemplate(const FFType &ff,
+                                            Intermolecular &inter_LJ,
                                             Intermolecular &inter_coulomb,
                                             XYZArray const &molCoords,
                                             const uint molIndex, const uint box,
@@ -454,7 +458,7 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
         hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(boxAxes, molCoords)              \
+#pragma omp parallel for default(none) shared(boxAxes, ff, molCoords)          \
     firstprivate(box, molIndex, num::qqFact, length, start, hasFraction,       \
                      fracMol, fracVDW, fracCoul)                               \
     reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
@@ -494,12 +498,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
 
             if (qi_qj_fact != 0.0) {
-              pREn += -forcefield.particles->CalcCoulomb(
+              pREn += -ff.FFType::CalcCoulomb(
                   distSq, particleKind[atom], particleKind[nIndex[i]],
                   qi_qj_fact, lambdaCoulomb, box);
             }
           }
-          pLJEn += -forcefield.particles->CalcEn(
+          pLJEn += -ff.FFType::CalcEn(
               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
         }
       }
@@ -538,12 +542,12 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
                 particleCharge[atom] * particleCharge[nIndex[i]] * num::qqFact;
 
             if (qi_qj_fact != 0.0) {
-              pREn += forcefield.particles->CalcCoulomb(
+              pREn += ff.FFType::CalcCoulomb(
                   distSq, particleKind[atom], particleKind[nIndex[i]],
                   qi_qj_fact, lambdaCoulomb, box);
             }
           }
-          pLJEn += forcefield.particles->CalcEn(
+          pLJEn += ff.FFType::CalcEn(
               distSq, particleKind[atom], particleKind[nIndex[i]], lambdaVDW);
         }
       }
@@ -559,9 +563,10 @@ bool CalculateEnergy::MoleculeInterTemplate(Intermolecular &inter_LJ,
   return overlap;
 }
 
-template <typename BoxType>
+template <typename BoxType, typename FFType>
 void CalculateEnergy::ParticleNonbondedTemplate(
-    double *inter, cbmc::TrialMol const &trialMol, XYZArray const &trialPos,
+    const FFType &ff, double *inter, cbmc::TrialMol const &trialMol,
+    XYZArray const &trialPos,
     const uint partIndex, const uint box, const uint trials,
     const BoxType &boxAxes) const {
   if (box >= BOXES_WITH_U_B)
@@ -577,14 +582,14 @@ void CalculateEnergy::ParticleNonbondedTemplate(
         double distSq;
         if (boxAxes.InRcut(distSq, trialPos, t, trialMol.GetCoords(), *partner,
                            box)) {
-          inter[t] += forcefield.particles->CalcEn(
+          inter[t] += ff.FFType::CalcEn(
               distSq, kind.AtomKind(partIndex), kind.AtomKind(*partner), 1.0);
           if (electrostatic) {
             double qi_qj_fact = kind.AtomCharge(partIndex) *
                                 kind.AtomCharge(*partner) * num::qqFact;
 
             if (qi_qj_fact != 0.0) {
-              forcefield.particles->CalcCoulombAdd_1_4(inter[t], distSq,
+              ff.FFType::CalcCoulombAdd_1_4(inter[t], distSq,
                                                        qi_qj_fact, true);
             }
           }
@@ -596,8 +601,9 @@ void CalculateEnergy::ParticleNonbondedTemplate(
   GOMC_EVENT_STOP(1, GomcProfileEvent::EN_CBMC_INTRA_NB);
 }
 
-template <typename BoxType>
-void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
+template <typename BoxType, typename FFType>
+void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
+                                            double *real,
                                             XYZArray const &trialPos,
                                             bool *overlap, const uint partIndex,
                                             const uint molIndex, const uint box,
@@ -623,7 +629,7 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
 // use OpenMP to distribute the workload over CBMC trials
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
-    shared(overlap, trialPos, boxAxes, en, real)                               \
+    shared(overlap, trialPos, boxAxes, en, ff, real)                           \
     firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials,       \
                      hasFraction, fracMol, fracVDW, fracCoul)
 #endif
@@ -661,14 +667,14 @@ void CalculateEnergy::ParticleInterTemplate(double *en, double *real,
         if (distSq < forcefield.rCutLowSq) {
           overlap[t] |= true;
         }
-        tempLJ += forcefield.particles->CalcEn(
+        tempLJ += ff.FFType::CalcEn(
             distSq, kindI, particleKind[nIndex[i]], lambdaVDW);
         if (electrostatic) {
           double qi_qj_fact =
               particleCharge[nIndex[i]] * kindICharge * num::qqFact;
 
           if (qi_qj_fact != 0.0) {
-            tempReal += forcefield.particles->CalcCoulomb(
+            tempReal += ff.FFType::CalcCoulomb(
                 distSq, kindI, particleKind[nIndex[i]], qi_qj_fact,
                 lambdaCoulomb, box);
           }
@@ -813,16 +819,20 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
                   forcefield.sc_alpha, forcefield.sc_power, box);
 
 #else
-  if (boxAxes.orthogonal[box]) {
-    BoxForceTemplate<BoxDimensions>(
-        coords, atomForce, molForce, boxAxes, box, tempREn, tempLJEn,
-        cellVector, cellStartIndex, mapParticleToCell, neighborList);
-  } else {
-    BoxForceTemplate<BoxDimensionsNonOrth>(
-        coords, atomForce, molForce,
-        static_cast<const BoxDimensionsNonOrth &>(boxAxes), box, tempREn,
-        tempLJEn, cellVector, cellStartIndex, mapParticleToCell, neighborList);
-  }
+  DispatchForcefield(forcefield, [&](const auto &ffRef) {
+    using FFT = std::decay_t<decltype(ffRef)>;
+    if (boxAxes.orthogonal[box]) {
+      BoxForceTemplate<BoxDimensions, FFT>(
+          ffRef, coords, atomForce, molForce, boxAxes, box, tempREn, tempLJEn,
+          cellVector, cellStartIndex, mapParticleToCell, neighborList);
+    } else {
+      BoxForceTemplate<BoxDimensionsNonOrth, FFT>(
+          ffRef, coords, atomForce, molForce,
+          static_cast<const BoxDimensionsNonOrth &>(boxAxes), box, tempREn,
+          tempLJEn, cellVector, cellStartIndex, mapParticleToCell,
+          neighborList);
+    }
+  });
 #endif
 
   // setting energy and virial of LJ interaction
@@ -884,20 +894,20 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
                        vT33, forcefield.sc_coul, forcefield.sc_sigma_6,
                        forcefield.sc_alpha, forcefield.sc_power, box);
 #else
-  if (currentAxes.orthogonal[box]) {
-    VirialCalcTemplate<BoxDimensions>(currentAxes, box, vT11, vT12, vT13, vT22,
-                                      vT23, vT33, rT11, rT12, rT13, rT22, rT23,
-                                      rT33, cellVector, cellStartIndex,
-                                      mapParticleToCell, neighborList);
-  }
-
-  else {
-    VirialCalcTemplate<BoxDimensionsNonOrth>(
-        static_cast<const BoxDimensionsNonOrth &>(currentAxes), box, vT11, vT12,
-        vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22, rT23, rT33, cellVector,
-        cellStartIndex, mapParticleToCell, neighborList);
-  }
-
+  DispatchForcefield(forcefield, [&](const auto &ffRef) {
+    using FFT = std::decay_t<decltype(ffRef)>;
+    if (currentAxes.orthogonal[box]) {
+      VirialCalcTemplate<BoxDimensions, FFT>(
+          ffRef, currentAxes, box, vT11, vT12, vT13, vT22, vT23, vT33, rT11,
+          rT12, rT13, rT22, rT23, rT33, cellVector, cellStartIndex,
+          mapParticleToCell, neighborList);
+    } else {
+      VirialCalcTemplate<BoxDimensionsNonOrth, FFT>(
+          ffRef, static_cast<const BoxDimensionsNonOrth &>(currentAxes), box,
+          vT11, vT12, vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22, rT23,
+          rT33, cellVector, cellStartIndex, mapParticleToCell, neighborList);
+    }
+  });
 #endif
 
   // set the all tensor values
@@ -950,16 +960,20 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
                                     Intermolecular &inter_coulomb,
                                     XYZArray const &molCoords,
                                     const uint molIndex, const uint box) const {
-  if (currentAxes.orthogonal[box]) {
-    return MoleculeInterTemplate<BoxDimensions>(
-        inter_LJ, inter_coulomb, molCoords, molIndex, box, currentAxes);
-  }
-
-  else {
-    return MoleculeInterTemplate<BoxDimensionsNonOrth>(
-        inter_LJ, inter_coulomb, molCoords, molIndex, box,
-        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
-  }
+  bool overlap = false;
+  DispatchForcefield(forcefield, [&](const auto &ffRef) {
+    using FFT = std::decay_t<decltype(ffRef)>;
+    if (currentAxes.orthogonal[box]) {
+      overlap = MoleculeInterTemplate<BoxDimensions, FFT>(
+          ffRef, inter_LJ, inter_coulomb, molCoords, molIndex, box,
+          currentAxes);
+    } else {
+      overlap = MoleculeInterTemplate<BoxDimensionsNonOrth, FFT>(
+          ffRef, inter_LJ, inter_coulomb, molCoords, molIndex, box,
+          static_cast<const BoxDimensionsNonOrth &>(currentAxes));
+    }
+  });
+  return overlap;
 }
 
 void CalculateEnergy::ParticleNonbonded(double *inter,
@@ -967,28 +981,36 @@ void CalculateEnergy::ParticleNonbonded(double *inter,
                                         XYZArray const &trialPos,
                                         const uint partIndex, const uint box,
                                         const uint trials) const {
-  if (currentAxes.orthogonal[box]) {
-    ParticleNonbondedTemplate<BoxDimensions>(
-        inter, trialMol, trialPos, partIndex, box, trials, currentAxes);
-  } else {
-    ParticleNonbondedTemplate<BoxDimensionsNonOrth>(
-        inter, trialMol, trialPos, partIndex, box, trials,
-        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
-  }
+  DispatchForcefield(forcefield, [&](const auto &ffRef) {
+    using FFT = std::decay_t<decltype(ffRef)>;
+    if (currentAxes.orthogonal[box]) {
+      ParticleNonbondedTemplate<BoxDimensions, FFT>(
+          ffRef, inter, trialMol, trialPos, partIndex, box, trials,
+          currentAxes);
+    } else {
+      ParticleNonbondedTemplate<BoxDimensionsNonOrth, FFT>(
+          ffRef, inter, trialMol, trialPos, partIndex, box, trials,
+          static_cast<const BoxDimensionsNonOrth &>(currentAxes));
+    }
+  });
 }
 
 void CalculateEnergy::ParticleInter(double *en, double *real,
                                     XYZArray const &trialPos, bool *overlap,
                                     const uint partIndex, const uint molIndex,
                                     const uint box, const uint trials) const {
-  if (currentAxes.orthogonal[box]) {
-    ParticleInterTemplate<BoxDimensions>(en, real, trialPos, overlap, partIndex,
-                                         molIndex, box, trials, currentAxes);
-  } else {
-    ParticleInterTemplate<BoxDimensionsNonOrth>(
-        en, real, trialPos, overlap, partIndex, molIndex, box, trials,
-        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
-  }
+  DispatchForcefield(forcefield, [&](const auto &ffRef) {
+    using FFT = std::decay_t<decltype(ffRef)>;
+    if (currentAxes.orthogonal[box]) {
+      ParticleInterTemplate<BoxDimensions, FFT>(
+          ffRef, en, real, trialPos, overlap, partIndex, molIndex, box, trials,
+          currentAxes);
+    } else {
+      ParticleInterTemplate<BoxDimensionsNonOrth, FFT>(
+          ffRef, en, real, trialPos, overlap, partIndex, molIndex, box, trials,
+          static_cast<const BoxDimensionsNonOrth &>(currentAxes));
+    }
+  });
 }
 
 // Calculates the change in the TC from adding numChange atoms of a kind

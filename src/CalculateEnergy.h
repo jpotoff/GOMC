@@ -191,8 +191,9 @@ private:
                         const std::vector<int> &mapParticleToCell,
                         const std::vector<std::vector<int>> &neighborList);
 
-  template <typename BoxType>
-  void BoxForceTemplate(XYZArray const &coords, XYZArray &atomForce,
+  template <typename BoxType, typename FFType>
+  void BoxForceTemplate(const FFType &ff, XYZArray const &coords,
+                        XYZArray &atomForce,
                         XYZArray &molForce, const BoxType &boxAxes,
                         const uint box, double &tempREn, double &tempLJEn,
                         const std::vector<int> &cellVector,
@@ -200,8 +201,9 @@ private:
                         const std::vector<int> &mapParticleToCell,
                         const std::vector<std::vector<int>> &neighborList);
 
-  template <typename BoxType>
-  void VirialCalcTemplate(const BoxType &boxAxes, const uint box, double &vT11,
+  template <typename BoxType, typename FFType>
+  void VirialCalcTemplate(const FFType &ff, const BoxType &boxAxes,
+                          const uint box, double &vT11,
                           double &vT12, double &vT13, double &vT22,
                           double &vT23, double &vT33, double &rT11,
                           double &rT12, double &rT13, double &rT22,
@@ -211,20 +213,22 @@ private:
                           const std::vector<int> &mapParticleToCell,
                           const std::vector<std::vector<int>> &neighborList);
   // templates used for single molecule moves
-  template <typename BoxType>
-  bool MoleculeInterTemplate(Intermolecular &inter_LJ,
+  template <typename BoxType, typename FFType>
+  bool MoleculeInterTemplate(const FFType &ff, Intermolecular &inter_LJ,
                              Intermolecular &inter_coulomb,
                              XYZArray const &molCoords, const uint molIndex,
                              const uint box, const BoxType &boxAxes) const;
 
-  template <typename BoxType>
-  void ParticleNonbondedTemplate(double *inter, cbmc::TrialMol const &trialMol,
+  template <typename BoxType, typename FFType>
+  void ParticleNonbondedTemplate(const FFType &ff, double *inter,
+                                 cbmc::TrialMol const &trialMol,
                                  XYZArray const &trialPos, const uint partIndex,
                                  const uint box, const uint trials,
                                  const BoxType &boxAxes) const;
 
-  template <typename BoxType>
-  void ParticleInterTemplate(double *en, double *real, XYZArray const &trialPos,
+  template <typename BoxType, typename FFType>
+  void ParticleInterTemplate(const FFType &ff, double *en, double *real,
+                             XYZArray const &trialPos,
                              bool *overlap, const uint partIndex,
                              const uint molIndex, const uint box,
                              const uint trials, const BoxType &boxAxes) const;
