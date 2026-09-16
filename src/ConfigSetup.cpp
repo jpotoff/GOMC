@@ -32,6 +32,7 @@ ConfigSetup::ConfigSetup(void) {
   sys.elect.ewald = false;
   sys.elect.enable = false;
   sys.elect.cache = false;
+  sys.elect.tabulateRealSpace = true;
   sys.elect.tolerance = DBL_MAX;
   sys.elect.oneFourScale = DBL_MAX;
   sys.elect.dielectric = DBL_MAX;
@@ -719,6 +720,13 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
         printf("%-40s %-s \n", "Info: Cache Ewald Fourier", "Active");
       } else {
         printf("%-40s %-s \n", "Info: Cache Ewald Fourier", "Inactive");
+      }
+    } else if (CheckString(line[0], "EwaldTabulateRealSpace")) {
+      sys.elect.tabulateRealSpace = checkBool(line[1]);
+      if (sys.elect.tabulateRealSpace) {
+        printf("%-40s %-s \n", "Info: Tabulated Ewald real space", "Active");
+      } else {
+        printf("%-40s %-s \n", "Info: Tabulated Ewald real space", "Inactive");
       }
     } else if (CheckString(line[0], "1-4scaling")) {
       sys.elect.oneFourScale = stringtod(line[1]);

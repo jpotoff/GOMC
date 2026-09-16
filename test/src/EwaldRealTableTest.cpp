@@ -177,3 +177,64 @@ TEST_F(EwaldRealTableTest, AccuracyHoldsAcrossCutoffsAndTolerances) {
     }
   }
 }
+
+//
+// Guard: past EwaldRealTable::MaxCutoff the table would no longer stay
+// cache-resident, so those boxes must report misses and let callers use the
+// stock erfc. Typical GEMC gas-phase cutoffs land above the limit.
+//
+TEST_F(EwaldRealTableTest, LongCutoffFallsBackToExactErfc) {
+  const double longCut = EwaldRealTable::MaxCutoff() + 5.0;
+  double a[BOX_TOTAL], rs[BOX_TOTAL];
+  for (uint b = 0; b < BOX_TOTAL; ++b) {
+    a[b] = AlphaFor(longCut, kTolerance);
+    rs[b] = longCut * longCut;
+  }
+  EwaldRealTable t;
+  t.Init(a, rs, kRCutLowSq);
+
+  double out = 0.0;
+  EXPECT_FALSE(t.Energy(25.0, 0, out)) << "table must be disabled past MaxCutoff";
+  EXPECT_FALSE(t.Virial(25.0, 0, out));
+  EXPECT_FALSE(t.Energy(rs[0] * 0.5, 0, out));
+}
+
+//
+// Just under the limit the table must still be built, so the guard cannot
+// silently disable the common case.
+//
+TEST_F(EwaldRealTableTest, JustUnderLimitStaysEnabled) {
+  const double cut = EwaldRealTable::MaxCutoff() - 1.0;
+  double a[BOX_TOTAL], rs[BOX_TOTAL];
+  for (uint b = 0; b < BOX_TOTAL; ++b) {
+    a[b] = AlphaFor(cut, kTolerance);
+    rs[b] = cut * cut;
+  }
+  EwaldRealTable t;
+  t.Init(a, rs, kRCutLowSq);
+
+  double got = 0.0;
+  ASSERT_TRUE(t.Energy(25.0, 0, got));
+  EXPECT_NEAR(got, EwaldRealTable::ExactEnergy(25.0, a[0]),
+              kMaxRelErr * std::fabs(EwaldRealTable::ExactEnergy(25.0, a[0])));
+}
+
+//
+// Mixed cutoffs, the GEMC case: a short-cutoff liquid box keeps its table
+// while a long-cutoff gas box falls back, independently.
+//
+TEST_F(EwaldRealTableTest, GuardIsPerBox) {
+  if (BOX_TOTAL < 2)
+    GTEST_SKIP() << "needs two boxes";
+  double a[BOX_TOTAL], rs[BOX_TOTAL];
+  a[0] = AlphaFor(12.0, kTolerance);
+  rs[0] = 12.0 * 12.0;
+  a[1] = AlphaFor(100.0, kTolerance);
+  rs[1] = 100.0 * 100.0;
+  EwaldRealTable t;
+  t.Init(a, rs, kRCutLowSq);
+
+  double out = 0.0;
+  EXPECT_TRUE(t.Energy(25.0, 0, out)) << "box 0 (12 A) should keep its table";
+  EXPECT_FALSE(t.Energy(25.0, 1, out)) << "box 1 (100 A) should fall back";
+}

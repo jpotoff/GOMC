@@ -84,9 +84,14 @@ void Forcefield::InitBasicVals(config_setup::SystemVals const &val,
   }
 
   // alpha and the Coulomb cutoff are fixed for the run, so the real-space
-  // kernels can be tabulated once here.
-  if (ewald)
+  // kernels can be tabulated once here. Boxes whose Coulomb cutoff makes the
+  // table too large to stay cache-resident keep the standard erfc; see
+  // EwaldRealTable::MaxCutoff.
+  if (ewald && val.elect.tabulateRealSpace) {
     realTable.Init(alpha, rCutCoulombSq, rCutLowSq);
+  } else if (ewald) {
+    printf("%-40s %-s \n", "Info: Tabulated Ewald real space", "Inactive");
+  }
 
   vdwGeometricSigma = val.ff.vdwGeometricSigma;
   isMartini = ffKind.isMARTINI;

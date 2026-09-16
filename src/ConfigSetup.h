@@ -187,6 +187,7 @@ struct ElectroStatic {
   bool enable;
   bool ewald;
   bool cache;
+  bool tabulateRealSpace;
   bool cutoffCoulombRead[BOX_TOTAL];
   double tolerance;
   double oneFourScale;

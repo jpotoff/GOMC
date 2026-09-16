@@ -11,6 +11,7 @@ along with this program, also can be found at
 #include "BasicTypes.h"
 #include "EnsemblePreprocessor.h"
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 //
@@ -42,16 +43,32 @@ public:
   // cache-resident, with ~2e-7 max relative error at any cutoff.
   static double DefaultDx() { return 0.05; }
 
+  // The table grows as rCutCoulomb^2 (~0.2 MB at 12 A, ~0.5 MB at 20 A,
+  // ~12 MB at 100 A). Past this cutoff it no longer stays cache-resident and
+  // the lookups cost more than the erfc they replace, so those boxes keep the
+  // stock erfc. Typical GEMC gas-phase cutoffs land above this.
+  static double MaxCutoff() { return 25.0; }
+
   EwaldRealTable() : built(false), dx(0.0) {}
 
   // Safe to call repeatedly; rebuilds if alpha or the cutoff changed.
   void Init(const double *alpha, const double *rCutCoulombSq, double rCutLowSq,
             double intervalWidth = 0.05) {
     dx = intervalWidth;
+    const double maxCutSq = MaxCutoff() * MaxCutoff();
     // Below r2Lo the kernel diverges and callers fall back to the exact form.
     // Anything that close is an overlap and gets rejected, so the floor only
     // has to keep the table away from the singularity.
     for (uint b = 0; b < BOX_TOTAL; ++b) {
+      if (rCutCoulombSq[b] > maxCutSq) {
+        // Leaving the grid empty makes every lookup miss, so the callers take
+        // their exact-erfc path for this box.
+        box[b].Clear();
+        printf("Info: Box %d  Tabulated Ewald real space Inactive: "
+               "RcutCoulomb %.1f A exceeds %.1f A, using standard erfc\n",
+               (int)b, std::sqrt(rCutCoulombSq[b]), MaxCutoff());
+        continue;
+      }
       box[b].Build(alpha[b], rCutCoulombSq[b], std::max(rCutLowSq, 0.25),
                    intervalWidth);
     }
@@ -93,14 +110,18 @@ private:
 
     Grid() : lo(0.0), invDx(0.0), n(0) {}
 
+    void Clear() {
+      n = 0;
+      en.clear();
+      vir.clear();
+    }
+
     void Build(double alpha, double r2Hi, double r2Lo, double intervalWidth) {
       lo = r2Lo;
       // A box with electrostatics off has rCutCoulombSq == 0; leave it empty
       // so every lookup reports a miss and takes the exact path.
       if (r2Hi <= r2Lo || intervalWidth <= 0.0) {
-        n = 0;
-        en.clear();
-        vir.clear();
+        Clear();
         return;
       }
       // Fixed spacing, so accuracy does not depend on the cutoff.
