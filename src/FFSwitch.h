@@ -33,7 +33,11 @@ A copy of the MIT License can be found in License.txt with this program or at
 // Welect = -1 * qi * qj * (dSwitchVal/rij^2 - (rij^2/rcut^2 - 1.0)^2/(rij^3))
 // dSwitchVa = 2.0 * (rij^2/rcut^2 - 1.0) * 2.0 * rij/rcut^2
 
-struct FF_SWITCH : public FFParticle {
+// `final` lets the compiler resolve this class's own virtual calls --
+// notably the 4-argument CalcEn/CalcCoulomb calling their 2-argument
+// counterparts -- statically, which is what allows the templated energy
+// kernels to inline the pair math. Nothing derives from these.
+struct FF_SWITCH final : public FFParticle {
 public:
   FF_SWITCH(Forcefield &ff) : FFParticle(ff) {
     rOnSq = rOn = factor1 = factor2 = 0.0;

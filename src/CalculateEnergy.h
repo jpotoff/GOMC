@@ -180,10 +180,13 @@ public:
 
 private:
   // use templates to eliminate branching
-  template <typename BoxType>
-  void BoxInterTemplate(XYZArray const &coords, const BoxType &boxAxes,
-                        const uint box, double &tempREn, double &tempLJEn,
-                        const std::vector<int> &cellVector,
+  // FFType is the concrete forcefield; see ForcefieldDispatch.h. Kernels must
+  // call through it with the qualified form ff.FFType::CalcEn(...), otherwise
+  // the call stays virtual.
+  template <typename BoxType, typename FFType>
+  void BoxInterTemplate(const FFType &ff, XYZArray const &coords,
+                        const BoxType &boxAxes, const uint box, double &tempREn,
+                        double &tempLJEn, const std::vector<int> &cellVector,
                         const std::vector<int> &cellStartIndex,
                         const std::vector<int> &mapParticleToCell,
                         const std::vector<std::vector<int>> &neighborList);

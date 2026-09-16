@@ -119,6 +119,7 @@ set(GOMCHeaders
    src/FFDihedrals.h
    src/FFExp6.h
    src/FFParticle.h
+   src/FFParticleInline.h
    src/FFSetup.h
    src/FFShift.h
    src/FFSwitch.h

@@ -25,7 +25,11 @@ A copy of the MIT License can be found in License.txt with this program or at
 // Vir(r)= 6 * expConst * [(r/rmin) * exp(alpha * [1-(r/rmin)])-(rmin/r)^6]/ r^2
 //
 
-struct FF_EXP6 : public FFParticle {
+// `final` lets the compiler resolve this class's own virtual calls --
+// notably the 4-argument CalcEn/CalcCoulomb calling their 2-argument
+// counterparts -- statically, which is what allows the templated energy
+// kernels to inline the pair math. Nothing derives from these.
+struct FF_EXP6 final : public FFParticle {
 public:
   FF_EXP6(Forcefield &ff)
       : FFParticle(ff), expConst(NULL), expConst_1_4(NULL), rMin(NULL),

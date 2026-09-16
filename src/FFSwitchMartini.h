@@ -41,7 +41,11 @@ A copy of the MIT License can be found in License.txt with this program or at
 //
 //
 
-struct FF_SWITCH_MARTINI : public FFParticle {
+// `final` lets the compiler resolve this class's own virtual calls --
+// notably the 4-argument CalcEn/CalcCoulomb calling their 2-argument
+// counterparts -- statically, which is what allows the templated energy
+// kernels to inline the pair math. Nothing derives from these.
+struct FF_SWITCH_MARTINI final : public FFParticle {
 public:
   FF_SWITCH_MARTINI(Forcefield &ff)
       : FFParticle(ff), An(NULL), Bn(NULL), Cn(NULL), An_1_4(NULL),

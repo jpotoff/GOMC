@@ -40,7 +40,15 @@ class NBfix;
 
 class Forcefield;
 
+// Test-only access to the precomputed integer Mie exponent, so the exponent
+// fast path can be compared against its own pow() fallback. The concrete
+// forcefields are `final` (needed to devirtualise the energy kernels), so the
+// tests cannot reach it by deriving a fixture.
+struct MieExponentTestAccess;
+
 struct FFParticle {
+  friend struct MieExponentTestAccess;
+
 public:
   FFParticle(Forcefield &ff);
   virtual ~FFParticle(void);

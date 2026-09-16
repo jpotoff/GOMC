@@ -16,6 +16,8 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "Ewald.h"                //for ewald calculation
 #include "EwaldCached.h"          //for ewald calculation
 #include "Forcefield.h"           //
+#include "FFParticleInline.h"     // so VDW_STD pair math can inline
+#include "ForcefieldDispatch.h"   // resolve the concrete FF type once
 #include "GeomLib.h"
 #include "MoleculeKind.h"
 #include "MoleculeLookup.h"
@@ -152,10 +154,11 @@ SystemPotential CalculateEnergy::SystemInter(SystemPotential potential,
   return potential;
 }
 
-template <typename BoxType>
+template <typename BoxType, typename FFType>
 void CalculateEnergy::BoxInterTemplate(
-    XYZArray const &coords, const BoxType &boxAxes, const uint box,
-    double &tempREn, double &tempLJEn, const std::vector<int> &cellVector,
+    const FFType &ff, XYZArray const &coords, const BoxType &boxAxes,
+    const uint box, double &tempREn, double &tempLJEn,
+    const std::vector<int> &cellVector,
     const std::vector<int> &cellStartIndex,
     const std::vector<int> &mapParticleToCell,
     const std::vector<std::vector<int>> &neighborList) {
@@ -169,8 +172,9 @@ void CalculateEnergy::BoxInterTemplate(
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none)                                         \
-    shared(boxAxes, cellStartIndex, cellVector, coords, mapParticleToCell,     \
-               neighborList) reduction(+ : tempREn, tempLJEn)                  \
+    shared(boxAxes, cellStartIndex, cellVector, coords, ff,                    \
+               mapParticleToCell, neighborList)                                \
+    reduction(+ : tempREn, tempLJEn)                                           \
     firstprivate(box, num::qqFact, hasFraction, fracMol, fracVDW, fracCoul)
 #endif
   // loop over all particles
@@ -214,12 +218,12 @@ void CalculateEnergy::BoxInterTemplate(
               double qi_qj_fact = particleCharge[currParticle] *
                                   particleCharge[nParticle] * num::qqFact;
               if (qi_qj_fact != 0.0) {
-                tempREn += forcefield.particles->CalcCoulomb(
+                tempREn += ff.FFType::CalcCoulomb(
                     distSq, particleKind[currParticle], particleKind[nParticle],
                     qi_qj_fact, lambdaCoulomb, box);
               }
             }
-            tempLJEn += forcefield.particles->CalcEn(
+            tempLJEn += ff.FFType::CalcEn(
                 distSq, particleKind[currParticle], particleKind[nParticle],
                 lambdaVDW);
           }
@@ -720,17 +724,21 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
                   forcefield.sc_coul, forcefield.sc_sigma_6,
                   forcefield.sc_alpha, forcefield.sc_power, box);
 #else
-  // Use templated function for orthogonal and non-orthogonal boxes
-  if (boxAxes.orthogonal[box]) {
-    BoxInterTemplate<BoxDimensions>(coords, boxAxes, box, tempREn, tempLJEn,
-                                    cellVector, cellStartIndex,
-                                    mapParticleToCell, neighborList);
-  } else {
-    BoxInterTemplate<BoxDimensionsNonOrth>(
-        coords, static_cast<const BoxDimensionsNonOrth &>(boxAxes), box,
-        tempREn, tempLJEn, cellVector, cellStartIndex, mapParticleToCell,
-        neighborList);
-  }
+  // Resolve the concrete forcefield and box types once, then run a kernel
+  // with no virtual dispatch in the pair loop.
+  DispatchForcefield(forcefield, [&](const auto &ffRef) {
+    using FFT = std::decay_t<decltype(ffRef)>;
+    if (boxAxes.orthogonal[box]) {
+      BoxInterTemplate<BoxDimensions, FFT>(
+          ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+          cellStartIndex, mapParticleToCell, neighborList);
+    } else {
+      BoxInterTemplate<BoxDimensionsNonOrth, FFT>(
+          ffRef, coords, static_cast<const BoxDimensionsNonOrth &>(boxAxes),
+          box, tempREn, tempLJEn, cellVector, cellStartIndex,
+          mapParticleToCell, neighborList);
+    }
+  });
 #endif
 
   // setting energy and virial of LJ interaction

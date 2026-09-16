@@ -26,7 +26,11 @@ A copy of the MIT License can be found in License.txt with this program or at
 // Eelect = qi * qj * (1/r - 1/rcut)
 // Welect = qi * qj * 1/rij^3
 
-struct FF_SHIFT : public FFParticle {
+// `final` lets the compiler resolve this class's own virtual calls --
+// notably the 4-argument CalcEn/CalcCoulomb calling their 2-argument
+// counterparts -- statically, which is what allows the templated energy
+// kernels to inline the pair math. Nothing derives from these.
+struct FF_SHIFT final : public FFParticle {
 public:
   FF_SHIFT(Forcefield &ff)
       : FFParticle(ff), shiftConst(NULL), shiftConst_1_4(NULL) {}
