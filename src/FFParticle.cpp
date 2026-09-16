@@ -206,17 +206,17 @@ void FFParticle::Blend(ff_setup::Particle const &mie) {
       nOver6_1_4[idx] = n_1_4[idx] / 6;
 
       uint n_int = (uint)n[idx];
-      if (n[idx] == (double)n_int && n_int >= 7 && n_int <= 50) {
+      if (n[idx] == (double)n_int && n_int >= ff::MIE_EXP_MIN && n_int <= ff::MIE_EXP_MAX) {
         nExp[idx] = n_int;
       } else {
-        nExp[idx] = 0xFFFFFFFF;
+        nExp[idx] = ff::MIE_EXP_NOT_INTEGER;
       }
 
       uint n_int_1_4 = (uint)n_1_4[idx];
-      if (n_1_4[idx] == (double)n_int_1_4 && n_int_1_4 >= 7 && n_int_1_4 <= 50) {
+      if (n_1_4[idx] == (double)n_int_1_4 && n_int_1_4 >= ff::MIE_EXP_MIN && n_int_1_4 <= ff::MIE_EXP_MAX) {
         nExp_1_4[idx] = n_int_1_4;
       } else {
-        nExp_1_4[idx] = 0xFFFFFFFF;
+        nExp_1_4[idx] = ff::MIE_EXP_NOT_INTEGER;
       }
     }
   }
@@ -245,17 +245,17 @@ void FFParticle::AdjNBfix(ff_setup::NBfix const &nbfix) {
         nOver6_1_4[j] = n_1_4[j] / 6;
 
         uint n_int = (uint)n[j];
-        if (n[j] == (double)n_int && n_int >= 7 && n_int <= 50) {
+        if (n[j] == (double)n_int && n_int >= ff::MIE_EXP_MIN && n_int <= ff::MIE_EXP_MAX) {
           nExp[j] = n_int;
         } else {
-          nExp[j] = 0xFFFFFFFF;
+          nExp[j] = ff::MIE_EXP_NOT_INTEGER;
         }
 
         uint n_int_1_4 = (uint)n_1_4[j];
-        if (n_1_4[j] == (double)n_int_1_4 && n_int_1_4 >= 7 && n_int_1_4 <= 50) {
+        if (n_1_4[j] == (double)n_int_1_4 && n_int_1_4 >= ff::MIE_EXP_MIN && n_int_1_4 <= ff::MIE_EXP_MAX) {
           nExp_1_4[j] = n_int_1_4;
         } else {
-          nExp_1_4[j] = 0xFFFFFFFF;
+          nExp_1_4[j] = ff::MIE_EXP_NOT_INTEGER;
         }
       }
     }

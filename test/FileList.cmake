@@ -8,6 +8,7 @@ set(TestSources
     test/src/CheckpointTest.cpp
     test/src/MieExponentTest.cpp
     test/src/EwaldRealTableTest.cpp
+    test/src/ForcefieldAnalyticTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )
@@ -120,6 +121,7 @@ set(GOMCHeaders
    src/FFExp6.h
    src/FFParticle.h
    src/FFParticleInline.h
+   src/MiePotential.h
    src/FFSetup.h
    src/FFShift.h
    src/FFSwitch.h

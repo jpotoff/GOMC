@@ -101,6 +101,7 @@ set(headers
    src/FFExp6.h
    src/FFParticle.h
    src/FFParticleInline.h
+   src/MiePotential.h
    src/FFSetup.h
    src/FFShift.h
    src/FFSwitch.h

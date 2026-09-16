@@ -9,6 +9,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "BasicTypes.h" //for uint
 #include "FFConst.h"    //constants related to particles.
 #include "FFParticle.h"
+#include "MiePotential.h"
 #include "NumLib.h" //For Cb, Sq
 
 ///////////////////////////////////////////////////////////////////////
@@ -46,6 +47,8 @@ A copy of the MIT License can be found in License.txt with this program or at
 // counterparts -- statically, which is what allows the templated energy
 // kernels to inline the pair math. Nothing derives from these.
 struct FF_SWITCH_MARTINI final : public FFParticle {
+  friend struct FFTestAccess;
+
 public:
   FF_SWITCH_MARTINI(Forcefield &ff)
       : FFParticle(ff), An(NULL), Bn(NULL), Cn(NULL), An_1_4(NULL),
@@ -227,15 +230,9 @@ inline void FF_SWITCH_MARTINI::CalcAdd_1_4(double &en, const double distSq,
   double r_4 = r_2 * r_2;
   double r_6 = r_4 * r_2;
   
-  double r_n;
-  uint nh = nExp_1_4[index];
-  if (nh == 12) {
-    r_n = r_6 * r_6;
-  } else if (nh != 0xFFFFFFFF) {
-    r_n = num::POW(r_2, r_4, r_6, nh);
-  } else {
-    r_n = pow(r_2, n_1_4[index] * 0.5);
-  }
+  const ff::MieTerms mie_ = ff::MiePair(r_2, nExp_1_4[index],
+                                       n_1_4[index]);
+  const double r_n = mie_.repulse;
 
   double rij_ron = sqrt(distSq) - rOn;
   double rij_ron_2 = rij_ron * rij_ron;
@@ -278,13 +275,10 @@ inline double FF_SWITCH_MARTINI::CalcEn(const double distSq, const uint kind1,
     // save computation time
     return CalcEn(distSq, index);
   }
-  double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
-  sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
-  double dist6 = distSq * distSq * distSq;
-  double lambdaCoef =
-      forcefield.sc_alpha * pow((1.0 - lambda), forcefield.sc_power);
-  double softDist6 = lambdaCoef * sigma6 + dist6;
-  double softRsq = cbrt(softDist6);
+  const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
+      distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
+      forcefield.sc_power, forcefield.sc_sigma_6);
+  const double softRsq = sc_.softRsq;
 
   double en = lambda * CalcEn(softRsq, index);
   return en;
@@ -296,15 +290,9 @@ inline double FF_SWITCH_MARTINI::CalcEn(const double distSq,
   double r_4 = r_2 * r_2;
   double r_6 = r_4 * r_2;
   
-  double r_n;
-  uint nh = nExp[index];
-  if (nh == 12) {
-    r_n = r_6 * r_6;
-  } else if (nh != 0xFFFFFFFF) {
-    r_n = num::POW(r_2, r_4, r_6, nh);
-  } else {
-    r_n = pow(r_2, n[index] * 0.5);
-  }
+  const ff::MieTerms mie_ = ff::MiePair(r_2, nExp[index],
+                                       n[index]);
+  const double r_n = mie_.repulse;
 
   double rij_ron = sqrt(distSq) - rOn;
   double rij_ron_2 = rij_ron * rij_ron;
@@ -334,13 +322,10 @@ inline double FF_SWITCH_MARTINI::CalcVir(const double distSq, const uint kind1,
     // save computation time
     return CalcVir(distSq, index);
   }
-  double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
-  sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
-  double dist6 = distSq * distSq * distSq;
-  double lambdaCoef =
-      forcefield.sc_alpha * pow((1.0 - lambda), forcefield.sc_power);
-  double softDist6 = lambdaCoef * sigma6 + dist6;
-  double softRsq = cbrt(softDist6);
+  const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
+      distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
+      forcefield.sc_power, forcefield.sc_sigma_6);
+  const double softRsq = sc_.softRsq;
   double correction = distSq / softRsq;
   // We need to fix the return value from calcVir
   double vir = lambda * correction * correction * CalcVir(softRsq, index);
@@ -357,15 +342,9 @@ inline double FF_SWITCH_MARTINI::CalcVir(const double distSq,
   double r_4 = r_2 * r_2;
   double r_6 = r_4 * r_2;
   
-  double r_n;
-  uint nh = nExp[index];
-  if (nh == 12) {
-    r_n = r_6 * r_6;
-  } else if (nh != 0xFFFFFFFF) {
-    r_n = num::POW(r_2, r_4, r_6, nh);
-  } else {
-    r_n = pow(r_2, n[index] * 0.5);
-  }
+  const ff::MieTerms mie_ = ff::MiePair(r_2, nExp[index],
+                                       n[index]);
+  const double r_n = mie_.repulse;
   double r_n2 = r_n * r_2;
 
   double rij_ron = sqrt(distSq) - rOn;
@@ -398,13 +377,10 @@ inline double FF_SWITCH_MARTINI::CalcCoulomb(const double distSq,
   double en = 0.0;
   if (forcefield.sc_coul) {
     uint index = FlatIndex(kind1, kind2);
-    double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
-    sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
-    double dist6 = distSq * distSq * distSq;
-    double lambdaCoef =
-        forcefield.sc_alpha * pow((1.0 - lambda), forcefield.sc_power);
-    double softDist6 = lambdaCoef * sigma6 + dist6;
-    double softRsq = cbrt(softDist6);
+    const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
+        distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
+        forcefield.sc_power, forcefield.sc_sigma_6);
+    const double softRsq = sc_.softRsq;
     en = lambda * CalcCoulomb(softRsq, qi_qj_Fact, b);
   } else {
     en = lambda * CalcCoulomb(distSq, qi_qj_Fact, b);
@@ -449,13 +425,10 @@ FF_SWITCH_MARTINI::CalcCoulombVir(const double distSq, const uint kind1,
   double vir = 0.0;
   if (forcefield.sc_coul) {
     uint index = FlatIndex(kind1, kind2);
-    double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
-    sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
-    double dist6 = distSq * distSq * distSq;
-    double lambdaCoef =
-        forcefield.sc_alpha * pow((1.0 - lambda), forcefield.sc_power);
-    double softDist6 = lambdaCoef * sigma6 + dist6;
-    double softRsq = cbrt(softDist6);
+    const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
+        distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
+        forcefield.sc_power, forcefield.sc_sigma_6);
+    const double softRsq = sc_.softRsq;
     double correction = distSq / softRsq;
     // We need to fix the return value from calcVir
     vir = lambda * correction * correction * CalcCoulombVir(softRsq, qi_qj, b);
@@ -498,13 +471,11 @@ inline double FF_SWITCH_MARTINI::CalcdEndL(const double distSq,
     return 0.0;
 
   uint index = FlatIndex(kind1, kind2);
-  double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
-  sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
-  double dist6 = distSq * distSq * distSq;
-  double lambdaCoef =
-      forcefield.sc_alpha * pow((1.0 - lambda), forcefield.sc_power);
-  double softDist6 = lambdaCoef * sigma6 + dist6;
-  double softRsq = cbrt(softDist6);
+  const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
+      distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
+      forcefield.sc_power, forcefield.sc_sigma_6);
+  const double softRsq = sc_.softRsq;
+  const double sigma6 = sc_.sigma6;
   double fCoef = lambda * forcefield.sc_alpha * forcefield.sc_power / 6.0;
   fCoef *= pow(1.0 - lambda, forcefield.sc_power - 1.0) * sigma6 /
            (softRsq * softRsq);
@@ -523,13 +494,11 @@ FF_SWITCH_MARTINI::CalcCoulombdEndL(const double distSq, const uint kind1,
   double dhdl = 0.0;
   if (forcefield.sc_coul) {
     uint index = FlatIndex(kind1, kind2);
-    double sigma6 = sigmaSq[index] * sigmaSq[index] * sigmaSq[index];
-    sigma6 = std::max(sigma6, forcefield.sc_sigma_6);
-    double dist6 = distSq * distSq * distSq;
-    double lambdaCoef =
-        forcefield.sc_alpha * pow((1.0 - lambda), forcefield.sc_power);
-    double softDist6 = lambdaCoef * sigma6 + dist6;
-    double softRsq = cbrt(softDist6);
+    const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
+        distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
+        forcefield.sc_power, forcefield.sc_sigma_6);
+    const double softRsq = sc_.softRsq;
+    const double sigma6 = sc_.sigma6;
     double fCoef = lambda * forcefield.sc_alpha * forcefield.sc_power / 6.0;
     fCoef *= pow(1.0 - lambda, forcefield.sc_power - 1.0) * sigma6 /
              (softRsq * softRsq);

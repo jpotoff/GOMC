@@ -45,9 +45,14 @@ class Forcefield;
 // forcefields are `final` (needed to devirtualise the energy kernels), so the
 // tests cannot reach it by deriving a fixture.
 struct MieExponentTestAccess;
+// Test-only access to derived forcefield parameters, so the analytic tests can
+// pin each potential against its closed form. The concrete forcefields are
+// `final`, so fixtures cannot reach them by derivation.
+struct FFTestAccess;
 
 struct FFParticle {
   friend struct MieExponentTestAccess;
+  friend struct FFTestAccess;
 
 public:
   FFParticle(Forcefield &ff);
