@@ -224,15 +224,11 @@ inline void FF_SWITCH_MARTINI::CalcAdd_1_4(double &en, const double distSq,
   double r_6 = r_4 * r_2;
   
   double r_n;
-  uint nh = nHalf_1_4[index];
-  if (nh == 6) {
-    r_n = r_6;
+  uint nh = nExp_1_4[index];
+  if (nh == 12) {
+    r_n = r_6 * r_6;
   } else if (nh != 0xFFFFFFFF) {
     r_n = num::POW(r_2, r_4, r_6, nh);
-    uint n_int = (uint)n_1_4[index];
-    if (n_int & 1) {
-      r_n *= sqrt(r_2);
-    }
   } else {
     r_n = pow(r_2, n_1_4[index] * 0.5);
   }
@@ -297,15 +293,11 @@ inline double FF_SWITCH_MARTINI::CalcEn(const double distSq,
   double r_6 = r_4 * r_2;
   
   double r_n;
-  uint nh = nHalf[index];
-  if (nh == 6) {
-    r_n = r_6;
+  uint nh = nExp[index];
+  if (nh == 12) {
+    r_n = r_6 * r_6;
   } else if (nh != 0xFFFFFFFF) {
     r_n = num::POW(r_2, r_4, r_6, nh);
-    uint n_int = (uint)n[index];
-    if (n_int & 1) {
-      r_n *= sqrt(r_2);
-    }
   } else {
     r_n = pow(r_2, n[index] * 0.5);
   }
@@ -362,15 +354,11 @@ inline double FF_SWITCH_MARTINI::CalcVir(const double distSq,
   double r_6 = r_4 * r_2;
   
   double r_n;
-  uint nh = nHalf[index];
-  if (nh == 6) {
-    r_n = r_6;
+  uint nh = nExp[index];
+  if (nh == 12) {
+    r_n = r_6 * r_6;
   } else if (nh != 0xFFFFFFFF) {
     r_n = num::POW(r_2, r_4, r_6, nh);
-    uint n_int = (uint)n[index];
-    if (n_int & 1) {
-      r_n *= sqrt(r_2);
-    }
   } else {
     r_n = pow(r_2, n[index] * 0.5);
   }

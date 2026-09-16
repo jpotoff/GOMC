@@ -6,6 +6,7 @@ set(TestSources
     #test/src/PSFParserTest.cpp
     test/src/ConsistentTrajectoryTest.cpp
     test/src/CheckpointTest.cpp
+    test/src/MieExponentTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )

@@ -15,7 +15,7 @@ FFParticle::FFParticle(Forcefield &ff)
       n_1_4(NULL), sigmaSq(NULL), sigmaSq_1_4(NULL), epsilon(NULL),
       epsilon_1_4(NULL), epsilon_cn(NULL), epsilon_cn_1_4(NULL),
       epsilon_cn_6(NULL), epsilon_cn_6_1_4(NULL), nOver6(NULL), nOver6_1_4(NULL),
-      nHalf(NULL), nHalf_1_4(NULL)
+      nExp(NULL), nExp_1_4(NULL)
 #ifdef GOMC_CUDA
       ,
       varCUDA(NULL)
@@ -43,8 +43,8 @@ FFParticle::~FFParticle(void) {
   delete[] epsilon_cn_1_4;
   delete[] epsilon_cn_6_1_4;
   delete[] nOver6_1_4;
-  delete[] nHalf;
-  delete[] nHalf_1_4;
+  delete[] nExp;
+  delete[] nExp_1_4;
 
 #ifdef GOMC_CUDA
   DestroyCUDAVars(varCUDA);
@@ -80,8 +80,8 @@ void FFParticle::Init(ff_setup::Particle const &mie,
   nOver6_1_4 = new double[size];
   sigmaSq_1_4 = new double[size];
 
-  nHalf = new uint[size];
-  nHalf_1_4 = new uint[size];
+  nExp = new uint[size];
+  nExp_1_4 = new uint[size];
 
   // Combining VDW parameter
   Blend(mie);
@@ -205,16 +205,16 @@ void FFParticle::Blend(ff_setup::Particle const &mie) {
 
       uint n_int = (uint)n[idx];
       if (n[idx] == (double)n_int && n_int >= 7 && n_int <= 50) {
-        nHalf[idx] = n_int / 2;
+        nExp[idx] = n_int;
       } else {
-        nHalf[idx] = 0xFFFFFFFF;
+        nExp[idx] = 0xFFFFFFFF;
       }
 
       uint n_int_1_4 = (uint)n_1_4[idx];
       if (n_1_4[idx] == (double)n_int_1_4 && n_int_1_4 >= 7 && n_int_1_4 <= 50) {
-        nHalf_1_4[idx] = n_int_1_4 / 2;
+        nExp_1_4[idx] = n_int_1_4;
       } else {
-        nHalf_1_4[idx] = 0xFFFFFFFF;
+        nExp_1_4[idx] = 0xFFFFFFFF;
       }
     }
   }
@@ -244,16 +244,16 @@ void FFParticle::AdjNBfix(ff_setup::NBfix const &nbfix) {
 
         uint n_int = (uint)n[j];
         if (n[j] == (double)n_int && n_int >= 7 && n_int <= 50) {
-          nHalf[j] = n_int / 2;
+          nExp[j] = n_int;
         } else {
-          nHalf[j] = 0xFFFFFFFF;
+          nExp[j] = 0xFFFFFFFF;
         }
 
         uint n_int_1_4 = (uint)n_1_4[j];
         if (n_1_4[j] == (double)n_int_1_4 && n_int_1_4 >= 7 && n_int_1_4 <= 50) {
-          nHalf_1_4[j] = n_int_1_4 / 2;
+          nExp_1_4[j] = n_int_1_4;
         } else {
-          nHalf_1_4[j] = 0xFFFFFFFF;
+          nExp_1_4[j] = 0xFFFFFFFF;
         }
       }
     }
@@ -310,16 +310,12 @@ inline void FFParticle::CalcAdd_1_4(double &en, const double distSq,
   double attract = rRat4 * rRat2;
   
   double repulse;
-  uint nh = nHalf_1_4[index];
-  if (nh == 6) {
+  uint nh = nExp_1_4[index];
+  if (nh == 12) {
     repulse = attract * attract;
   } else if (nh != 0xFFFFFFFF) {
     double rRat6 = attract;
     repulse = num::POW(rRat2, rRat4, rRat6, nh);
-    uint n_int = (uint)n_1_4[index];
-    if (n_int & 1) {
-      repulse *= sqrt(rRat2);
-    }
   } else {
     repulse = pow(rRat2, n_1_4[index] * 0.5);
   }
@@ -369,16 +365,12 @@ inline double FFParticle::CalcEn(const double distSq, const uint index) const {
   double attract = rRat4 * rRat2;
   
   double repulse;
-  uint nh = nHalf[index];
-  if (nh == 6) {
+  uint nh = nExp[index];
+  if (nh == 12) {
     repulse = attract * attract;
   } else if (nh != 0xFFFFFFFF) {
     double rRat6 = attract;
     repulse = num::POW(rRat2, rRat4, rRat6, nh);
-    uint n_int = (uint)n[index];
-    if (n_int & 1) {
-      repulse *= sqrt(rRat2);
-    }
   } else {
     repulse = pow(rRat2, n[index] * 0.5);
   }
@@ -416,16 +408,12 @@ inline double FFParticle::CalcVir(const double distSq, const uint index) const {
   double attract = rRat4 * rRat2;
   
   double repulse;
-  uint nh = nHalf[index];
-  if (nh == 6) {
+  uint nh = nExp[index];
+  if (nh == 12) {
     repulse = attract * attract;
   } else if (nh != 0xFFFFFFFF) {
     double rRat6 = attract;
     repulse = num::POW(rRat2, rRat4, rRat6, nh);
-    uint n_int = (uint)n[index];
-    if (n_int & 1) {
-      repulse *= sqrt(rRat2);
-    }
   } else {
     repulse = pow(rRat2, n[index] * 0.5);
   }
