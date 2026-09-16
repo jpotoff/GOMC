@@ -30,6 +30,8 @@ function(add_ensemble_test name ENSEMBLE_ID ENSEMBLE_LABEL)
              COMMAND ${name} --gtest_filter=BasicTypesTest.*)
     add_test(NAME MolLookupTest_${ENSEMBLE_LABEL}
              COMMAND ${name} --gtest_filter=CheckConsensusBeta.*)
+    add_test(NAME MieExponentTest_${ENSEMBLE_LABEL}
+             COMMAND ${name} --gtest_filter=MieExponentTest.*)
 
     if(${ENSEMBLE_ID} EQUAL 2 OR ${ENSEMBLE_ID} EQUAL 3)
         add_test(NAME ConsistentTrajectoryTest_${ENSEMBLE_LABEL}

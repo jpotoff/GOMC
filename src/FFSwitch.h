@@ -119,16 +119,12 @@ inline void FF_SWITCH::CalcAdd_1_4(double &en, const double distSq,
   double attract = rRat4 * rRat2;
 
   double repulse;
-  uint nh = nHalf_1_4[index];
-  if (nh == 6) {
+  uint nh = nExp_1_4[index];
+  if (nh == 12) {
     repulse = attract * attract;
   } else if (nh != 0xFFFFFFFF) {
     double rRat6 = attract;
     repulse = num::POW(rRat2, rRat4, rRat6, nh);
-    uint n_int = (uint)n_1_4[index];
-    if (n_int & 1) {
-      repulse *= sqrt(rRat2);
-    }
   } else {
     repulse = pow(rRat2, n_1_4[index] * 0.5);
   }
@@ -183,16 +179,12 @@ inline double FF_SWITCH::CalcEn(const double distSq, const uint index) const {
   double attract = rRat4 * rRat2;
   
   double repulse;
-  uint nh = nHalf[index];
-  if (nh == 6) {
+  uint nh = nExp[index];
+  if (nh == 12) {
     repulse = attract * attract;
   } else if (nh != 0xFFFFFFFF) {
     double rRat6 = attract;
     repulse = num::POW(rRat2, rRat4, rRat6, nh);
-    uint n_int = (uint)n[index];
-    if (n_int & 1) {
-      repulse *= sqrt(rRat2);
-    }
   } else {
     repulse = pow(rRat2, n[index] * 0.5);
   }
@@ -236,16 +228,12 @@ inline double FF_SWITCH::CalcVir(const double distSq, const uint index) const {
   double attract = rRat4 * rRat2;
   
   double repulse;
-  uint nh = nHalf[index];
-  if (nh == 6) {
+  uint nh = nExp[index];
+  if (nh == 12) {
     repulse = attract * attract;
   } else if (nh != 0xFFFFFFFF) {
     double rRat6 = attract;
     repulse = num::POW(rRat2, rRat4, rRat6, nh);
-    uint n_int = (uint)n[index];
-    if (n_int & 1) {
-      repulse *= sqrt(rRat2);
-    }
   } else {
     repulse = pow(rRat2, n[index] * 0.5);
   }
