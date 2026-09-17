@@ -21,6 +21,7 @@ the *energy expression*, which is what a refactor moves.
 
 #include "FFExp6.h"
 #include "FFParticle.h"
+#include "FFVdwStd.h"
 #include "FFSetup.h"
 #include "FFShift.h"
 #include "FFSwitch.h"
@@ -84,6 +85,14 @@ void InitForcefield(Forcefield &ff, bool martini = false) {
   ff.dielectric = 1.0;
   ff.electrostatic = false;
   ff.ewald = false;
+  // The Coulomb kernels guard on rCutCoulombSq; leaving it zero makes every
+  // call return 0.0 and any comparison against it vacuous.
+  for (uint b = 0; b < BOX_TOTAL; ++b) {
+    ff.rCutCoulomb[b] = kRCut;
+    ff.rCutCoulombSq[b] = kRCut * kRCut;
+    ff.alpha[b] = 0.0;
+    ff.alphaSq[b] = 0.0;
+  }
 }
 
 // One kind, run through the production Init/Blend path.
@@ -133,7 +142,7 @@ TEST(ForcefieldAnalyticTest, MieMatchesClosedForm) {
   for (int e = 0; e < 6; ++e) {
     Forcefield ff;
     InitForcefield(ff);
-    FFParticle p(ff);
+    FF_VDW_STD p(ff);
     InitOneKind(p, exponents[e]);
 
     for (int d = 0; d < kNumDist; ++d) {
@@ -290,7 +299,7 @@ TEST(ForcefieldAnalyticTest, Exp6HasHardWallBelowRMax) {
 TEST(ForcefieldAnalyticTest, AllFlavorsVanishBeyondCutoff) {
   const double beyond = (kRCut + 1.0) * (kRCut + 1.0);
   {
-    Forcefield ff; InitForcefield(ff); FFParticle p(ff); InitOneKind(p, 12.0);
+    Forcefield ff; InitForcefield(ff); FF_VDW_STD p(ff); InitOneKind(p, 12.0);
     EXPECT_EQ(p.CalcEn(beyond, 0, 0, 1.0), 0.0) << "Mie";
   }
   {
@@ -315,7 +324,7 @@ TEST(ForcefieldAnalyticTest, AllFlavorsVanishBeyondCutoff) {
 //
 TEST(ForcefieldAnalyticTest, SoftCoreReducesToPlainAtLambdaOne) {
   {
-    Forcefield ff; InitForcefield(ff); FFParticle p(ff); InitOneKind(p, 16.0);
+    Forcefield ff; InitForcefield(ff); FF_VDW_STD p(ff); InitOneKind(p, 16.0);
     for (int d = 0; d < kNumDist; ++d) {
       const double rSq = kDist[d] * kDist[d];
       EXPECT_NEAR(p.CalcEn(rSq, 0, 0, 1.0), AnalyticMie(p, kDist[d], 0),
@@ -341,7 +350,7 @@ TEST(ForcefieldAnalyticTest, SoftCoreIsContinuousApproachingLambdaOne) {
   Forcefield ff;
   InitForcefield(ff);
   ff.freeEnergy = true;
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
 
   const double rSq = 5.0 * 5.0;
@@ -372,7 +381,7 @@ TEST(ForcefieldAnalyticTest, Mie14MatchesClosedForm) {
   for (int e = 0; e < 3; ++e) {
     Forcefield ff;
     InitForcefield(ff);
-    FFParticle p(ff);
+    FF_VDW_STD p(ff);
     InitOneKind(p, exponents[e]);
 
     for (int d = 0; d < kNumDist; ++d) {
@@ -409,7 +418,7 @@ TEST(ForcefieldAnalyticTest, Shift14MatchesClosedForm) {
 TEST(ForcefieldAnalyticTest, OneFourUsesItsOwnParameters) {
   Forcefield ff;
   InitForcefield(ff);
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
 
   const double r = 5.0;
@@ -430,7 +439,7 @@ TEST(ForcefieldAnalyticTest, OneFourUsesItsOwnParameters) {
 TEST(ForcefieldAnalyticTest, OneFourAccumulatesRatherThanOverwrites) {
   Forcefield ff;
   InitForcefield(ff);
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
 
   const double r = 5.0, seed = 123.456;
@@ -454,7 +463,7 @@ TEST(ForcefieldAnalyticTest, OneFourAccumulatesRatherThanOverwrites) {
 TEST(ForcefieldAnalyticTest, OneFourIsSilentBeyondCutoff) {
   Forcefield ff;
   InitForcefield(ff);
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
 
   const double beyond = (kRCut + 1.0) * (kRCut + 1.0);
@@ -470,7 +479,7 @@ TEST(ForcefieldAnalyticTest, CoulombOneFourAppliesScaling) {
   Forcefield ff;
   InitForcefield(ff);
   ff.scaling_14 = 0.5;
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
 
   const double qq = 332.0;
@@ -522,7 +531,7 @@ TEST(ForcefieldAnalyticTest, SoftCoreMatchesClosedFormBelowLambdaOne) {
     Forcefield ff;
     InitForcefield(ff);
     ff.freeEnergy = true;
-    FFParticle p(ff);
+    FF_VDW_STD p(ff);
     InitOneKind(p, exponents[e]);
     const double sSq = FFTestAccess::SigmaSq(p, 0);
 
@@ -574,7 +583,7 @@ TEST(ForcefieldAnalyticTest, SoftCoreClampsSmallSigma) {
   InitForcefield(ff);
   ff.freeEnergy = true;
   ff.sc_sigma_6 = 1.0e6; // far above sigma^6, so the clamp must bind
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
   const double sSq = FFTestAccess::SigmaSq(p, 0);
   ASSERT_LT(sSq * sSq * sSq, ff.sc_sigma_6) << "clamp would not bind";
@@ -594,7 +603,7 @@ TEST(ForcefieldAnalyticTest, SoftCoreIsFiniteAtContact) {
   Forcefield ff;
   InitForcefield(ff);
   ff.freeEnergy = true;
-  FFParticle p(ff);
+  FF_VDW_STD p(ff);
   InitOneKind(p, 12.0);
 
   const double tiny = 1e-8; // essentially overlapping
@@ -602,4 +611,551 @@ TEST(ForcefieldAnalyticTest, SoftCoreIsFiniteAtContact) {
   const double hard = p.CalcEn(tiny, 0, 0, 1.0);
   EXPECT_TRUE(std::isfinite(soft)) << "soft core must stay finite at contact";
   EXPECT_LT(soft, hard) << "lambda<1 must be less repulsive than lambda=1";
+}
+
+// ===========================================================================
+// The point of the evaluator split: a new truncation is a few lines and works
+// with every core, rather than a new 175-line class (cf. commit b1d7ec92,
+// which added force-shifted VdW in 280 lines across 10 files).
+//
+// This is force-shifted VdW, defined here in the test rather than in the
+// library, precisely to show that nothing in the library has to change.
+// ===========================================================================
+namespace {
+
+struct TestForceShiftTrunc {
+  //! plain, less the value AND the slope at the cutoff
+  static double Energy(const ff::VdwParams &p, const ff::MieTerms &t,
+                       const double distSq, const uint i) {
+    return p.epsilon_cn[i] * (t.repulse - t.attract) - p.shiftConst[i];
+  }
+};
+
+// Note it reuses the library's PlainVir: a new truncation of the energy does
+// not require reimplementing the virial.
+typedef ff::PairEval<ff::MieCore, TestForceShiftTrunc, ff::PlainVir>
+    TestMieForceShift;
+
+} // namespace
+
+TEST(ForcefieldAnalyticTest, NewTruncationComposesWithExistingCore) {
+  Forcefield ff;
+  InitForcefield(ff);
+  FF_SHIFT p(ff); // reuse its parameters, incl. shiftConst
+  InitOneKind(p, 16.0);
+
+  const ff::VdwParams vp = p.VdwView();
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d], rSq = r * r;
+    // the new evaluator, composed from an existing core and a new truncation
+    const double got = TestMieForceShift::Energy(vp, rSq, 0);
+    const double want = AnalyticMie(p, r, 0) - FFTestAccess::ShiftConst(p, 0);
+    EXPECT_NEAR(got, want, kTol * std::fabs(want)) << "r=" << r;
+  }
+}
+
+//
+// The library's own compositions must agree with the classes that delegate to
+// them -- i.e. the evaluators really are what the forcefields compute.
+//
+TEST(ForcefieldAnalyticTest, EvaluatorsAgreeWithTheirForcefields) {
+  {
+    Forcefield ff; InitForcefield(ff); FF_VDW_STD p(ff); InitOneKind(p, 16.0);
+    for (int d = 0; d < kNumDist; ++d) {
+      const double rSq = kDist[d] * kDist[d];
+      EXPECT_EQ(ff::MiePlain::Energy(p.VdwView(), rSq, 0),
+                p.CalcEn(rSq, 0, 0, 1.0)) << "MiePlain vs FFParticle";
+    }
+  }
+  {
+    Forcefield ff; InitForcefield(ff); FF_SHIFT p(ff); InitOneKind(p, 16.0);
+    for (int d = 0; d < kNumDist; ++d) {
+      const double rSq = kDist[d] * kDist[d];
+      EXPECT_EQ(ff::MieShift::Energy(p.VdwView(), rSq, 0),
+                p.CalcEn(rSq, 0, 0, 1.0)) << "MieShift vs FF_SHIFT";
+    }
+  }
+  {
+    Forcefield ff; InitForcefield(ff); FF_SWITCH p(ff); InitOneKind(p, 16.0);
+    for (int d = 0; d < kNumDist; ++d) {
+      const double rSq = kDist[d] * kDist[d];
+      EXPECT_EQ(ff::MieSwitch::Energy(p.VdwView(), rSq, 0),
+                p.CalcEn(rSq, 0, 0, 1.0)) << "MieSwitch vs FF_SWITCH";
+    }
+  }
+  {
+    Forcefield ff; InitForcefield(ff); ff.exp6 = true;
+    FF_EXP6 p(ff); InitOneKind(p, 15.0);
+    const double rMaxSq = FFTestAccess::RMaxSq(p, 0);
+    for (int d = 0; d < kNumDist; ++d) {
+      const double rSq = kDist[d] * kDist[d];
+      if (rSq < rMaxSq) continue;
+      EXPECT_EQ(ff::Exp6Eval::Energy(p.VdwView(), rSq, 0),
+                p.CalcEn(rSq, 0, 0, 1.0)) << "Exp6Eval vs FF_EXP6";
+    }
+  }
+}
+
+// ===========================================================================
+// Virial.
+//
+// GOMC's convention (stated in FFParticle::CalcVir) is
+//
+//     Vir(r) = F.r / r^2 = -(1/r) dU/dr
+//
+// so the strongest available check is against a central difference of CalcEn,
+// not against a transcribed formula. A copied-and-edited virial expression can
+// agree with a copied-and-edited closed form while both are wrong; it cannot
+// agree with the derivative of the energy the code actually computes.
+// ===========================================================================
+namespace {
+
+//! -(1/r) dU/dr by central difference on whatever CalcEn returns.
+template <class FF>
+double VirialByFiniteDifference(const FF &p, double r) {
+  const double h = 1e-5 * r;
+  const double uPlus = p.CalcEn((r + h) * (r + h), 0, 0, 1.0);
+  const double uMinus = p.CalcEn((r - h) * (r - h), 0, 0, 1.0);
+  return -(uPlus - uMinus) / (2.0 * h) / r;
+}
+
+// Away from the steep repulsive wall, where a central difference is accurate.
+const double kVirDist[] = {4.5, 5.0, 6.0, 7.0, 8.0, 9.0, 11.0, 12.0};
+const int kNumVirDist = sizeof(kVirDist) / sizeof(kVirDist[0]);
+const double kFdTol = 1e-5; // central-difference truncation, not code error
+
+} // namespace
+
+TEST(ForcefieldAnalyticTest, MieVirialIsNegativeEnergyDerivative) {
+  const double exponents[] = {12.0, 16.0};
+  for (int e = 0; e < 2; ++e) {
+    Forcefield ff;
+    InitForcefield(ff);
+    FF_VDW_STD p(ff);
+    InitOneKind(p, exponents[e]);
+    for (int d = 0; d < kNumVirDist; ++d) {
+      const double r = kVirDist[d];
+      const double want = VirialByFiniteDifference(p, r);
+      const double got = p.CalcVir(r * r, 0, 0, 1.0);
+      EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-12)
+          << "n=" << exponents[e] << " r=" << r;
+    }
+  }
+}
+
+//
+// The Mie virial in closed form, independent of the finite difference:
+//   Vir = epsilon_cn * (n * repulse - 6 * attract) / r^2
+//
+TEST(ForcefieldAnalyticTest, MieVirialMatchesClosedForm) {
+  const double exponents[] = {12.0, 16.0, 12.5};
+  for (int e = 0; e < 3; ++e) {
+    Forcefield ff;
+    InitForcefield(ff);
+    FF_VDW_STD p(ff);
+    InitOneKind(p, exponents[e]);
+    const double sSq = FFTestAccess::SigmaSq(p, 0);
+    const double ecn = FFTestAccess::EpsilonCn(p, 0);
+    const double n = FFTestAccess::N(p, 0);
+
+    for (int d = 0; d < kNumVirDist; ++d) {
+      const double r = kVirDist[d], rSq = r * r;
+      const double sr2 = sSq / rSq;
+      const double attract = std::pow(sr2, 3.0);
+      const double repulse = std::pow(sr2, n * 0.5);
+      const double want = ecn * (n * repulse - 6.0 * attract) / rSq;
+      const double got = p.CalcVir(rSq, 0, 0, 1.0);
+      EXPECT_NEAR(got, want, 1e-10 * std::fabs(want))
+          << "n=" << exponents[e] << " r=" << r;
+    }
+  }
+}
+
+//
+// Shifting the energy by a constant cannot change the force, so FF_SHIFT's
+// virial must equal the plain one. This is a property the code should have, not
+// a formula it happens to contain.
+//
+TEST(ForcefieldAnalyticTest, ShiftDoesNotChangeTheVirial) {
+  Forcefield ffA, ffB;
+  InitForcefield(ffA);
+  InitForcefield(ffB);
+  FF_VDW_STD plain(ffA);
+  FF_SHIFT shifted(ffB);
+  InitOneKind(plain, 16.0);
+  InitOneKind(shifted, 16.0);
+
+  for (int d = 0; d < kNumVirDist; ++d) {
+    const double rSq = kVirDist[d] * kVirDist[d];
+    EXPECT_NEAR(shifted.CalcVir(rSq, 0, 0, 1.0), plain.CalcVir(rSq, 0, 0, 1.0),
+                1e-12 * std::fabs(plain.CalcVir(rSq, 0, 0, 1.0)))
+        << "a constant shift must not change the force, r=" << kVirDist[d];
+  }
+}
+
+//
+// The switched virial must account for the derivative of the switching
+// function, not just the potential -- the case a transcribed formula gets
+// wrong most easily.
+//
+TEST(ForcefieldAnalyticTest, SwitchVirialIsNegativeEnergyDerivative) {
+  Forcefield ff;
+  InitForcefield(ff);
+  FF_SWITCH p(ff);
+  InitOneKind(p, 12.0);
+
+  for (int d = 0; d < kNumVirDist; ++d) {
+    const double r = kVirDist[d];
+    const double want = VirialByFiniteDifference(p, r);
+    const double got = p.CalcVir(r * r, 0, 0, 1.0);
+    EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-12)
+        << "r=" << r << (r * r > kRSwitch * kRSwitch ? "  (inside switch)" : "");
+  }
+}
+
+TEST(ForcefieldAnalyticTest, Exp6VirialIsNegativeEnergyDerivative) {
+  Forcefield ff;
+  InitForcefield(ff);
+  ff.exp6 = true;
+  FF_EXP6 p(ff);
+  InitOneKind(p, 15.0);
+  const double rMaxSq = FFTestAccess::RMaxSq(p, 0);
+
+  for (int d = 0; d < kNumVirDist; ++d) {
+    const double r = kVirDist[d];
+    if (r * r < rMaxSq * 1.05)
+      continue; // keep the stencil clear of the hard wall
+    const double want = VirialByFiniteDifference(p, r);
+    const double got = p.CalcVir(r * r, 0, 0, 1.0);
+    EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-12) << "r=" << r;
+  }
+}
+
+// ===========================================================================
+// Electrostatics.
+//
+// Two distinct situations, and they factor differently:
+//
+//   Ewald on  -- every flavor computes the SAME thing, qq * erfc(alpha*r)/r
+//                (now via the tabulated kernel). Ten identical copies.
+//   Ewald off -- the flavors genuinely differ: plain qq/r, shifted
+//                qq(1/r - 1/rCut), switched, and Martini's own form.
+//
+// So the Ewald branch is duplication to remove; the rest is real physics.
+// ===========================================================================
+namespace {
+
+void InitForcefieldEwald(Forcefield &ff) {
+  InitForcefield(ff);
+  ff.electrostatic = true;
+  ff.ewald = true;
+  ff.tolerance = 1e-5;
+  for (uint b = 0; b < BOX_TOTAL; ++b) {
+    ff.rCutCoulomb[b] = kRCut;
+    ff.rCutCoulombSq[b] = kRCut * kRCut;
+    ff.alpha[b] = std::sqrt(-std::log(ff.tolerance)) / kRCut;
+    ff.alphaSq[b] = ff.alpha[b] * ff.alpha[b];
+  }
+  ff.realTable.Init(ff.alpha, ff.rCutCoulombSq, ff.rCutLowSq);
+}
+
+const double kQQ = 332.0636;   // e^2/(4 pi eps0) in GOMC's units, roughly
+// The tabulated kernel is accurate to ~1e-7 relative by construction.
+const double kCoulTol = 1e-6;
+
+} // namespace
+
+TEST(ForcefieldAnalyticTest, EwaldCoulombMatchesErfcOverR) {
+  Forcefield ff;
+  InitForcefieldEwald(ff);
+  FF_VDW_STD p(ff);
+  InitOneKind(p, 12.0);
+  const double alpha = ff.alpha[0];
+
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d];
+    const double want = kQQ * std::erfc(alpha * r) / r;
+    const double got = p.CalcCoulomb(r * r, 0, 0, kQQ, 1.0, 0);
+    EXPECT_NEAR(got, want, kCoulTol * std::fabs(want)) << "r=" << r;
+  }
+}
+
+//
+// With Ewald on, every flavor must agree -- that is what makes the ten copies
+// duplication rather than physics.
+//
+TEST(ForcefieldAnalyticTest, EwaldCoulombIsTheSameForEveryFlavor) {
+  Forcefield f1, f2, f3, f4;
+  InitForcefieldEwald(f1); InitForcefieldEwald(f2);
+  InitForcefieldEwald(f3); InitForcefieldEwald(f4);
+  FF_VDW_STD a(f1); FF_SHIFT b(f2); FF_SWITCH c(f3);
+  f4.exp6 = true; FF_EXP6 d(f4);
+  InitOneKind(a, 12.0); InitOneKind(b, 12.0);
+  InitOneKind(c, 12.0); InitOneKind(d, 15.0);
+
+  for (int i = 0; i < kNumDist; ++i) {
+    const double rSq = kDist[i] * kDist[i];
+    const double ref = a.CalcCoulomb(rSq, 0, 0, kQQ, 1.0, 0);
+    EXPECT_EQ(b.CalcCoulomb(rSq, 0, 0, kQQ, 1.0, 0), ref) << "shift, r=" << kDist[i];
+    EXPECT_EQ(c.CalcCoulomb(rSq, 0, 0, kQQ, 1.0, 0), ref) << "switch, r=" << kDist[i];
+    EXPECT_EQ(d.CalcCoulomb(rSq, 0, 0, kQQ, 1.0, 0), ref) << "exp6, r=" << kDist[i];
+  }
+}
+
+//
+// Ewald off: each flavor's own form.
+//
+TEST(ForcefieldAnalyticTest, PlainCoulombMatchesClosedForm) {
+  Forcefield ff;
+  InitForcefield(ff);          // ewald stays off
+  ff.electrostatic = true;
+  FF_VDW_STD p(ff);
+  InitOneKind(p, 12.0);
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d];
+    EXPECT_NEAR(p.CalcCoulomb(r * r, 0, 0, kQQ, 1.0, 0), kQQ / r,
+                kTol * std::fabs(kQQ / r)) << "r=" << r;
+  }
+}
+
+TEST(ForcefieldAnalyticTest, ShiftedCoulombVanishesAtCutoff) {
+  Forcefield ff;
+  InitForcefield(ff);
+  ff.electrostatic = true;
+  FF_SHIFT p(ff);
+  InitOneKind(p, 12.0);
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d];
+    const double want = kQQ * (1.0 / r - 1.0 / kRCut);
+    EXPECT_NEAR(p.CalcCoulomb(r * r, 0, 0, kQQ, 1.0, 0), want,
+                kTol * std::fabs(want)) << "r=" << r;
+  }
+  // its defining property
+  const double atCut = kRCut - 1e-9;
+  EXPECT_NEAR(p.CalcCoulomb(atCut * atCut, 0, 0, kQQ, 1.0, 0), 0.0, 1e-6);
+}
+
+TEST(ForcefieldAnalyticTest, SwitchedCoulombMatchesClosedForm) {
+  Forcefield ff;
+  InitForcefield(ff);
+  ff.electrostatic = true;
+  FF_SWITCH p(ff);
+  InitOneKind(p, 12.0);
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d], rSq = r * r;
+    double sw = rSq / ff.rCutSq - 1.0;
+    sw *= sw;
+    const double want = kQQ * sw / r;
+    EXPECT_NEAR(p.CalcCoulomb(rSq, 0, 0, kQQ, 1.0, 0), want,
+                kTol * std::fabs(want)) << "r=" << r;
+  }
+}
+
+//
+// The Coulomb virial follows the same convention as the vdW one, so the same
+// finite-difference check applies.
+//
+TEST(ForcefieldAnalyticTest, EwaldCoulombVirialIsNegativeDerivative) {
+  Forcefield ff;
+  InitForcefieldEwald(ff);
+  FF_VDW_STD p(ff);
+  InitOneKind(p, 12.0);
+
+  for (int d = 0; d < kNumVirDist; ++d) {
+    const double r = kVirDist[d], h = 1e-5 * r;
+    const double uP = p.CalcCoulomb((r + h) * (r + h), 0, 0, kQQ, 1.0, 0);
+    const double uM = p.CalcCoulomb((r - h) * (r - h), 0, 0, kQQ, 1.0, 0);
+    // A finite difference of a kernel that returns zero everywhere is zero,
+    // and would agree with a virial kernel that also returns zero. That is
+    // precisely what a missed CoulView override produced, so require the
+    // energy to be non-trivial before believing the comparison.
+    ASSERT_GT(std::fabs(uP), 1e-6) << "vacuous comparison at r=" << r;
+    const double want = -(uP - uM) / (2.0 * h) / r;
+    const double got = p.CalcCoulombVir(r * r, 0, 0, kQQ, 1.0, 0);
+    EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-10) << "r=" << r;
+  }
+}
+
+// ===========================================================================
+// dE/dlambda -- the free-energy derivative.
+//
+// As with the virial, the strong check is not a transcribed formula but the
+// defining relationship: dE/dlambda must equal the numerical derivative of the
+// energy with respect to lambda. This is the most intricate of the soft-core
+// paths and the one a copied formula is most likely to get subtly wrong.
+// ===========================================================================
+namespace {
+
+template <class FF>
+double DEnergyDLambdaByFiniteDifference(const FF &p, double distSq,
+                                        double lambda) {
+  const double h = 1e-6;
+  return (p.CalcEn(distSq, 0, 0, lambda + h) -
+          p.CalcEn(distSq, 0, 0, lambda - h)) /
+         (2.0 * h);
+}
+
+} // namespace
+
+TEST(ForcefieldAnalyticTest, DEnergyDLambdaIsDerivativeOfEnergy) {
+  const double lambdas[] = {0.2, 0.4, 0.6, 0.8};
+  Forcefield ff;
+  InitForcefield(ff);
+  ff.freeEnergy = true;
+  FF_VDW_STD p(ff);
+  InitOneKind(p, 12.0);
+
+  for (int l = 0; l < 4; ++l) {
+    for (int d = 0; d < kNumVirDist; ++d) {
+      const double distSq = kVirDist[d] * kVirDist[d];
+      const double want = DEnergyDLambdaByFiniteDifference(p, distSq, lambdas[l]);
+      const double got = p.CalcdEndL(distSq, 0, 0, lambdas[l]);
+      EXPECT_NEAR(got, want, 1e-4 * std::fabs(want) + 1e-9)
+          << "lambda=" << lambdas[l] << " r=" << kVirDist[d];
+    }
+  }
+}
+
+TEST(ForcefieldAnalyticTest, ShiftDEnergyDLambdaIsDerivativeOfEnergy) {
+  Forcefield ff;
+  InitForcefield(ff);
+  ff.freeEnergy = true;
+  FF_SHIFT p(ff);
+  InitOneKind(p, 16.0);
+
+  for (double lambda : {0.3, 0.5, 0.7}) {
+    for (int d = 0; d < kNumVirDist; ++d) {
+      const double distSq = kVirDist[d] * kVirDist[d];
+      const double want = DEnergyDLambdaByFiniteDifference(p, distSq, lambda);
+      const double got = p.CalcdEndL(distSq, 0, 0, lambda);
+      EXPECT_NEAR(got, want, 1e-4 * std::fabs(want) + 1e-9)
+          << "lambda=" << lambda << " r=" << kVirDist[d];
+    }
+  }
+}
+
+TEST(ForcefieldAnalyticTest, SwitchDEnergyDLambdaIsDerivativeOfEnergy) {
+  Forcefield ff;
+  InitForcefield(ff);
+  ff.freeEnergy = true;
+  FF_SWITCH p(ff);
+  InitOneKind(p, 12.0);
+
+  for (double lambda : {0.3, 0.6}) {
+    for (int d = 0; d < kNumVirDist; ++d) {
+      const double distSq = kVirDist[d] * kVirDist[d];
+      const double want = DEnergyDLambdaByFiniteDifference(p, distSq, lambda);
+      const double got = p.CalcdEndL(distSq, 0, 0, lambda);
+      EXPECT_NEAR(got, want, 1e-4 * std::fabs(want) + 1e-9)
+          << "lambda=" << lambda << " r=" << kVirDist[d];
+    }
+  }
+}
+
+// ===========================================================================
+// Martini.
+//
+// Martini weights the two Mie terms separately and adds its own shift, so it is
+// not a truncation of the plain form -- it is a standalone evaluator. Its
+// electrostatics are dielectric-screened with a Coulomb switching distance of
+// zero.
+//
+// The virial check here is the finite-difference one, which does not depend on
+// my transcription of the formula being right -- the point being that these
+// expressions were moved into ff::MartiniEval / ff::MartiniCoul by hand.
+// ===========================================================================
+namespace {
+
+void InitForcefieldMartini(Forcefield &ff) {
+  InitForcefield(ff);
+  ff.isMartini = true;
+  ff.electrostatic = true;
+  ff.dielectric = 15.0; // Martini's usual screened value
+}
+
+} // namespace
+
+TEST(ForcefieldAnalyticTest, MartiniEnergyMatchesClosedForm) {
+  Forcefield ff;
+  InitForcefieldMartini(ff);
+  FF_SWITCH_MARTINI p(ff);
+  InitOneKind(p, 12.0);
+
+  const ff::VdwParams vp = p.VdwView();
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d], rSq = r * r;
+    const double r_2 = 1.0 / rSq;
+    const double r_6 = r_2 * r_2 * r_2;
+    const double r_n = std::pow(r_2, FFTestAccess::N(p, 0) * 0.5);
+
+    const double rij_ron = r - vp.rOn;
+    const double c3 = rij_ron * rij_ron * rij_ron;
+    const double c4 = c3 * rij_ron;
+    const double shiftRep = (rSq > vp.rOnSq)
+        ? -(vp.An[0] / 3.0) * c3 - (vp.Bn[0] / 4.0) * c4 - vp.Cn[0]
+        : -vp.Cn[0];
+    const double shiftAtt = (rSq > vp.rOnSq)
+        ? -(vp.A6 / 3.0) * c3 - (vp.B6 / 4.0) * c4 - vp.C6
+        : -vp.C6;
+
+    const double want = FFTestAccess::EpsilonCn(p, 0) *
+        (vp.sign[0] * (r_n + shiftRep) - vp.sig6[0] * (r_6 + shiftAtt));
+    const double got = p.CalcEn(rSq, 0, 0, 1.0);
+    EXPECT_NEAR(got, want, 1e-9 * std::fabs(want)) << "r=" << r;
+  }
+}
+
+TEST(ForcefieldAnalyticTest, MartiniVirialIsNegativeEnergyDerivative) {
+  Forcefield ff;
+  InitForcefieldMartini(ff);
+  FF_SWITCH_MARTINI p(ff);
+  InitOneKind(p, 12.0);
+
+  for (int d = 0; d < kNumVirDist; ++d) {
+    const double r = kVirDist[d];
+    const double want = VirialByFiniteDifference(p, r);
+    const double got = p.CalcVir(r * r, 0, 0, 1.0);
+    EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-10) << "r=" << r;
+  }
+}
+
+TEST(ForcefieldAnalyticTest, MartiniCoulombIsDielectricScreened) {
+  Forcefield ff;
+  InitForcefieldMartini(ff);
+  FF_SWITCH_MARTINI p(ff);
+  InitOneKind(p, 12.0);
+
+  const ff::CoulParams cp = p.CoulView(0);
+  ASSERT_NEAR(cp.diElectric_1, 1.0 / ff.dielectric, 1e-12)
+      << "the screening factor must reach the evaluator";
+
+  for (int d = 0; d < kNumDist; ++d) {
+    const double r = kDist[d], rSq = r * r;
+    const double c3 = r * rSq, c4 = rSq * rSq;
+    const double coul = -(cp.A1 / 3.0) * c3 - (cp.B1 / 4.0) * c4 - cp.C1;
+    const double want = kQQ * cp.diElectric_1 * (1.0 / r + coul);
+    const double got = p.CalcCoulomb(rSq, 0, 0, kQQ, 1.0, 0);
+    EXPECT_NEAR(got, want, 1e-9 * std::fabs(want)) << "r=" << r;
+  }
+}
+
+TEST(ForcefieldAnalyticTest, MartiniCoulombVirialIsNegativeDerivative) {
+  Forcefield ff;
+  InitForcefieldMartini(ff);
+  FF_SWITCH_MARTINI p(ff);
+  InitOneKind(p, 12.0);
+
+  for (int d = 0; d < kNumVirDist; ++d) {
+    const double r = kVirDist[d], h = 1e-5 * r;
+    const double uP = p.CalcCoulomb((r + h) * (r + h), 0, 0, kQQ, 1.0, 0);
+    const double uM = p.CalcCoulomb((r - h) * (r - h), 0, 0, kQQ, 1.0, 0);
+    // A finite difference of a kernel that returns zero everywhere is zero,
+    // and would agree with a virial kernel that also returns zero. That is
+    // precisely what a missed CoulView override produced, so require the
+    // energy to be non-trivial before believing the comparison.
+    ASSERT_GT(std::fabs(uP), 1e-6) << "vacuous comparison at r=" << r;
+    const double want = -(uP - uM) / (2.0 * h) / r;
+    const double got = p.CalcCoulombVir(r * r, 0, 0, kQQ, 1.0, 0);
+    EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-10) << "r=" << r;
+  }
 }

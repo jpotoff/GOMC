@@ -4,6 +4,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 <https://opensource.org/licenses/MIT>.
 ******************************************************************************/
 #include "CPUSide.h" //Spec declaration
+#include "Setup.h"
 
 #include "GOMCEventsProfile.h"
 #include "StaticVals.h"

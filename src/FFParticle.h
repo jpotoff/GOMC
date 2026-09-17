@@ -6,7 +6,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 #ifndef FF_PARTICLE_H
 #define FF_PARTICLE_H
 
-#include "BasicTypes.h" //for uint
+#include "BasicTypes.h"
+#include "CoulEvaluators.h"
+#include "VdwEvaluators.h" //for uint
 #include "FFConst.h"    //constants related to particles.
 #include "Forcefield.h"
 #include "NumLib.h" //For Cb, Sq
@@ -38,8 +40,6 @@ class Particle;
 class NBfix;
 } // namespace ff_setup
 
-class Forcefield;
-
 // Test-only access to the precomputed integer Mie exponent, so the exponent
 // fast path can be compared against its own pow() fallback. The concrete
 // forcefields are `final` (needed to devirtualise the energy kernels), so the
@@ -50,6 +50,14 @@ struct MieExponentTestAccess;
 // `final`, so fixtures cannot reach them by derivation.
 struct FFTestAccess;
 
+//
+// Parameter storage and the forcefield interface.
+//
+// This used to be a concrete forcefield as well -- it *was* VDW_STD. That is
+// now FF_VDW_STD (FFVdwStd.h), built from FFAdapter like the other four, so
+// the pair kernels below are pure virtual and every concrete forcefield is
+// `final`.
+//
 struct FFParticle {
   friend struct MieExponentTestAccess;
   friend struct FFTestAccess;
@@ -74,21 +82,21 @@ public:
 
   // LJ interaction functions
   virtual double CalcEn(const double distSq, const uint kind1, const uint kind2,
-                        const double lambda) const;
+                        const double lambda) const = 0;
   virtual double CalcVir(const double distSq, const uint kind1,
-                         const uint kind2, const double lambda) const;
+                         const uint kind2, const double lambda) const = 0;
   virtual void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
-                           const uint kind2) const;
+                           const uint kind2) const = 0;
 
   // coulomb interaction functions
   virtual double CalcCoulomb(const double distSq, const uint kind1,
                              const uint kind2, const double qi_qj_Fact,
-                             const double lambda, const uint b) const;
+                             const double lambda, const uint b) const = 0;
   virtual double CalcCoulombVir(const double distSq, const uint kind1,
                                 const uint kind2, const double qi_qj,
-                                const double lambda, uint b) const;
+                                const double lambda, uint b) const = 0;
   virtual void CalcCoulombAdd_1_4(double &en, const double distSq,
-                                  const double qi_qj_Fact, const bool NB) const;
+                                  const double qi_qj_Fact, const bool NB) const = 0;
 
   //! Returns Energy long-range correction term for a kind pair
   virtual double EnergyLRC(const uint kind1, const uint kind2) const;
@@ -100,11 +108,11 @@ public:
 
   // Calculate the dE/dlambda for vdw energy
   virtual double CalcdEndL(const double distSq, const uint kind1,
-                           const uint kind2, const double lambda) const;
+                           const uint kind2, const double lambda) const = 0;
   // Calculate the dE/dlambda for Coulomb energy
   virtual double CalcCoulombdEndL(const double distSq, const uint kind1,
                                   const uint kind2, const double qi_qj_Fact,
-                                  const double lambda, uint b) const;
+                                  const double lambda, uint b) const = 0;
 
   uint NumKinds() const { return count; }
   double GetMass(const uint kind) const { return mass[kind]; }
@@ -113,13 +121,22 @@ public:
   VariablesCUDA *getCUDAVars() { return varCUDA; }
 #endif
 
+
+  //! Parameter views for the composable evaluators (see VdwEvaluators.h).
+  //! Defined below, inline: FFAdapter builds one per pair in the inner loop
+  //! and reaches them through CRTP so the compiler can see through them.
+  ff::VdwParams VdwView() const;
+  ff::VdwParams VdwView14() const;
+  //! Parameter view for the electrostatic evaluators.
+  ff::CoulParams CoulView(const uint b) const;
+
 protected:
-  virtual double CalcEn(const double distSq, const uint index) const;
-  virtual double CalcVir(const double distSq, const uint index) const;
+  virtual double CalcEn(const double distSq, const uint index) const = 0;
+  virtual double CalcVir(const double distSq, const uint index) const = 0;
   virtual double CalcCoulomb(const double distSq, const double qi_qj_Fact,
-                             const uint b) const;
+                             const uint b) const = 0;
   virtual double CalcCoulombVir(const double distSq, const double qi_qj,
-                                uint b) const;
+                                uint b) const = 0;
   // Find the index of the pair kind
   uint FlatIndex(const uint i, const uint j) const { return i + j * count; }
   // Combining sigma, epsilon, and n value for different kind
@@ -145,5 +162,47 @@ protected:
   uint count;
   bool exp6;
 };
+
+  //! Parameter view for the composable evaluators (see VdwEvaluators.h).
+inline ff::CoulParams FFParticle::CoulView(const uint b) const {
+  ff::CoulParams c = {};
+  c.table = forcefield.ewald ? &forcefield.realTable : nullptr;
+  c.alpha = forcefield.alpha[b];
+  c.rCut = forcefield.rCut;
+  c.rCutSq = forcefield.rCutSq;
+  c.box = b;
+  return c;
+}
+
+inline ff::VdwParams FFParticle::VdwView() const {
+  ff::VdwParams p = {};   // value-initialised; evaluators read a subset
+  p.sigmaSq = sigmaSq; p.epsilon_cn = epsilon_cn; p.n = n; p.nExp = nExp;
+  p.epsilon_cn_6 = epsilon_cn_6; p.nOver6 = nOver6;
+  p.rCutSq = forcefield.rCutSq;
+  return p;
+  }
+  //! Same, over the 1-4 parameter set.
+inline ff::VdwParams FFParticle::VdwView14() const {
+  ff::VdwParams p = {};   // value-initialised; evaluators read a subset
+  p.sigmaSq = sigmaSq_1_4; p.epsilon_cn = epsilon_cn_1_4;
+  p.n = n_1_4; p.nExp = nExp_1_4;
+  p.epsilon_cn_6 = epsilon_cn_6_1_4; p.nOver6 = nOver6_1_4;
+  p.rCutSq = forcefield.rCutSq;
+  return p;
+  }
+
+
+inline double FFParticle::GetRmin(const uint i, const uint j) const {
+  return 0.0;
+}
+inline double FFParticle::GetRmax(const uint i, const uint j) const {
+  return 0.0;
+}
+inline double FFParticle::GetRmin_1_4(const uint i, const uint j) const {
+  return 0.0;
+}
+inline double FFParticle::GetRmax_1_4(const uint i, const uint j) const {
+  return 0.0;
+}
 
 #endif /*FF_PARTICLE_H*/

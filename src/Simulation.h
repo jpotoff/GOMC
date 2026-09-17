@@ -7,6 +7,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #define SIMULATION_H
 // Member vars
 #include "BasicTypes.h"
+#include "Setup.h"
 #include "CPUSide.h"
 #include "GOMC_Config.h" //For PT
 #include "ParallelTemperingPreprocessor.h"

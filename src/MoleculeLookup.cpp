@@ -4,6 +4,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 <https://opensource.org/licenses/MIT>.
 ******************************************************************************/
 #include "MoleculeLookup.h" //Header spec.
+#include "FFParticle.h" // forcefield.particles-> ; Forcefield.h only forward-declares it
 
 #include <algorithm>
 #include <iostream>

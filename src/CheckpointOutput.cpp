@@ -5,6 +5,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 
 #include "CheckpointOutput.h"
+#include "Setup.h"
 
 #include <stdint.h>
 

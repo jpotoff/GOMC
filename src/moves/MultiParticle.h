@@ -7,6 +7,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #define MULTIPARTICLE_H
 
 #include "MoveBase.h"
+#include "FFParticle.h" // forcefield.particles-> ; Forcefield.h only forward-declares it
 #include "Random123Wrapper.h"
 #include "StaticVals.h"
 #include "System.h"

@@ -23,6 +23,7 @@ the suite unnoticed.
 #include <gtest/gtest.h>
 
 #include "FFParticle.h"
+#include "FFVdwStd.h"
 #include "FFSetup.h"
 #include "FFShift.h"
 #include "FFSwitch.h"
@@ -151,7 +152,7 @@ template <class FFT> void CheckFastPathMatchesFallback() {
 } // namespace
 
 TEST(MieExponentTest, StdKernelFastPathMatchesFallback) {
-  CheckFastPathMatchesFallback<FFParticle>();
+  CheckFastPathMatchesFallback<FF_VDW_STD>();
 }
 
 TEST(MieExponentTest, ShiftKernelFastPathMatchesFallback) {
@@ -175,7 +176,7 @@ TEST(MieExponentTest, StdKernelMatchesAnalyticMie) {
     const double n = static_cast<double>(n_int);
     Forcefield ff;
     InitForcefield(ff);
-    FFParticle particle(ff);
+    FF_VDW_STD particle(ff);
     InitOneKind(particle, n);
 
     for (int d = 0; d < kNumDist; ++d) {
@@ -200,7 +201,7 @@ TEST(MieExponentTest, OutOfRangeExponentSelectsFallback) {
   for (int e = 0; e < 4; ++e) {
     Forcefield ff;
     InitForcefield(ff);
-    FFParticle particle(ff);
+    FF_VDW_STD particle(ff);
     InitOneKind(particle, exponents[e]);
     EXPECT_EQ(MieExponentTestAccess::Exponent(particle), POW_SENTINEL)
         << "n=" << exponents[e] << " should not use the integer table";
@@ -217,7 +218,7 @@ TEST(MieExponentTest, FallbackMatchesAnalyticMie) {
   for (int e = 0; e < 3; ++e) {
     Forcefield ff;
     InitForcefield(ff);
-    FFParticle particle(ff);
+    FF_VDW_STD particle(ff);
     InitOneKind(particle, exponents[e]);
     ASSERT_EQ(MieExponentTestAccess::Exponent(particle), POW_SENTINEL);
 
@@ -243,7 +244,7 @@ TEST(MieExponentTest, InitPathMatchesAnalyticMie) {
     const double n = static_cast<double>(n_int);
     Forcefield ff;
     InitForcefield(ff);
-    FFParticle particle(ff);
+    FF_VDW_STD particle(ff);
     InitOneKind(particle, n);
 
     EXPECT_EQ(MieExponentTestAccess::Exponent(particle), n_int)

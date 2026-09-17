@@ -11,7 +11,11 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "FFBonds.h"
 #include "EwaldRealTable.h"
 #include "FFDihedrals.h"
-#include "FFParticle.h"
+// Forcefield::Init takes a `const Setup &`, so this is its own dependency, not
+// a re-export. It used to arrive transitively through FFParticle.h, which is
+// no longer included here; pulling it in directly keeps that available to the
+// translation units that were relying on it.
+#include "Setup.h"
 
 namespace config_setup {
 // class FFValues;
@@ -22,6 +26,11 @@ struct SystemVals;
 class FFSetup;
 class Setup;
 class FFPrintout;
+// Forward-declared, not included. FFParticle needs Forcefield complete (it
+// holds a reference and reads rCutSq in its inline views); Forcefield only
+// needs a pointer. Including both ways made this an include cycle, which is
+// why FFParticle's inline bodies had to live in a separate header. Translation
+// units that call through `particles` include FFParticle.h themselves.
 struct FFParticle;
 
 class Forcefield {

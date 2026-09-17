@@ -8,8 +8,10 @@ A copy of the MIT License can be found in License.txt with this program or at
 
 #include "BasicTypes.h" //for uint
 #include "FFConst.h"    //constants related to particles.
-#include "FFParticle.h"
+#include "FFAdapter.h"
 #include "MiePotential.h"
+#include "CoulEvaluators.h"
+#include "VdwEvaluators.h"
 #include "NumLib.h" //For Cb, Sq
 #ifdef GOMC_CUDA
 #include "ConstantDefinitionsCUDAKernel.cuh"
@@ -30,14 +32,14 @@ A copy of the MIT License can be found in License.txt with this program or at
 // notably the 4-argument CalcEn/CalcCoulomb calling their 2-argument
 // counterparts -- statically, which is what allows the templated energy
 // kernels to inline the pair math. Nothing derives from these.
-struct FF_EXP6 final : public FFParticle {
+struct FF_EXP6 final : public FFAdapter<FF_EXP6, ff::Exp6Eval, ff::PlainCoul> {
   friend struct FFTestAccess;
 
 public:
   FF_EXP6(Forcefield &ff)
-      : FFParticle(ff), expConst(NULL), expConst_1_4(NULL), rMin(NULL),
+      : FFAdapter(ff), expConst(NULL), expConst_1_4(NULL), rMin(NULL),
         rMin_1_4(NULL), rMaxSq(NULL), rMaxSq_1_4(NULL) {}
-  virtual ~FF_EXP6() {
+  ~FF_EXP6() override {
 #ifdef GOMC_CUDA
     DestroyExp6CUDAVars(getCUDAVars());
 #endif
@@ -49,58 +51,62 @@ public:
     delete[] rMaxSq_1_4;
   }
 
-  virtual void Init(ff_setup::Particle const &mie,
-                    ff_setup::NBfix const &nbfix);
+  //! Exp-6 turns over at small r, so it is guarded by a hard wall. FFAdapter
+  //! has no notion of that, so these two add it and then defer.
+  double CalcEn(const double distSq, const uint kind1, const uint kind2,
+                const double lambda) const override {
+    if (distSq < rMaxSq[FlatIndex(kind1, kind2)])
+      return num::BIGNUM;
+    return FFAdapter::CalcEn(distSq, kind1, kind2, lambda);
+  }
+  double CalcVir(const double distSq, const uint kind1, const uint kind2,
+                 const double lambda) const override {
+    if (distSq < rMaxSq[FlatIndex(kind1, kind2)])
+      return num::BIGNUM;
+    return FFAdapter::CalcVir(distSq, kind1, kind2, lambda);
+  }
 
-  virtual double GetRmin(const uint i, const uint j) const;
-  virtual double GetRmax(const uint i, const uint j) const;
-  virtual double GetRmin_1_4(const uint i, const uint j) const;
-  virtual double GetRmax_1_4(const uint i, const uint j) const;
+  //! Parameter views; these add the Exp-6 specific arrays.
+  ff::VdwParams VdwView() const {
+    ff::VdwParams p = FFParticle::VdwView();
+    p.expConst = expConst; p.rMin = rMin;
+    return p;
+  }
+  ff::VdwParams VdwView14() const {
+    ff::VdwParams p = FFParticle::VdwView14();
+    p.expConst = expConst_1_4; p.rMin = rMin_1_4;
+    return p;
+  }
 
-  virtual double CalcEn(const double distSq, const uint kind1, const uint kind2,
-                        const double lambda) const;
-  virtual double CalcVir(const double distSq, const uint kind1,
-                         const uint kind2, const double lambda) const;
-  virtual void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
-                           const uint kind2) const;
+  void Init(ff_setup::Particle const &mie,
+            ff_setup::NBfix const &nbfix) override;
+
+  double GetRmin(const uint i, const uint j) const override;
+  double GetRmax(const uint i, const uint j) const override;
+  double GetRmin_1_4(const uint i, const uint j) const override;
+  double GetRmax_1_4(const uint i, const uint j) const override;
+
 
   // coulomb interaction functions
-  virtual double CalcCoulomb(const double distSq, const uint kind1,
-                             const uint kind2, const double qi_qj_Fact,
-                             const double lambda, const uint b) const;
-  virtual double CalcCoulombVir(const double distSq, const uint kind1,
-                                const uint kind2, const double qi_qj,
-                                const double lambda, const uint b) const;
-  virtual void CalcCoulombAdd_1_4(double &en, const double distSq,
-                                  const double qi_qj_Fact, const bool NB) const;
 
   //! Returns energy correction
-  virtual double EnergyLRC(const uint kind1, const uint kind2) const;
+  double EnergyLRC(const uint kind1, const uint kind2) const override;
 
   //!!Returns virial correction
-  virtual double VirialLRC(const uint kind1, const uint kind2) const;
+  double VirialLRC(const uint kind1, const uint kind2) const override;
 
   //! Returns impulse pressure correction term for a kind pair
-  virtual double ImpulsePressureCorrection(const uint kind1,
-                                           const uint kind2) const;
+  double ImpulsePressureCorrection(const uint kind1,
+                                   const uint kind2) const override;
 
   // Calculate the dE/dlambda for vdw energy
-  virtual double CalcdEndL(const double distSq, const uint kind1,
-                           const uint kind2, const double lambda) const;
   // Calculate the dE/dlambda for Coulomb energy
-  virtual double CalcCoulombdEndL(const double distSq, const uint kind1,
-                                  const uint kind2, const double qi_qj_Fact,
-                                  const double lambda, uint b) const;
 
   double *expConst, *expConst_1_4, *rMin, *rMin_1_4, *rMaxSq, *rMaxSq_1_4;
 
+
+
 protected:
-  virtual double CalcEn(const double distSq, const uint index) const;
-  virtual double CalcVir(const double distSq, const uint index) const;
-  virtual double CalcCoulomb(const double distSq, const double qi_qj_Fact,
-                             const uint b) const;
-  virtual double CalcCoulombVir(const double distSq, const double qi_qj,
-                                uint b) const;
 };
 
 inline void FF_EXP6::Init(ff_setup::Particle const &mie,
@@ -153,194 +159,15 @@ inline void FF_EXP6::Init(ff_setup::Particle const &mie,
 #endif
 }
 
-inline void FF_EXP6::CalcAdd_1_4(double &en, const double distSq,
-                                 const uint kind1, const uint kind2) const {
-  if (forcefield.rCutSq < distSq)
-    return;
 
-  uint idx = FlatIndex(kind1, kind2);
-  if (distSq < rMaxSq_1_4[idx]) {
-    en += num::BIGNUM;
-    return;
-  }
 
-  double dist = sqrt(distSq);
-  double rRat = rMin_1_4[idx] / dist;
-  double rRat2 = rRat * rRat;
-  double attract = rRat2 * rRat2 * rRat2;
-  double alpha_ij = n_1_4[idx];
-  double repulse =
-      (6.0 / alpha_ij) * exp(alpha_ij * (1.0 - dist / rMin_1_4[idx]));
 
-  en += expConst_1_4[idx] * (repulse - attract);
-}
 
-inline void FF_EXP6::CalcCoulombAdd_1_4(double &en, const double distSq,
-                                        const double qi_qj_Fact,
-                                        const bool NB) const {
-  if (forcefield.rCutSq < distSq)
-    return;
 
-  double dist = sqrt(distSq);
-  if (NB)
-    en += qi_qj_Fact / dist;
-  else
-    en += qi_qj_Fact * forcefield.scaling_14 / dist;
-}
 
-inline double FF_EXP6::CalcEn(const double distSq, const uint kind1,
-                              const uint kind2, const double lambda) const {
-  if (forcefield.rCutSq < distSq)
-    return 0.0;
 
-  uint index = FlatIndex(kind1, kind2);
-  if (distSq < rMaxSq[index]) {
-    return num::BIGNUM;
-  }
-  if (lambda >= 0.999999) {
-    // save computation time
-    return CalcEn(distSq, index);
-  }
-  const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
-      distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
-      forcefield.sc_power, forcefield.sc_sigma_6);
-  const double softRsq = sc_.softRsq;
 
-  double en = lambda * CalcEn(softRsq, index);
-  return en;
-}
 
-inline double FF_EXP6::CalcEn(const double distSq, const uint idx) const {
-  double dist = sqrt(distSq);
-  double rRat = rMin[idx] / dist;
-  double rRat2 = rRat * rRat;
-  double attract = rRat2 * rRat2 * rRat2;
-
-  uint alpha_ij = n[idx];
-  double repulse = (6.0 / alpha_ij) * exp(alpha_ij * (1.0 - dist / rMin[idx]));
-  return expConst[idx] * (repulse - attract);
-}
-
-inline double FF_EXP6::CalcVir(const double distSq, const uint kind1,
-                               const uint kind2, const double lambda) const {
-  if (forcefield.rCutSq < distSq)
-    return 0.0;
-
-  uint index = FlatIndex(kind1, kind2);
-  if (distSq < rMaxSq[index]) {
-    return num::BIGNUM;
-  }
-  if (lambda >= 0.999999) {
-    // save computation time
-    return CalcVir(distSq, index);
-  }
-  const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
-      distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
-      forcefield.sc_power, forcefield.sc_sigma_6);
-  const double softRsq = sc_.softRsq;
-  double correction = distSq / softRsq;
-  // We need to fix the return value from calcVir
-  double vir = lambda * correction * correction * CalcVir(softRsq, index);
-  return vir;
-}
-
-inline double FF_EXP6::CalcVir(const double distSq, const uint idx) const {
-  double dist = sqrt(distSq);
-  double rRat = rMin[idx] / dist;
-  double rRat2 = rRat * rRat;
-  double attract = rRat2 * rRat2 * rRat2;
-
-  uint alpha_ij = n[idx];
-  double repulse =
-      (dist / rMin[idx]) * exp(alpha_ij * (1.0 - dist / rMin[idx]));
-  // Virial = F.r = -du/dr * 1/r
-  return 6.0 * expConst[idx] * (repulse - attract) / distSq;
-}
-
-inline double FF_EXP6::CalcCoulomb(const double distSq, const uint kind1,
-                                   const uint kind2, const double qi_qj_Fact,
-                                   const double lambda, const uint b) const {
-  if (forcefield.rCutCoulombSq[b] < distSq)
-    return 0.0;
-
-  if (lambda >= 0.999999) {
-    // save computation time
-    return CalcCoulomb(distSq, qi_qj_Fact, b);
-  }
-  double en = 0.0;
-  if (forcefield.sc_coul) {
-    uint index = FlatIndex(kind1, kind2);
-    const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
-        distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
-        forcefield.sc_power, forcefield.sc_sigma_6);
-    const double softRsq = sc_.softRsq;
-    en = lambda * CalcCoulomb(softRsq, qi_qj_Fact, b);
-  } else {
-    en = lambda * CalcCoulomb(distSq, qi_qj_Fact, b);
-  }
-  return en;
-}
-
-inline double FF_EXP6::CalcCoulomb(const double distSq, const double qi_qj_Fact,
-                                   const uint b) const {
-  if (forcefield.ewald) {
-    double tab;
-    if (forcefield.realTable.Energy(distSq, b, tab))
-      return qi_qj_Fact * tab;
-    // below the table floor: overlapping pair, exact form
-    double dist = sqrt(distSq);
-    double val = forcefield.alpha[b] * dist;
-    return qi_qj_Fact * std::erfc(val) / dist;
-  } else {
-    double dist = sqrt(distSq);
-    return qi_qj_Fact / dist;
-  }
-}
-
-inline double FF_EXP6::CalcCoulombVir(const double distSq, const uint kind1,
-                                      const uint kind2, const double qi_qj,
-                                      const double lambda, const uint b) const {
-  if (forcefield.rCutCoulombSq[b] < distSq)
-    return 0.0;
-
-  if (lambda >= 0.999999) {
-    // save computation time
-    return CalcCoulombVir(distSq, qi_qj, b);
-  }
-  double vir = 0.0;
-  if (forcefield.sc_coul) {
-    uint index = FlatIndex(kind1, kind2);
-    const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
-        distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
-        forcefield.sc_power, forcefield.sc_sigma_6);
-    const double softRsq = sc_.softRsq;
-    double correction = distSq / softRsq;
-    // We need to fix the return value from calcVir
-    vir = lambda * correction * correction * CalcCoulombVir(softRsq, qi_qj, b);
-  } else {
-    vir = lambda * CalcCoulombVir(distSq, qi_qj, b);
-  }
-  return vir;
-}
-
-inline double FF_EXP6::CalcCoulombVir(const double distSq, const double qi_qj,
-                                      const uint b) const {
-  if (forcefield.ewald) {
-    double tab;
-    if (forcefield.realTable.Virial(distSq, b, tab))
-      return qi_qj * tab;
-    // below the table floor: overlapping pair, exact form
-    double dist = sqrt(distSq);
-    // M_2_SQRTPI is 2/sqrt(PI)
-    double constValue = forcefield.alpha[b] * M_2_SQRTPI;
-    double expConstValue = exp(-1.0 * forcefield.alphaSq[b] * distSq);
-    double temp = std::erfc(forcefield.alpha[b] * dist);
-    return qi_qj * (temp / dist + constValue * expConstValue) / distSq;
-  } else {
-    double dist = sqrt(distSq);
-    return qi_qj / (distSq * dist);
-  }
-}
 
 inline double FF_EXP6::GetRmin(const uint i, const uint j) const {
   uint idx = FlatIndex(i, j);
@@ -408,49 +235,7 @@ inline double FF_EXP6::ImpulsePressureCorrection(const uint kind1,
   return tailCorrection;
 }
 
-inline double FF_EXP6::CalcdEndL(const double distSq, const uint kind1,
-                                 const uint kind2, const double lambda) const {
-  if (forcefield.rCutSq < distSq)
-    return 0.0;
-
-  uint index = FlatIndex(kind1, kind2);
-  const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
-      distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
-      forcefield.sc_power, forcefield.sc_sigma_6);
-  const double softRsq = sc_.softRsq;
-  const double sigma6 = sc_.sigma6;
-  double fCoef = lambda * forcefield.sc_alpha * forcefield.sc_power / 6.0;
-  fCoef *= pow(1.0 - lambda, forcefield.sc_power - 1.0) * sigma6 /
-           (softRsq * softRsq);
-  double dhdl = CalcEn(softRsq, index) + fCoef * CalcVir(softRsq, index);
-  return dhdl;
-}
 
 // Calculate the dE/dlambda for Coulomb energy
-inline double FF_EXP6::CalcCoulombdEndL(const double distSq, const uint kind1,
-                                        const uint kind2,
-                                        const double qi_qj_Fact,
-                                        const double lambda, uint b) const {
-  if (forcefield.rCutCoulombSq[b] < distSq)
-    return 0.0;
-
-  double dhdl = 0.0;
-  if (forcefield.sc_coul) {
-    uint index = FlatIndex(kind1, kind2);
-    const ff::SoftCoreDist sc_ = ff::SoftenedDistance(
-        distSq, sigmaSq[index], lambda, forcefield.sc_alpha,
-        forcefield.sc_power, forcefield.sc_sigma_6);
-    const double softRsq = sc_.softRsq;
-    const double sigma6 = sc_.sigma6;
-    double fCoef = lambda * forcefield.sc_alpha * forcefield.sc_power / 6.0;
-    fCoef *= pow(1.0 - lambda, forcefield.sc_power - 1) * sigma6 /
-             (softRsq * softRsq);
-    dhdl = CalcCoulomb(softRsq, qi_qj_Fact, b) +
-           fCoef * CalcCoulombVir(softRsq, qi_qj_Fact, b);
-  } else {
-    dhdl = CalcCoulomb(distSq, qi_qj_Fact, b);
-  }
-  return dhdl;
-}
 
 #endif /*FF_EXP6_H*/

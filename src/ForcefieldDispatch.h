@@ -14,6 +14,7 @@ along with this program, also can be found at
 #include "FFShift.h"
 #include "FFSwitch.h"
 #include "FFSwitchMartini.h"
+#include "FFVdwStd.h"
 #include "Forcefield.h"
 
 #include <type_traits>
@@ -30,8 +31,8 @@ along with this program, also can be found at
 // still refer to a further-derived object as far as the compiler knows, so an
 // ordinary `ff.CalcEn(...)` remains an indirect call. Kernels must therefore
 // use the qualified form, `ff.FFType::CalcEn(...)`, which names the function
-// statically and suppresses dispatch. FFParticle is both the base and a
-// concrete forcefield, so it cannot simply be marked `final` instead.
+// statically and suppresses dispatch. All five concrete forcefields are also
+// `final`, which gives the compiler the same information a second way.
 //
 // Usage:
 //   DispatchForcefield(forcefield, [&](const auto &ff) {
@@ -45,7 +46,7 @@ inline void DispatchForcefield(const Forcefield &forcefield, Fn &&fn) {
   const FFParticle &base = *forcefield.particles;
 
   if (forcefield.vdwKind == FFV::VDW_STD_KIND) {
-    fn(base);
+    fn(static_cast<const FF_VDW_STD &>(base));
   } else if (forcefield.vdwKind == FFV::VDW_SHIFT_KIND) {
     fn(static_cast<const FF_SHIFT &>(base));
   } else if (forcefield.vdwKind == FFV::VDW_EXP6_KIND) {

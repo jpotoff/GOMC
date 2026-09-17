@@ -120,10 +120,13 @@ set(GOMCHeaders
    src/FFDihedrals.h
    src/FFExp6.h
    src/FFParticle.h
-   src/FFParticleInline.h
    src/MiePotential.h
+   src/CoulEvaluators.h
+   src/VdwEvaluators.h
    src/FFSetup.h
+   src/FFAdapter.h
    src/FFShift.h
+   src/FFVdwStd.h
    src/FFSwitch.h
    src/FFSwitchMartini.h
    src/FixedWidthReader.h

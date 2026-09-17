@@ -7,6 +7,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #define VOLUMETRANSFER_H
 
 #include "MoveBase.h" //For uint.
+#include "FFParticle.h" // forcefield.particles-> ; Forcefield.h only forward-declares it
 
 #ifdef GOMC_CUDA
 #include "ConstantDefinitionsCUDAKernel.cuh"

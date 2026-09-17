@@ -7,6 +7,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 // Setup partner classes
 #include "FFExp6.h"
 #include "FFShift.h"
+#include "FFVdwStd.h"
 #include "FFSwitch.h"
 #include "FFSwitchMartini.h"
 #include "Setup.h"
@@ -102,7 +103,7 @@ void Forcefield::InitBasicVals(config_setup::SystemVals const &val,
 #endif
 
   if (vdwKind == val.ff.VDW_STD_KIND)
-    particles = new FFParticle(*this);
+    particles = new FF_VDW_STD(*this);
   else if (vdwKind == val.ff.VDW_EXP6_KIND)
     particles = new FF_EXP6(*this);
   else if (vdwKind == val.ff.VDW_SHIFT_KIND)

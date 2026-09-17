@@ -1046,8 +1046,12 @@ CalcCoulombVirSwitchMartiniGPU(double distSq, double qi_qj, int gpu_ewald,
   } else {
     // in Martini, the Coulomb switching distance is zero, so we will have
     // sqrt(distSq) - rOnCoul =  sqrt(distSq)
-    double rij_ronCoul_2 = 1.0 / distSq;
-    double rij_ronCoul_3 = 1.0 / (dist * distSq);
+    // phiW(1) = A1*(r-rOnCoul)^2 + B1*(r-rOnCoul)^3 with rOnCoul = 0, so these
+    // are r^2 and r^3. They were spelled as the reciprocals, which made the
+    // switching part of the Martini Coulomb virial wrong; see
+    // ff::MartiniCoul::Virial in CoulEvaluators.h.
+    double rij_ronCoul_2 = distSq;
+    double rij_ronCoul_3 = dist * distSq;
 
     // Unoptimized version
     // double A1 = 1.0 * (-(1.0 + 4) * gpu_rCut) / (pow(gpu_rCut, 1.0 + 2) *
@@ -1061,7 +1065,7 @@ CalcCoulombVirSwitchMartiniGPU(double distSq, double qi_qj, int gpu_ewald,
                 gpu_invrCut;
 
     double virCoul = A1 * rij_ronCoul_2 + B1 * rij_ronCoul_3;
-    return qi_qj * gpu_diElectric_1 * (rij_ronCoul_3 + virCoul / dist);
+    return qi_qj * gpu_diElectric_1 * (1.0 / (dist * distSq) + virCoul / dist);
   }
 }
 
@@ -1249,7 +1253,11 @@ __device__ double CalcVirSwitchMartiniGPU(double distSq, int index,
                                           double *gpu_epsilon_Cn,
                                           double gpu_rCut, double gpu_rOn) {
   double r_1 = rsqrt(distSq);
-  double r_8 = distSq * distSq * distSq * distSq;
+  // 1/r^8, matching ff::MartiniEval::Virial. This read
+  // `distSq * distSq * distSq * distSq` -- r^8 -- which made the attractive
+  // part of the Martini virial wrong by r^16; see VdwEvaluators.h.
+  double r_2 = 1.0 / distSq;
+  double r_8 = r_2 * r_2 * r_2 * r_2;
   double r_n2 = pow(r_1, gpu_n[index] + 2.0);
 
   double rij_ron = sqrt(distSq) - gpu_rOn;

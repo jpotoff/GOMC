@@ -4,6 +4,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 <https://opensource.org/licenses/MIT>.
 ******************************************************************************/
 #include "System.h"
+#include "FFParticle.h" // forcefield.particles-> ; Forcefield.h only forward-declares it
 
 #include "CalculateEnergy.h"
 #include "ConfigSetup.h" //For types directly read from config. file
