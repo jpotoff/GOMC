@@ -1,0 +1,4048 @@
+1,2c1,2
+< Info: GOMC Version 2.75
+< Info: Start Time: Tue Jul  7 14:52:30 2026
+---
+> Info: GOMC Version 2.80
+> Info: Start Time: Tue Jul  7 14:51:17 2026
+5,6c5,6
+< Info: Total number of CPUs: 32
+< Info: Total number of CPUs available: 32
+---
+> Info: Total number of CPU cores: 32
+> Info: Total number of CPU cores available: 32
+13c13
+< Info: Used Ram: 28546.6MB
+---
+> Info: Used Ram: 28542.1MB
+16,17c16,17
+< Info: Number of threads                  4 
+< Info: Compiled with OpenMP Version       5.0 Preview 1
+---
+> Info: Number of OpenMP threads:          4 
+> Info: Compiled with OpenMP Version:      5.1
+153,159c153,159
+< Info: Box  0:  Periodic Cell Basis 1     32.812   0.000   0.000 
+< Info: Box  0:  Periodic Cell Basis 2      0.000  32.812   0.000 
+< Info: Box  0:  Periodic Cell Basis 3      0.000   0.000  32.812 
+< 
+< Info: Box  1:  Periodic Cell Basis 1     54.070   0.000   0.000 
+< Info: Box  1:  Periodic Cell Basis 2      0.000  54.070   0.000 
+< Info: Box  1:  Periodic Cell Basis 3      0.000   0.000  54.070 
+---
+> Info: Box  0:  Periodic Cell Basis 1     32.812   0.000   0.000
+> Info: Box  0:  Periodic Cell Basis 2      0.000  32.812   0.000
+> Info: Box  0:  Periodic Cell Basis 3      0.000   0.000  32.812
+> 
+> Info: Box  1:  Periodic Cell Basis 1     54.070   0.000   0.000
+> Info: Box  1:  Periodic Cell Basis 2      0.000  54.070   0.000
+> Info: Box  1:  Periodic Cell Basis 3      0.000   0.000  54.070
+233c233
+< Steps/sec:   6.004, Simulation ends in:   0 d:   0 h:   3 m 
+---
+> Steps/sec:   5.351, Simulation ends in:   0 d:   0 h:   4 m
+251c251
+< Steps/sec: 780.045, Simulation ends in:   0 d:   0 h:   2 m 
+---
+> Steps/sec: 2288.218, Simulation ends in:   0 d:   0 h:   2 m
+269c269
+< Steps/sec: 1010.919, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 2298.249, Simulation ends in:   0 d:   0 h:   2 m
+287c287
+< Steps/sec: 816.330, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 2341.878, Simulation ends in:   0 d:   0 h:   1 m
+305c305
+< Steps/sec: 2652.944, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 6026.299, Simulation ends in:   0 d:   0 h:   1 m
+323c323
+< Steps/sec: 2577.937, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 6132.023, Simulation ends in:   0 d:   0 h:   1 m
+341c341
+< Steps/sec: 801.204, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 2262.300, Simulation ends in:   0 d:   0 h:   1 m
+359c359
+< Steps/sec: 795.581, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 3039.351, Simulation ends in:   0 d:   0 h:   1 m
+377c377
+< Steps/sec: 972.705, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4466.777, Simulation ends in:   0 d:   0 h:   1 m
+395c395
+< Steps/sec: 966.207, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+413c413
+< Steps/sec: 1021.506, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+431c431
+< Steps/sec: 2716.518, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11335.957, Simulation ends in:   0 d:   0 h:   1 m
+449c449
+< Steps/sec: 2755.784, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11244.783, Simulation ends in:   0 d:   0 h:   1 m
+467c467
+< Steps/sec: 2725.344, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+485c485
+< Steps/sec: 1008.004, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4466.777, Simulation ends in:   0 d:   0 h:   1 m
+503c503
+< Steps/sec: 2666.436, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+521c521
+< Steps/sec: 1031.048, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4583.939, Simulation ends in:   0 d:   0 h:   1 m
+539c539
+< Steps/sec: 1034.099, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   1 m
+557c557
+< Steps/sec: 913.195, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   1 m
+575c575
+< Steps/sec: 2753.975, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+593c593
+< Steps/sec: 778.887, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+611c611
+< Steps/sec: 637.335, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4466.777, Simulation ends in:   0 d:   0 h:   1 m
+629c629
+< Steps/sec: 989.223, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+647c647
+< Steps/sec: 697.307, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m
+665c665
+< Steps/sec: 2624.721, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11244.783, Simulation ends in:   0 d:   0 h:   1 m
+683c683
+< Steps/sec: 2777.685, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+701c701
+< Steps/sec: 760.389, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+719c719
+< Steps/sec: 2725.344, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+737c737
+< Steps/sec: 2777.685, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 9892.226, Simulation ends in:   0 d:   0 h:   1 m
+755c755
+< Steps/sec: 866.592, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m
+773c773
+< Steps/sec: 1026.757, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4466.777, Simulation ends in:   0 d:   0 h:   1 m
+791c791
+< Steps/sec: 2739.585, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+809c809
+< Steps/sec: 2792.479, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+827c827
+< Steps/sec: 2816.860, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+845c845
+< Steps/sec: 1050.414, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   1 m
+863c863
+< Steps/sec: 980.436, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+881c881
+< Steps/sec: 868.746, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+899c899
+< Steps/sec: 2763.046, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11335.957, Simulation ends in:   0 d:   0 h:   1 m
+917c917
+< Steps/sec: 2801.806, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   1 m
+935c935
+< Steps/sec: 2777.685, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+953c953
+< Steps/sec: 674.759, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4583.939, Simulation ends in:   0 d:   0 h:   1 m
+971c971
+< Steps/sec: 714.776, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4634.590, Simulation ends in:   0 d:   0 h:   1 m
+989c989
+< Steps/sec: 2681.780, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1007c1007
+< Steps/sec: 750.189, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4583.939, Simulation ends in:   0 d:   0 h:   1 m
+1025c1025
+< Steps/sec: 1035.119, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+1043c1043
+< Steps/sec: 1029.782, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   1 m
+1061c1061
+< Steps/sec: 3013.149, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+1079c1079
+< Steps/sec: 2922.860, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1097c1097
+< Steps/sec: 3002.365, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1115c1115
+< Steps/sec: 3050.403, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   1 m
+1133c1133
+< Steps/sec: 3002.365, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1151c1151
+< Steps/sec: 937.275, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+1169c1169
+< Steps/sec: 1016.308, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m
+1187c1187
+< Steps/sec: 3104.592, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1205c1205
+< Steps/sec: 868.746, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+1223c1223
+< Steps/sec: 3279.362, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 10866.073, Simulation ends in:   0 d:   0 h:   1 m
+1241c1241
+< Steps/sec: 3216.491, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+1259c1259
+< Steps/sec: 1168.004, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m
+1277c1277
+< Steps/sec: 3460.647, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1295c1295
+< Steps/sec: 3437.954, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1313c1313
+< Steps/sec: 3310.421, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11125.475, Simulation ends in:   0 d:   0 h:   1 m
+1331c1331
+< Steps/sec: 1212.227, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   1 m
+1349c1349
+< Steps/sec: 973.608, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+1367c1367
+< Steps/sec: 1076.567, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+1385c1385
+< Steps/sec: 3366.215, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1403c1403
+< Steps/sec: 3533.533, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11522.813, Simulation ends in:   0 d:   0 h:   1 m
+1421c1421
+< Steps/sec: 936.229, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m
+1439c1439
+< Steps/sec: 3663.148, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1457c1457
+< Steps/sec: 3718.355, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1475c1475
+< Steps/sec: 970.904, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+1493c1493
+< Steps/sec: 3545.481, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+1511c1511
+< Steps/sec: 3637.731, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1529c1529
+< Steps/sec: 1184.832, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4466.777, Simulation ends in:   0 d:   0 h:   1 m
+1547c1547
+< Steps/sec: 3785.473, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1565c1565
+< Steps/sec: 3938.314, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1583c1583
+< Steps/sec: 1168.330, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+1601c1601
+< Steps/sec: 1157.369, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+1619c1619
+< Steps/sec: 1275.252, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+1637c1637
+< Steps/sec: 1171.266, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   1 m
+1655c1655
+< Steps/sec: 1347.351, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+1673c1673
+< Steps/sec: 1183.494, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+1691c1691
+< Steps/sec: 1335.340, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4466.777, Simulation ends in:   0 d:   0 h:   1 m
+1709c1709
+< Steps/sec: 1261.066, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+1727c1727
+< Steps/sec: 1382.890, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4485.887, Simulation ends in:   0 d:   0 h:   1 m
+1745c1745
+< Steps/sec: 1242.389, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+1763c1763
+< Steps/sec: 4405.782, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1781c1781
+< Steps/sec: 4236.671, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+1799c1799
+< Steps/sec: 4253.858, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+1817c1817
+< Steps/sec: 4293.044, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1835c1835
+< Steps/sec: 4310.693, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+1853c1853
+< Steps/sec: 4364.520, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   1 m
+1871c1871
+< Steps/sec: 4405.782, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1889c1889
+< Steps/sec: 4293.044, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+1907c1907
+< Steps/sec: 1091.698, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+1925c1925
+< Steps/sec: 1416.516, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4604.066, Simulation ends in:   0 d:   0 h:   1 m
+1943c1943
+< Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11522.813, Simulation ends in:   0 d:   0 h:   1 m
+1961c1961
+< Steps/sec: 1346.054, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4481.094, Simulation ends in:   0 d:   0 h:   1 m
+1979c1979
+< Steps/sec: 1107.261, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+1997c1997
+< Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2015c2015
+< Steps/sec: 1091.698, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+2033c2033
+< Steps/sec: 1366.223, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4604.066, Simulation ends in:   0 d:   0 h:   1 m
+2051c2051
+< Steps/sec: 1256.156, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4675.924, Simulation ends in:   0 d:   0 h:   1 m
+2069c2069
+< Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2087c2087
+< Steps/sec: 5029.141, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   1 m
+2105c2105
+< Steps/sec: 5047.297, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+2123c2123
+< Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2141c2141
+< Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   1 m
+2159c2159
+< Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   1 m
+2177c2177
+< Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2195c2195
+< Steps/sec: 4975.450, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2213c2213
+< Steps/sec: 1536.375, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4485.887, Simulation ends in:   0 d:   0 h:   1 m
+2231c2231
+< Steps/sec: 4899.888, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+2249c2249
+< Steps/sec: 4951.953, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+2267c2267
+< Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+2285c2285
+< Steps/sec: 1557.484, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+2303c2303
+< Steps/sec: 1474.790, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+2321c2321
+< Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   1 m
+2339c2339
+< Steps/sec: 1519.675, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   1 m
+2357c2357
+< Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2375c2375
+< Steps/sec: 1377.440, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4549.137, Simulation ends in:   0 d:   0 h:   1 m
+2393c2393
+< Steps/sec: 5184.554, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+2411c2411
+< Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2429c2429
+< Steps/sec: 1420.354, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+2447c2447
+< Steps/sec: 5077.850, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   1 m
+2465c2465
+< Steps/sec: 1579.776, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+2483c2483
+< Steps/sec: 1459.396, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4583.939, Simulation ends in:   0 d:   0 h:   1 m
+2501c2501
+< Steps/sec: 1408.430, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4549.137, Simulation ends in:   0 d:   0 h:   1 m
+2519c2519
+< Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+2537c2537
+< Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   1 m
+2555c2555
+< Steps/sec: 1305.823, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4670.717, Simulation ends in:   0 d:   0 h:   1 m
+2573c2573
+< Steps/sec: 1597.222, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+2591c2591
+< Steps/sec: 1470.654, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+2609c2609
+< Steps/sec: 5433.036, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2627c2627
+< Steps/sec: 1463.980, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   1 m
+2645c2645
+< Steps/sec: 5497.122, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   1 m
+2663c2663
+< Steps/sec: 1547.714, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4310.693, Simulation ends in:   0 d:   0 h:   1 m
+2681c2681
+< Steps/sec: 1667.052, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+2699c2699
+< Steps/sec: 1572.078, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+2717c2717
+< Steps/sec: 1477.388, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+2735c2735
+< Steps/sec: 5614.865, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   1 m
+2753c2753
+< Steps/sec: 5622.391, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2771c2771
+< Steps/sec: 1599.658, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   1 m
+2789c2789
+< Steps/sec: 5849.796, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+2807c2807
+< Steps/sec: 5817.343, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2825c2825
+< Steps/sec: 5841.649, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   1 m
+2843c2843
+< Steps/sec: 1585.149, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4583.939, Simulation ends in:   0 d:   0 h:   1 m
+2861c2861
+< Steps/sec: 1579.776, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   1 m
+2879c2879
+< Steps/sec: 5675.648, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+2897c2897
+< Steps/sec: 1396.705, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+2915c2915
+< Steps/sec: 5652.701, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   1 m
+2933c2933
+< Steps/sec: 5745.622, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   1 m
+2951c2951
+< Steps/sec: 1661.110, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+2969c2969
+< Steps/sec: 1623.811, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+2987c2987
+< Steps/sec: 6017.653, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   1 m
+3005c3005
+< Steps/sec: 5882.614, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11214.717, Simulation ends in:   0 d:   0 h:   1 m
+3023c3023
+< Steps/sec: 1647.409, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3041c3041
+< Steps/sec: 1496.897, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3059c3059
+< Steps/sec: 1600.269, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   1 m
+3077c3077
+< Steps/sec: 5915.803, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+3095c3095
+< Steps/sec: 5714.311, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+3113c3113
+< Steps/sec: 6096.372, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+3131c3131
+< Steps/sec: 1655.864, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4443.119, Simulation ends in:   0 d:   0 h:   1 m
+3149c3149
+< Steps/sec: 1607.629, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3167c3167
+< Steps/sec: 1499.572, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3185c3185
+< Steps/sec: 5983.315, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11125.475, Simulation ends in:   0 d:   0 h:   1 m
+3203c3203
+< Steps/sec: 6096.372, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   1 m
+3221c3221
+< Steps/sec: 1468.594, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3239c3239
+< Steps/sec: 6096.372, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11214.717, Simulation ends in:   0 d:   0 h:   1 m
+3257c3257
+< Steps/sec: 1639.040, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3275c3275
+< Steps/sec: 6026.299, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   1 m
+3293c3293
+< Steps/sec: 1600.269, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   1 m
+3311c3311
+< Steps/sec: 1644.825, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+3329c3329
+< Steps/sec: 1592.371, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4675.924, Simulation ends in:   0 d:   0 h:   1 m
+3347c3347
+< Steps/sec: 1615.057, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   1 m
+3365c3365
+< Steps/sec: 1675.042, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   1 m
+3383c3383
+< Steps/sec: 1517.476, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   1 m
+3401c3401
+< Steps/sec: 1577.399, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   1 m
+3419c3419
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   0 m
+3437c3437
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   0 m
+3455c3455
+< Steps/sec: 1536.375, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   0 m
+3473c3473
+< Steps/sec: 1715.462, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+3491c3491
+< Steps/sec: 1618.173, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+3509c3509
+< Steps/sec: 1785.570, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4675.924, Simulation ends in:   0 d:   0 h:   0 m
+3527c3527
+< Steps/sec: 1711.961, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+3545c3545
+< Steps/sec: 1555.174, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+3563c3563
+< Steps/sec: 1552.871, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   0 m
+3581c3581
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   0 m
+3599c3599
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11096.042, Simulation ends in:   0 d:   0 h:   0 m
+3617c3617
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   0 m
+3635c3635
+< Steps/sec: 1608.245, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+3653c3653
+< Steps/sec: 1778.755, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+3671c3671
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+3689c3689
+< Steps/sec: 1592.371, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+3707c3707
+< Steps/sec: 5683.339, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+3725c3725
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+3743c3743
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+3761c3761
+< Steps/sec: 1694.668, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   0 m
+3779c3779
+< Steps/sec: 1709.170, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   0 m
+3797c3797
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+3815c3815
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   0 m
+3833c3833
+< Steps/sec: 1694.668, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4549.137, Simulation ends in:   0 d:   0 h:   0 m
+3851c3851
+< Steps/sec: 1678.393, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+3869c3869
+< Steps/sec: 1562.124, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+3887c3887
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11214.717, Simulation ends in:   0 d:   0 h:   0 m
+3905c3905
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   0 m
+3923c3923
+< Steps/sec: 1633.932, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4505.160, Simulation ends in:   0 d:   0 h:   0 m
+3941c3941
+< Steps/sec: 1610.098, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+3959c3959
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11335.957, Simulation ends in:   0 d:   0 h:   0 m
+3977c3977
+< Steps/sec: 1666.390, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4505.160, Simulation ends in:   0 d:   0 h:   0 m
+3995c3995
+< Steps/sec: 1557.484, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+4013c4013
+< Steps/sec: 1653.253, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+4031c4031
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+4049c4049
+< Steps/sec: 1650.002, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+4067c4067
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11244.783, Simulation ends in:   0 d:   0 h:   0 m
+4085c4085
+< Steps/sec: 1636.482, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+4103c4103
+< Steps/sec: 1610.098, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+4121c4121
+< Steps/sec: 1718.273, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   0 m
+4139c4139
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+4157c4157
+< Steps/sec: 1575.030, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4670.717, Simulation ends in:   0 d:   0 h:   0 m
+4175c4175
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4193c4193
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+4211c4211
+< Steps/sec: 1559.801, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+4229c4229
+< Steps/sec: 1569.725, Simulation ends in:   0 d:   0 h:   1 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+4247c4247
+< Steps/sec: 1653.253, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+4265c4265
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4283c4283
+< Steps/sec: 1644.825, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+4301c4301
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4568.959, Simulation ends in:   0 d:   0 h:   0 m
+4319c4319
+< Steps/sec: 1623.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+4337c4337
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   0 m
+4355c4355
+< Steps/sec: 6168.094, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11335.957, Simulation ends in:   0 d:   0 h:   0 m
+4373c4373
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   0 m
+4391c4391
+< Steps/sec: 6502.797, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11096.042, Simulation ends in:   0 d:   0 h:   0 m
+4409c4409
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   0 m
+4427c4427
+< Steps/sec: 1599.658, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4583.939, Simulation ends in:   0 d:   0 h:   0 m
+4445c4445
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+4463c4463
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   0 m
+4481c4481
+< Steps/sec: 1652.602, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4481.094, Simulation ends in:   0 d:   0 h:   0 m
+4499c4499
+< Steps/sec: 1637.121, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4549.137, Simulation ends in:   0 d:   0 h:   0 m
+4517c4517
+< Steps/sec: 1801.677, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+4535c4535
+< Steps/sec: 1623.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+4553c4553
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   0 m
+4571c4571
+< Steps/sec: 1475.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+4589c4589
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   0 m
+4607c4607
+< Steps/sec: 1655.211, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+4625c4625
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4643c4643
+< Steps/sec: 1577.399, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+4661c4661
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4679c4679
+< Steps/sec: 1582.159, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+4697c4697
+< Steps/sec: 1748.355, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+4715c4715
+< Steps/sec: 1738.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+4733c4733
+< Steps/sec: 1700.853, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4718.002, Simulation ends in:   0 d:   0 h:   0 m
+4751c4751
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4769c4769
+< Steps/sec: 1594.792, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4505.160, Simulation ends in:   0 d:   0 h:   0 m
+4787c4787
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4805c4805
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4823c4823
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4549.137, Simulation ends in:   0 d:   0 h:   0 m
+4841c4841
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+4859c4859
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+4877c4877
+< Steps/sec: 1658.483, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+4895c4895
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11214.717, Simulation ends in:   0 d:   0 h:   0 m
+4913c4913
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+4931c4931
+< Steps/sec: 1694.668, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+4949c4949
+< Steps/sec: 1572.667, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+4967c4967
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   0 m
+4985c4985
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+5003c5003
+< Steps/sec: 1698.099, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+5021c5021
+< Steps/sec: 1623.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4549.137, Simulation ends in:   0 d:   0 h:   0 m
+5039c5039
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+5057c5057
+< Steps/sec: 1594.792, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4629.475, Simulation ends in:   0 d:   0 h:   0 m
+5075c5075
+< Steps/sec: 1633.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+5093c5093
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+5111c5111
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+5129c5129
+< Steps/sec: 1738.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5147c5147
+< Steps/sec: 1639.040, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+5165c5165
+< Steps/sec: 1575.030, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+5183c5183
+< Steps/sec: 1550.574, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+5201c5201
+< Steps/sec: 1586.948, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   0 m
+5219c5219
+< Steps/sec: 1483.659, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5237c5237
+< Steps/sec: 1751.275, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4604.066, Simulation ends in:   0 d:   0 h:   0 m
+5255c5255
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11244.783, Simulation ends in:   0 d:   0 h:   0 m
+5273c5273
+< Steps/sec: 1626.330, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4369.067, Simulation ends in:   0 d:   0 h:   0 m
+5291c5291
+< Steps/sec: 1736.053, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4604.066, Simulation ends in:   0 d:   0 h:   0 m
+5309c5309
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11650.844, Simulation ends in:   0 d:   0 h:   0 m
+5327c5327
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+5345c5345
+< Steps/sec: 1675.042, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5363c5363
+< Steps/sec: 1721.093, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   0 m
+5381c5381
+< Steps/sec: 1669.707, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5399c5399
+< Steps/sec: 1680.410, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4563.987, Simulation ends in:   0 d:   0 h:   0 m
+5417c5417
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+5435c5435
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   0 m
+5453c5453
+< Steps/sec: 1715.462, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4500.326, Simulation ends in:   0 d:   0 h:   0 m
+5471c5471
+< Steps/sec: 1706.389, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5489c5489
+< Steps/sec: 1695.353, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5507c5507
+< Steps/sec: 1620.674, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+5525c5525
+< Steps/sec: 1618.173, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4650.004, Simulation ends in:   0 d:   0 h:   0 m
+5543c5543
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11214.717, Simulation ends in:   0 d:   0 h:   0 m
+5561c5561
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11522.813, Simulation ends in:   0 d:   0 h:   0 m
+5579c5579
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   0 m
+5597c5597
+< Steps/sec: 1795.507, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4588.954, Simulation ends in:   0 d:   0 h:   0 m
+5615c5615
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11748.751, Simulation ends in:   0 d:   0 h:   0 m
+5633c5633
+< Steps/sec: 1655.864, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4544.208, Simulation ends in:   0 d:   0 h:   0 m
+5651c5651
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+5669c5669
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11366.678, Simulation ends in:   0 d:   0 h:   0 m
+5687c5687
+< Steps/sec: 1647.409, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4524.600, Simulation ends in:   0 d:   0 h:   0 m
+5705c5705
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 10754.626, Simulation ends in:   0 d:   0 h:   0 m
+5723c5723
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11244.783, Simulation ends in:   0 d:   0 h:   0 m
+5741c5741
+< Steps/sec: 1607.629, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4609.125, Simulation ends in:   0 d:   0 h:   0 m
+5759c5759
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+5777c5777
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11491.244, Simulation ends in:   0 d:   0 h:   0 m
+5795c5795
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   0 m
+5813c5813
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12052.598, Simulation ends in:   0 d:   0 h:   0 m
+5831c5831
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11881.881, Simulation ends in:   0 d:   0 h:   0 m
+5849c5849
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4718.002, Simulation ends in:   0 d:   0 h:   0 m
+5867c5867
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+5885c5885
+< Steps/sec: 1795.507, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4760.844, Simulation ends in:   0 d:   0 h:   0 m
+5903c5903
+< Steps/sec: 1569.725, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4739.327, Simulation ends in:   0 d:   0 h:   0 m
+5921c5921
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12052.598, Simulation ends in:   0 d:   0 h:   0 m
+5939c5939
+< Steps/sec: 1615.680, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4788.018, Simulation ends in:   0 d:   0 h:   0 m
+5957c5957
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11618.571, Simulation ends in:   0 d:   0 h:   0 m
+5975c5975
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   0 m
+5993c5993
+< Steps/sec: 1709.170, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+6011c6011
+< Steps/sec: 1751.275, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4691.615, Simulation ends in:   0 d:   0 h:   0 m
+6029c6029
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12052.598, Simulation ends in:   0 d:   0 h:   0 m
+6047c6047
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12052.598, Simulation ends in:   0 d:   0 h:   0 m
+6065c6065
+< Steps/sec: 1669.043, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4809.982, Simulation ends in:   0 d:   0 h:   0 m
+6083c6083
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12052.598, Simulation ends in:   0 d:   0 h:   0 m
+6101c6101
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+6119c6119
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11881.881, Simulation ends in:   0 d:   0 h:   0 m
+6137c6137
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11915.636, Simulation ends in:   0 d:   0 h:   0 m
+6155c6155
+< Steps/sec: 1575.030, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4739.327, Simulation ends in:   0 d:   0 h:   0 m
+6173c6173
+< Steps/sec: 1599.658, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4809.982, Simulation ends in:   0 d:   0 h:   0 m
+6191c6191
+< Steps/sec: 1709.170, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4782.559, Simulation ends in:   0 d:   0 h:   0 m
+6209c6209
+< Steps/sec: 1610.716, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+6227c6227
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4696.869, Simulation ends in:   0 d:   0 h:   0 m
+6245c6245
+< Steps/sec: 1641.606, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4670.717, Simulation ends in:   0 d:   0 h:   0 m
+6263c6263
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 11781.753, Simulation ends in:   0 d:   0 h:   0 m
+6281c6281
+< Steps/sec: 1490.513, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4782.559, Simulation ends in:   0 d:   0 h:   0 m
+6299c6299
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+6317c6317
+< Steps/sec: 1754.939, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4832.147, Simulation ends in:   0 d:   0 h:   0 m
+6335c6335
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+6353c6353
+< Steps/sec: 1683.783, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4832.147, Simulation ends in:   0 d:   0 h:   0 m
+6371c6371
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+6389c6389
+< Steps/sec: 1572.667, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4854.519, Simulation ends in:   0 d:   0 h:   0 m
+6407c6407
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+6425c6425
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12192.744, Simulation ends in:   0 d:   0 h:   0 m
+6443c6443
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12336.188, Simulation ends in:   0 d:   0 h:   0 m
+6461c6461
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12671.613, Simulation ends in:   0 d:   0 h:   0 m
+6479c6479
+< Steps/sec: 1625.699, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4760.844, Simulation ends in:   0 d:   0 h:   0 m
+6497c6497
+< Steps/sec: 1785.570, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+6515c6515
+< Steps/sec: 1727.473, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4854.519, Simulation ends in:   0 d:   0 h:   0 m
+6533c6533
+< Steps/sec: 1711.961, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4832.147, Simulation ends in:   0 d:   0 h:   0 m
+6551c6551
+< Steps/sec: 1752.007, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4899.888, Simulation ends in:   0 d:   0 h:   0 m
+6569c6569
+< Steps/sec: 1769.749, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4854.519, Simulation ends in:   0 d:   0 h:   0 m
+6587c6587
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12372.578, Simulation ends in:   0 d:   0 h:   0 m
+6605c6605
+< Steps/sec: 1760.833, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4782.559, Simulation ends in:   0 d:   0 h:   0 m
+6623c6623
+< Steps/sec: 1535.813, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+6641c6641
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12520.310, Simulation ends in:   0 d:   0 h:   0 m
+6659c6659
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12018.063, Simulation ends in:   0 d:   0 h:   0 m
+6677c6677
+< Steps/sec: 1600.269, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4766.255, Simulation ends in:   0 d:   0 h:   0 m
+6695c6695
+< Steps/sec: 1706.389, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4804.472, Simulation ends in:   0 d:   0 h:   0 m
+6713c6713
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12520.310, Simulation ends in:   0 d:   0 h:   0 m
+6731c6731
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+6749c6749
+< Steps/sec: 1709.867, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4922.892, Simulation ends in:   0 d:   0 h:   0 m
+6767c6767
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12671.613, Simulation ends in:   0 d:   0 h:   0 m
+6785c6785
+< Steps/sec: 1661.769, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   0 m
+6803c6803
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+6821c6821
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12787.512, Simulation ends in:   0 d:   0 h:   0 m
+6839c6839
+< Steps/sec: 1712.660, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4905.619, Simulation ends in:   0 d:   0 h:   0 m
+6857c6857
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13148.288, Simulation ends in:   0 d:   0 h:   0 m
+6875c6875
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+6893c6893
+< Steps/sec: 1470.654, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4832.147, Simulation ends in:   0 d:   0 h:   0 m
+6911c6911
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13148.288, Simulation ends in:   0 d:   0 h:   0 m
+6929c6929
+< Steps/sec: 6204.592, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12826.618, Simulation ends in:   0 d:   0 h:   0 m
+6947c6947
+< Steps/sec: 1669.707, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+6965c6965
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+6983c6983
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12826.618, Simulation ends in:   0 d:   0 h:   0 m
+7001c7001
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12483.048, Simulation ends in:   0 d:   0 h:   0 m
+7019c7019
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7037c7037
+< Steps/sec: 1434.931, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4854.519, Simulation ends in:   0 d:   0 h:   0 m
+7055c7055
+< Steps/sec: 1718.273, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4905.619, Simulation ends in:   0 d:   0 h:   0 m
+7073c7073
+< Steps/sec: 1738.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4854.519, Simulation ends in:   0 d:   0 h:   0 m
+7091c7091
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7109c7109
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4922.892, Simulation ends in:   0 d:   0 h:   0 m
+7127c7127
+< Steps/sec: 1597.830, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   0 m
+7145c7145
+< Steps/sec: 1721.093, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+7163c7163
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7181c7181
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12826.618, Simulation ends in:   0 d:   0 h:   0 m
+7199c7199
+< Steps/sec: 1639.681, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4877.098, Simulation ends in:   0 d:   0 h:   0 m
+7217c7217
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13357.656, Simulation ends in:   0 d:   0 h:   0 m
+7235c7235
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7253c7253
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4712.701, Simulation ends in:   0 d:   0 h:   0 m
+7271c7271
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12826.618, Simulation ends in:   0 d:   0 h:   0 m
+7289c7289
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7307c7307
+< Steps/sec: 1620.674, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   0 m
+7325c7325
+< Steps/sec: 1672.370, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+7343c7343
+< Steps/sec: 1700.853, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   0 m
+7361c7361
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7379c7379
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13148.288, Simulation ends in:   0 d:   0 h:   0 m
+7397c7397
+< Steps/sec: 1565.039, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   0 m
+7415c7415
+< Steps/sec: 1636.482, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4951.953, Simulation ends in:   0 d:   0 h:   0 m
+7433c7433
+< Steps/sec: 1626.330, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4922.892, Simulation ends in:   0 d:   0 h:   0 m
+7451c7451
+< Steps/sec: 1633.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5029.141, Simulation ends in:   0 d:   0 h:   0 m
+7469c7469
+< Steps/sec: 1669.707, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5096.360, Simulation ends in:   0 d:   0 h:   0 m
+7487c7487
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13530.013, Simulation ends in:   0 d:   0 h:   0 m
+7505c7505
+< Steps/sec: 1540.325, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4975.450, Simulation ends in:   0 d:   0 h:   0 m
+7523c7523
+< Steps/sec: 1587.549, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   0 m
+7541c7541
+< Steps/sec: 1698.099, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4905.619, Simulation ends in:   0 d:   0 h:   0 m
+7559c7559
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13486.508, Simulation ends in:   0 d:   0 h:   0 m
+7577c7577
+< Steps/sec: 1631.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4882.775, Simulation ends in:   0 d:   0 h:   0 m
+7595c7595
+< Steps/sec: 1700.853, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4946.113, Simulation ends in:   0 d:   0 h:   0 m
+7613c7613
+< Steps/sec: 1754.205, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5029.141, Simulation ends in:   0 d:   0 h:   0 m
+7631c7631
+< Steps/sec: 1655.864, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+7649c7649
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13315.251, Simulation ends in:   0 d:   0 h:   0 m
+7667c7667
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13530.013, Simulation ends in:   0 d:   0 h:   0 m
+7685c7685
+< Steps/sec: 1633.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4951.953, Simulation ends in:   0 d:   0 h:   0 m
+7703c7703
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 12985.461, Simulation ends in:   0 d:   0 h:   0 m
+7721c7721
+< Steps/sec: 1494.763, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+7739c7739
+< Steps/sec: 1779.510, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+7757c7757
+< Steps/sec: 1644.825, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   0 m
+7775c7775
+< Steps/sec: 6213.784, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13706.876, Simulation ends in:   0 d:   0 h:   0 m
+7793c7793
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13530.013, Simulation ends in:   0 d:   0 h:   0 m
+7811c7811
+< Steps/sec: 1610.716, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   0 m
+7829c7829
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13315.251, Simulation ends in:   0 d:   0 h:   0 m
+7847c7847
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13706.876, Simulation ends in:   0 d:   0 h:   0 m
+7865c7865
+< Steps/sec: 1733.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+7883c7883
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13530.013, Simulation ends in:   0 d:   0 h:   0 m
+7901c7901
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4975.450, Simulation ends in:   0 d:   0 h:   0 m
+7919c7919
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13706.876, Simulation ends in:   0 d:   0 h:   0 m
+7937c7937
+< Steps/sec: 1685.814, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4946.113, Simulation ends in:   0 d:   0 h:   0 m
+7955c7955
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13357.656, Simulation ends in:   0 d:   0 h:   0 m
+7973c7973
+< Steps/sec: 1698.099, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5077.850, Simulation ends in:   0 d:   0 h:   0 m
+7991c7991
+< Steps/sec: 1631.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+8009c8009
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13148.288, Simulation ends in:   0 d:   0 h:   0 m
+8027c8027
+< Steps/sec: 1714.760, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   0 m
+8045c8045
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13662.228, Simulation ends in:   0 d:   0 h:   0 m
+8063c8063
+< Steps/sec: 1641.606, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5005.136, Simulation ends in:   0 d:   0 h:   0 m
+8081c8081
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5071.710, Simulation ends in:   0 d:   0 h:   0 m
+8099c8099
+< Steps/sec: 1607.629, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+8117c8117
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13706.876, Simulation ends in:   0 d:   0 h:   0 m
+8135c8135
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8153c8153
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13706.876, Simulation ends in:   0 d:   0 h:   0 m
+8171c8171
+< Steps/sec: 1569.725, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4928.677, Simulation ends in:   0 d:   0 h:   0 m
+8189c8189
+< Steps/sec: 1666.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5047.297, Simulation ends in:   0 d:   0 h:   0 m
+8207c8207
+< Steps/sec: 1572.667, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+8225c8225
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13888.424, Simulation ends in:   0 d:   0 h:   0 m
+8243c8243
+< Steps/sec: 1700.853, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5077.850, Simulation ends in:   0 d:   0 h:   0 m
+8261c8261
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13888.424, Simulation ends in:   0 d:   0 h:   0 m
+8279c8279
+< Steps/sec: 1602.715, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4899.888, Simulation ends in:   0 d:   0 h:   0 m
+8297c8297
+< Steps/sec: 1430.527, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5077.850, Simulation ends in:   0 d:   0 h:   0 m
+8315c8315
+< Steps/sec: 1639.040, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5184.554, Simulation ends in:   0 d:   0 h:   0 m
+8333c8333
+< Steps/sec: 1615.680, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+8351c8351
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8369c8369
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13530.013, Simulation ends in:   0 d:   0 h:   0 m
+8387c8387
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8405c8405
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8423c8423
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13530.013, Simulation ends in:   0 d:   0 h:   0 m
+8441c8441
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8459c8459
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8477c8477
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14122.236, Simulation ends in:   0 d:   0 h:   0 m
+8495c8495
+< Steps/sec: 1706.389, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5071.710, Simulation ends in:   0 d:   0 h:   0 m
+8513c8513
+< Steps/sec: 1658.483, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5029.141, Simulation ends in:   0 d:   0 h:   0 m
+8531c8531
+< Steps/sec: 1694.668, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   0 m
+8549c8549
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+8567c8567
+< Steps/sec: 1700.853, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+8585c8585
+< Steps/sec: 1745.445, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+8603c8603
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5029.141, Simulation ends in:   0 d:   0 h:   0 m
+8621c8621
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8639c8639
+< Steps/sec: 1615.680, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+8657c8657
+< Steps/sec: 1623.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4951.953, Simulation ends in:   0 d:   0 h:   0 m
+8675c8675
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+8693c8693
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+8711c8711
+< Steps/sec: 1691.934, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4951.953, Simulation ends in:   0 d:   0 h:   0 m
+8729c8729
+< Steps/sec: 6584.465, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14513.163, Simulation ends in:   0 d:   0 h:   0 m
+8747c8747
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+8765c8765
+< Steps/sec: 1552.871, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4975.450, Simulation ends in:   0 d:   0 h:   0 m
+8783c8783
+< Steps/sec: 1785.570, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5047.297, Simulation ends in:   0 d:   0 h:   0 m
+8801c8801
+< Steps/sec: 1658.483, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5053.378, Simulation ends in:   0 d:   0 h:   0 m
+8819c8819
+< Steps/sec: 1602.715, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+8837c8837
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14315.031, Simulation ends in:   0 d:   0 h:   0 m
+8855c8855
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+8873c8873
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+8891c8891
+< Steps/sec: 1650.002, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4975.450, Simulation ends in:   0 d:   0 h:   0 m
+8909c8909
+< Steps/sec: 1733.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5053.378, Simulation ends in:   0 d:   0 h:   0 m
+8927c8927
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14463.117, Simulation ends in:   0 d:   0 h:   0 m
+8945c8945
+< Steps/sec: 1727.473, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+8963c8963
+< Steps/sec: 1501.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+8981c8981
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14513.163, Simulation ends in:   0 d:   0 h:   0 m
+8999c8999
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13888.424, Simulation ends in:   0 d:   0 h:   0 m
+9017c9017
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 13706.876, Simulation ends in:   0 d:   0 h:   0 m
+9035c9035
+< Steps/sec: 1677.722, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+9053c9053
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5071.710, Simulation ends in:   0 d:   0 h:   0 m
+9071c9071
+< Steps/sec: 1709.170, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5077.850, Simulation ends in:   0 d:   0 h:   0 m
+9089c9089
+< Steps/sec: 1558.062, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5159.046, Simulation ends in:   0 d:   0 h:   0 m
+9107c9107
+< Steps/sec: 1647.409, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+9125c9125
+< Steps/sec: 1748.355, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9143c9143
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9161c9161
+< Steps/sec: 1741.821, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+9179c9179
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+9197c9197
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9215c9215
+< Steps/sec: 1633.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 4999.170, Simulation ends in:   0 d:   0 h:   0 m
+9233c9233
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14513.163, Simulation ends in:   0 d:   0 h:   0 m
+9251c9251
+< Steps/sec: 1698.099, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+9269c9269
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14513.163, Simulation ends in:   0 d:   0 h:   0 m
+9287c9287
+< Steps/sec: 1672.370, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5229.805, Simulation ends in:   0 d:   0 h:   0 m
+9305c9305
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14315.031, Simulation ends in:   0 d:   0 h:   0 m
+9323c9323
+< Steps/sec: 1751.275, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+9341c9341
+< Steps/sec: 1692.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9359c9359
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+9377c9377
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9395c9395
+< Steps/sec: 1712.660, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+9413c9413
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9431c9431
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9449c9449
+< Steps/sec: 1667.052, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5077.850, Simulation ends in:   0 d:   0 h:   0 m
+9467c9467
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14463.117, Simulation ends in:   0 d:   0 h:   0 m
+9485c9485
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14315.031, Simulation ends in:   0 d:   0 h:   0 m
+9503c9503
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14074.846, Simulation ends in:   0 d:   0 h:   0 m
+9521c9521
+< Steps/sec: 1605.168, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9539c9539
+< Steps/sec: 1521.881, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+9557c9557
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9575c9575
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+9593c9593
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9611c9611
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+9629c9629
+< Steps/sec: 1681.084, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5023.119, Simulation ends in:   0 d:   0 h:   0 m
+9647c9647
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14513.163, Simulation ends in:   0 d:   0 h:   0 m
+9665c9665
+< Steps/sec: 1723.923, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+9683c9683
+< Steps/sec: 1664.406, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9701c9701
+< Steps/sec: 1572.078, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+9719c9719
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+9737c9737
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14513.163, Simulation ends in:   0 d:   0 h:   0 m
+9755c9755
+< Steps/sec: 1565.039, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+9773c9773
+< Steps/sec: 1543.158, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5047.297, Simulation ends in:   0 d:   0 h:   0 m
+9791c9791
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+9809c9809
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+9827c9827
+< Steps/sec: 1647.409, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+9845c9845
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+9863c9863
+< Steps/sec: 1706.389, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+9881c9881
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9899c9899
+< Steps/sec: 1550.001, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+9917c9917
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+9935c9935
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+9953c9953
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+9971c9971
+< Steps/sec: 1531.327, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+9989c9989
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+10007c10007
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+10025c10025
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+10043c10043
+< Steps/sec: 1569.725, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+10061c10061
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+10079c10079
+< Steps/sec: 1636.482, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10097c10097
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+10115c10115
+< Steps/sec: 1811.794, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10133c10133
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+10151c10151
+< Steps/sec: 1785.570, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10169c10169
+< Steps/sec: 1723.923, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10187c10187
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+10205c10205
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+10223c10223
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+10241c10241
+< Steps/sec: 1680.410, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5102.560, Simulation ends in:   0 d:   0 h:   0 m
+10259c10259
+< Steps/sec: 1577.399, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5203.851, Simulation ends in:   0 d:   0 h:   0 m
+10277c10277
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+10295c10295
+< Steps/sec: 1615.057, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5184.554, Simulation ends in:   0 d:   0 h:   0 m
+10313c10313
+< Steps/sec: 1757.881, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+10331c10331
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14266.340, Simulation ends in:   0 d:   0 h:   0 m
+10349c10349
+< Steps/sec: 1661.110, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+10367c10367
+< Steps/sec: 1631.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5053.378, Simulation ends in:   0 d:   0 h:   0 m
+10385c10385
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+10403c10403
+< Steps/sec: 1718.273, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+10421c10421
+< Steps/sec: 1658.483, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+10439c10439
+< Steps/sec: 1685.814, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10457c10457
+< Steps/sec: 1718.273, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10475c10475
+< Steps/sec: 1644.825, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5159.046, Simulation ends in:   0 d:   0 h:   0 m
+10493c10493
+< Steps/sec: 1757.881, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5370.428, Simulation ends in:   0 d:   0 h:   0 m
+10511c10511
+< Steps/sec: 1807.890, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10529c10529
+< Steps/sec: 1647.409, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+10547c10547
+< Steps/sec: 1644.825, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10565c10565
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+10583c10583
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+10601c10601
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+10619c10619
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+10637c10637
+< Steps/sec: 1695.353, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10655c10655
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14716.856, Simulation ends in:   0 d:   0 h:   0 m
+10673c10673
+< Steps/sec: 1547.714, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10691c10691
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+10709c10709
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+10727c10727
+< Steps/sec: 1628.856, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10745c10745
+< Steps/sec: 1639.681, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+10763c10763
+< Steps/sec: 1669.043, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+10781c10781
+< Steps/sec: 1647.409, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+10799c10799
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 14926.349, Simulation ends in:   0 d:   0 h:   0 m
+10817c10817
+< Steps/sec: 1685.814, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+10835c10835
+< Steps/sec: 1721.800, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+10853c10853
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+10871c10871
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+10889c10889
+< Steps/sec: 1550.574, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+10907c10907
+< Steps/sec: 1669.043, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+10925c10925
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+10943c10943
+< Steps/sec: 1779.510, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+10961c10961
+< Steps/sec: 1745.445, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+10979c10979
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+10997c10997
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+11015c11015
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+11033c11033
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+11051c11051
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+11069c11069
+< Steps/sec: 1570.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11087c11087
+< Steps/sec: 1510.372, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+11105c11105
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+11123c11123
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+11141c11141
+< Steps/sec: 1650.002, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+11159c11159
+< Steps/sec: 1625.699, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+11177c11177
+< Steps/sec: 1681.084, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+11195c11195
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+11213c11213
+< Steps/sec: 1709.867, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11231c11231
+< Steps/sec: 1680.410, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5184.554, Simulation ends in:   0 d:   0 h:   0 m
+11249c11249
+< Steps/sec: 1751.275, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+11267c11267
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+11285c11285
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+11303c11303
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+11321c11321
+< Steps/sec: 1736.053, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+11339c11339
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+11357c11357
+< Steps/sec: 1607.629, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5047.297, Simulation ends in:   0 d:   0 h:   0 m
+11375c11375
+< Steps/sec: 1637.121, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11393c11393
+< Steps/sec: 1594.792, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11411c11411
+< Steps/sec: 1623.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11429c11429
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+11447c11447
+< Steps/sec: 1655.864, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11465c11465
+< Steps/sec: 1718.273, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+11483c11483
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+11501c11501
+< Steps/sec: 1618.173, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+11519c11519
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+11537c11537
+< Steps/sec: 1709.170, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+11555c11555
+< Steps/sec: 1626.330, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+11573c11573
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+11591c11591
+< Steps/sec: 1666.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5127.511, Simulation ends in:   0 d:   0 h:   0 m
+11609c11609
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+11627c11627
+< Steps/sec: 1760.833, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+11645c11645
+< Steps/sec: 1661.110, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+11663c11663
+< Steps/sec: 1620.674, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11681c11681
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+11699c11699
+< Steps/sec: 1517.476, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+11717c11717
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+11735c11735
+< Steps/sec: 1677.722, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11753c11753
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15196.754, Simulation ends in:   0 d:   0 h:   0 m
+11771c11771
+< Steps/sec: 1726.762, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5229.805, Simulation ends in:   0 d:   0 h:   0 m
+11789c11789
+< Steps/sec: 1579.776, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+11807c11807
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5159.046, Simulation ends in:   0 d:   0 h:   0 m
+11825c11825
+< Steps/sec: 1589.956, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+11843c11843
+< Steps/sec: 1562.124, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+11861c11861
+< Steps/sec: 1631.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+11879c11879
+< Steps/sec: 1565.039, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+11897c11897
+< Steps/sec: 1620.674, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11915c11915
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+11933c11933
+< Steps/sec: 1698.099, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11951c11951
+< Steps/sec: 1669.043, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+11969c11969
+< Steps/sec: 6502.797, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+11987c11987
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16980.988, Simulation ends in:   0 d:   0 h:   0 m
+12005c12005
+< Steps/sec: 1664.406, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+12023c12023
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12041c12041
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12059c12059
+< Steps/sec: 1618.173, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+12077c12077
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12095c12095
+< Steps/sec: 1545.433, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+12113c12113
+< Steps/sec: 1565.039, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+12131c12131
+< Steps/sec: 1594.792, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+12149c12149
+< Steps/sec: 1675.042, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+12167c12167
+< Steps/sec: 5652.701, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12185c12185
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+12203c12203
+< Steps/sec: 1481.040, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+12221c12221
+< Steps/sec: 1715.462, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+12239c12239
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+12257c12257
+< Steps/sec: 1641.606, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+12275c12275
+< Steps/sec: 1692.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+12293c12293
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12311c12311
+< Steps/sec: 1625.699, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5497.122, Simulation ends in:   0 d:   0 h:   0 m
+12329c12329
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16070.130, Simulation ends in:   0 d:   0 h:   0 m
+12347c12347
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16448.251, Simulation ends in:   0 d:   0 h:   0 m
+12365c12365
+< Steps/sec: 1814.930, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+12383c12383
+< Steps/sec: 1476.868, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+12401c12401
+< Steps/sec: 1727.473, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+12419c12419
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+12437c12437
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12455c12455
+< Steps/sec: 1732.468, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+12473c12473
+< Steps/sec: 1692.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+12491c12491
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12509c12509
+< Steps/sec: 1545.433, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+12527c12527
+< Steps/sec: 6168.094, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+12545c12545
+< Steps/sec: 1600.269, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+12563c12563
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12581c12581
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+12599c12599
+< Steps/sec: 1641.606, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+12617c12617
+< Steps/sec: 1727.473, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+12635c12635
+< Steps/sec: 1757.145, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+12653c12653
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12671c12671
+< Steps/sec: 1602.715, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+12689c12689
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12707c12707
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12725c12725
+< Steps/sec: 1570.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+12743c12743
+< Steps/sec: 1628.224, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+12761c12761
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12779c12779
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+12797c12797
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+12815c12815
+< Steps/sec: 1782.535, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+12833c12833
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12851c12851
+< Steps/sec: 1529.094, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+12869c12869
+< Steps/sec: 1639.681, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+12887c12887
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+12905c12905
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+12923c12923
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+12941c12941
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+12959c12959
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+12977c12977
+< Steps/sec: 1745.445, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+12995c12995
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13013c13013
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13031c13031
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16912.516, Simulation ends in:   0 d:   0 h:   0 m
+13049c13049
+< Steps/sec: 1754.205, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+13067c13067
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+13085c13085
+< Steps/sec: 1559.801, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+13103c13103
+< Steps/sec: 6584.465, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13121c13121
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13139c13139
+< Steps/sec: 1695.353, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+13157c13157
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16070.130, Simulation ends in:   0 d:   0 h:   0 m
+13175c13175
+< Steps/sec: 6177.178, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+13193c13193
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+13211c13211
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+13229c13229
+< Steps/sec: 1744.719, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+13247c13247
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13265c13265
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13283c13283
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+13301c13301
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+13319c13319
+< Steps/sec: 1785.570, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+13337c13337
+< Steps/sec: 1599.658, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+13355c13355
+< Steps/sec: 1513.097, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+13373c13373
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16448.251, Simulation ends in:   0 d:   0 h:   0 m
+13391c13391
+< Steps/sec: 1618.173, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5370.428, Simulation ends in:   0 d:   0 h:   0 m
+13409c13409
+< Steps/sec: 6213.784, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+13427c13427
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+13445c13445
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16980.988, Simulation ends in:   0 d:   0 h:   0 m
+13463c13463
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+13481c13481
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+13499c13499
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+13517c13517
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13535c13535
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13553c13553
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13571c13571
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16644.063, Simulation ends in:   0 d:   0 h:   0 m
+13589c13589
+< Steps/sec: 1559.801, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+13607c13607
+< Steps/sec: 1613.194, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+13625c13625
+< Steps/sec: 1772.740, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+13643c13643
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+13661c13661
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+13679c13679
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13697c13697
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13715c13715
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+13733c13733
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13751c13751
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+13769c13769
+< Steps/sec: 1642.249, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+13787c13787
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16070.130, Simulation ends in:   0 d:   0 h:   0 m
+13805c13805
+< Steps/sec: 1582.159, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+13823c13823
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+13841c13841
+< Steps/sec: 6626.073, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+13859c13859
+< Steps/sec: 1565.039, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+13877c13877
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+13895c13895
+< Steps/sec: 1686.491, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+13913c13913
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13931c13931
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+13949c13949
+< Steps/sec: 6584.465, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16644.063, Simulation ends in:   0 d:   0 h:   0 m
+13967c13967
+< Steps/sec: 1641.606, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+13985c13985
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15196.754, Simulation ends in:   0 d:   0 h:   0 m
+14003c14003
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14021c14021
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14039c14039
+< Steps/sec: 1642.249, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+14057c14057
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+14075c14075
+< Steps/sec: 1613.194, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+14093c14093
+< Steps/sec: 1559.801, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5433.036, Simulation ends in:   0 d:   0 h:   0 m
+14111c14111
+< Steps/sec: 1776.495, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+14129c14129
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14147c14147
+< Steps/sec: 1675.042, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+14165c14165
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14183c14183
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+14201c14201
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14219c14219
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14237c14237
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+14255c14255
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14273c14273
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14291c14291
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+14309c14309
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16448.251, Simulation ends in:   0 d:   0 h:   0 m
+14327c14327
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14345c14345
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+14363c14363
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+14381c14381
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14399c14399
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14417c14417
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+14435c14435
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15141.892, Simulation ends in:   0 d:   0 h:   0 m
+14453c14453
+< Steps/sec: 1625.699, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+14471c14471
+< Steps/sec: 1672.370, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+14489c14489
+< Steps/sec: 1623.811, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+14507c14507
+< Steps/sec: 1652.602, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+14525c14525
+< Steps/sec: 1723.923, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+14543c14543
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14561c14561
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14579c14579
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14597c14597
+< Steps/sec: 1745.445, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+14615c14615
+< Steps/sec: 1689.208, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+14633c14633
+< Steps/sec: 1658.483, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+14651c14651
+< Steps/sec: 1547.714, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+14669c14669
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14687c14687
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14705c14705
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+14723c14723
+< Steps/sec: 1650.651, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+14741c14741
+< Steps/sec: 6574.144, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14759c14759
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+14777c14777
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+14795c14795
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14813c14813
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+14831c14831
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+14849c14849
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16448.251, Simulation ends in:   0 d:   0 h:   0 m
+14867c14867
+< Steps/sec: 1763.795, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+14885c14885
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+14903c14903
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14921c14921
+< Steps/sec: 1776.495, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+14939c14939
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14957c14957
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+14975c14975
+< Steps/sec: 1712.660, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+14993c14993
+< Steps/sec: 1631.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15011c15011
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16070.130, Simulation ends in:   0 d:   0 h:   0 m
+15029c15029
+< Steps/sec: 1582.159, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15047c15047
+< Steps/sec: 1763.795, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15065c15065
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+15083c15083
+< Steps/sec: 1597.222, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+15101c15101
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16644.063, Simulation ends in:   0 d:   0 h:   0 m
+15119c15119
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+15137c15137
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+15155c15155
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+15173c15173
+< Steps/sec: 1671.703, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+15191c15191
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+15209c15209
+< Steps/sec: 1655.864, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+15227c15227
+< Steps/sec: 1726.762, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15245c15245
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+15263c15263
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+15281c15281
+< Steps/sec: 1712.660, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15299c15299
+< Steps/sec: 1610.098, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5152.708, Simulation ends in:   0 d:   0 h:   0 m
+15317c15317
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+15335c15335
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+15353c15353
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+15371c15371
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16644.063, Simulation ends in:   0 d:   0 h:   0 m
+15389c15389
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+15407c15407
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+15425c15425
+< Steps/sec: 1633.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5203.851, Simulation ends in:   0 d:   0 h:   0 m
+15443c15443
+< Steps/sec: 1785.570, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+15461c15461
+< Steps/sec: 1508.200, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+15479c15479
+< Steps/sec: 1680.410, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+15497c15497
+< Steps/sec: 1692.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+15515c15515
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+15533c15533
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+15551c15551
+< Steps/sec: 1501.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+15569c15569
+< Steps/sec: 1592.371, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+15587c15587
+< Steps/sec: 1736.053, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+15605c15605
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15420.235, Simulation ends in:   0 d:   0 h:   0 m
+15623c15623
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+15641c15641
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+15659c15659
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+15677c15677
+< Steps/sec: 1602.102, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+15695c15695
+< Steps/sec: 1661.110, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+15713c15713
+< Steps/sec: 1570.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+15731c15731
+< Steps/sec: 6442.863, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+15749c15749
+< Steps/sec: 1703.617, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+15767c15767
+< Steps/sec: 1766.767, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+15785c15785
+< Steps/sec: 1802.451, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5370.428, Simulation ends in:   0 d:   0 h:   0 m
+15803c15803
+< Steps/sec: 1717.569, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15821c15821
+< Steps/sec: 1683.783, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15839c15839
+< Steps/sec: 1709.170, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+15857c15857
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+15875c15875
+< Steps/sec: 1567.964, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+15893c15893
+< Steps/sec: 1657.828, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5370.428, Simulation ends in:   0 d:   0 h:   0 m
+15911c15911
+< Steps/sec: 1582.756, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+15929c15929
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+15947c15947
+< Steps/sec: 1626.330, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+15965c15965
+< Steps/sec: 1751.275, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+15983c15983
+< Steps/sec: 1639.040, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+16001c16001
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+16019c16019
+< Steps/sec: 1617.549, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5433.036, Simulation ends in:   0 d:   0 h:   0 m
+16037c16037
+< Steps/sec: 1531.886, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+16055c16055
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+16073c16073
+< Steps/sec: 1628.224, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+16091c16091
+< Steps/sec: 6584.465, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+16109c16109
+< Steps/sec: 1594.792, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+16127c16127
+< Steps/sec: 1754.205, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16145c16145
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+16163c16163
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+16181c16181
+< Steps/sec: 1615.680, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16199c16199
+< Steps/sec: 1677.722, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16217c16217
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+16235c16235
+< Steps/sec: 1587.549, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+16253c16253
+< Steps/sec: 1599.658, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16271c16271
+< Steps/sec: 1631.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+16289c16289
+< Steps/sec: 1667.052, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+16307c16307
+< Steps/sec: 1641.606, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+16325c16325
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+16343c16343
+< Steps/sec: 1650.651, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16361c16361
+< Steps/sec: 1517.476, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16379c16379
+< Steps/sec: 1685.814, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+16397c16397
+< Steps/sec: 1550.574, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+16415c16415
+< Steps/sec: 1585.149, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+16433c16433
+< Steps/sec: 1612.574, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16451c16451
+< Steps/sec: 1751.275, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+16469c16469
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15363.751, Simulation ends in:   0 d:   0 h:   0 m
+16487c16487
+< Steps/sec: 1515.283, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+16505c16505
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+16523c16523
+< Steps/sec: 1589.956, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16541c16541
+< Steps/sec: 1655.211, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+16559c16559
+< Steps/sec: 1773.490, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+16577c16577
+< Steps/sec: 1721.093, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5269.226, Simulation ends in:   0 d:   0 h:   0 m
+16595c16595
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+16613c16613
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+16631c16631
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+16649c16649
+< Steps/sec: 1754.205, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+16667c16667
+< Steps/sec: 1691.934, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+16685c16685
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+16703c16703
+< Steps/sec: 1681.084, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+16721c16721
+< Steps/sec: 1666.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+16739c16739
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+16757c16757
+< Steps/sec: 1782.535, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16775c16775
+< Steps/sec: 1666.390, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+16793c16793
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+16811c16811
+< Steps/sec: 6288.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+16829c16829
+< Steps/sec: 1715.462, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+16847c16847
+< Steps/sec: 1625.699, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+16865c16865
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+16883c16883
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5269.226, Simulation ends in:   0 d:   0 h:   0 m
+16901c16901
+< Steps/sec: 1691.934, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+16919c16919
+< Steps/sec: 1745.445, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+16937c16937
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+16955c16955
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+16973c16973
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+16991c16991
+< Steps/sec: 1712.660, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+17009c17009
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15592.208, Simulation ends in:   0 d:   0 h:   0 m
+17027c17027
+< Steps/sec: 1738.932, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+17045c17045
+< Steps/sec: 1613.194, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+17063c17063
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+17081c17081
+< Steps/sec: 1744.719, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+17099c17099
+< Steps/sec: 1515.283, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+17117c17117
+< Steps/sec: 1658.483, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5178.153, Simulation ends in:   0 d:   0 h:   0 m
+17135c17135
+< Steps/sec: 6533.184, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16710.375, Simulation ends in:   0 d:   0 h:   0 m
+17153c17153
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17171c17171
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+17189c17189
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17207c17207
+< Steps/sec: 1644.825, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5210.316, Simulation ends in:   0 d:   0 h:   0 m
+17225c17225
+< Steps/sec: 1669.043, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+17243c17243
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17261c17261
+< Steps/sec: 1671.703, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17279c17279
+< Steps/sec: 1724.632, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17297c17297
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+17315c17315
+< Steps/sec: 1570.312, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17333c17333
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17351c17351
+< Steps/sec: 6403.518, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17369c17369
+< Steps/sec: 1667.052, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+17387c17387
+< Steps/sec: 1801.677, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5343.062, Simulation ends in:   0 d:   0 h:   0 m
+17405c17405
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17423c17423
+< Steps/sec: 1531.327, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5236.335, Simulation ends in:   0 d:   0 h:   0 m
+17441c17441
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17459c17459
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17477c17477
+< Steps/sec: 1718.273, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5349.878, Simulation ends in:   0 d:   0 h:   0 m
+17495c17495
+< Steps/sec: 1663.746, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+17513c17513
+< Steps/sec: 1612.574, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+17531c17531
+< Steps/sec: 6250.826, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17549c17549
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+17567c17567
+< Steps/sec: 6364.649, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17585c17585
+< Steps/sec: 6326.250, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17603c17603
+< Steps/sec: 1730.323, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+17621c17621
+< Steps/sec: 1694.668, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5289.160, Simulation ends in:   0 d:   0 h:   0 m
+17639c17639
+< Steps/sec: 1733.183, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17657c17657
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17675c17675
+< Steps/sec: 1736.053, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17693c17693
+< Steps/sec: 6335.807, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+17711c17711
+< Steps/sec: 1655.211, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17729c17729
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17747c17747
+< Steps/sec: 1745.445, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5262.615, Simulation ends in:   0 d:   0 h:   0 m
+17765c17765
+< Steps/sec: 6241.524, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+17783c17783
+< Steps/sec: 6502.797, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+17801c17801
+< Steps/sec: 1612.574, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+17819c17819
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15650.388, Simulation ends in:   0 d:   0 h:   0 m
+17837c17837
+< Steps/sec: 1652.602, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+17855c17855
+< Steps/sec: 1723.923, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5405.031, Simulation ends in:   0 d:   0 h:   0 m
+17873c17873
+< Steps/sec: 6374.322, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17891c17891
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+17909c17909
+< Steps/sec: 1628.224, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+17927c17927
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16644.063, Simulation ends in:   0 d:   0 h:   0 m
+17945c17945
+< Steps/sec: 1466.540, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+17963c17963
+< Steps/sec: 1671.703, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5322.721, Simulation ends in:   0 d:   0 h:   0 m
+17981c17981
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+17999c17999
+< Steps/sec: 1459.904, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5315.975, Simulation ends in:   0 d:   0 h:   0 m
+18017c18017
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15887.515, Simulation ends in:   0 d:   0 h:   0 m
+18035c18035
+< Steps/sec: 6452.775, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16384.000, Simulation ends in:   0 d:   0 h:   0 m
+18053c18053
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+18071c18071
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16980.988, Simulation ends in:   0 d:   0 h:   0 m
+18089c18089
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 15827.562, Simulation ends in:   0 d:   0 h:   0 m
+18107c18107
+< Steps/sec: 1741.821, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5377.313, Simulation ends in:   0 d:   0 h:   0 m
+18125c18125
+< Steps/sec: 6492.731, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+18143c18143
+< Steps/sec: 6543.376, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16131.938, Simulation ends in:   0 d:   0 h:   0 m
+18161c18161
+< Steps/sec: 1794.739, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 5295.838, Simulation ends in:   0 d:   0 h:   0 m
+18179c18179
+< Steps/sec: 6413.309, Simulation ends in:   0 d:   0 h:   0 m 
+---
+> Steps/sec: 16070.130, Simulation ends in:   0 d:   0 h:   0 m
+18197c18197,18201
+< Simulation Time (total): 6.66964054e-01 sec.
+---
+> Writing DCD coordinate to file OPC_prod_BOX_0.dcd at step 1000 
+> Finished writing DCD coordinate to file OPC_prod_BOX_0.dcd at step 1000 
+> Writing DCD coordinate to file OPC_prod_BOX_1.dcd at step 1000 
+> Finished writing DCD coordinate to file OPC_prod_BOX_1.dcd at step 1000 
+> Simulation Time (total): 3.61448050e-01 sec.
+18203c18207
+< Rotation:                                0.3860    sec.
+---
+> Rotation:                                0.1049    sec.
+18217,18218c18221,18222
+< Info: GOMC Version 2.75
+< Info: Completed at: Tue Jul  7 14:52:31 2026
+---
+> Info: GOMC Version 2.80
+> Info: Completed at: Tue Jul  7 14:51:17 2026

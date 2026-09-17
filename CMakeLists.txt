@@ -38,17 +38,59 @@ set(CMAKE_CLANG_COMP_FLAGS -O3)
 set(CMAKE_CLANG_CUDA_COMP_FLAGS "SHELL:-Xcompiler -O3")
 set(CMAKE_CLANG_LINK_FLAGS -O3)
 
-# The GOMC_OPT setting enables processor-specific optimizations
+# The GOMC_OPT setting enables processor-specific optimizations.
+#
+# GOMC_ARCH picks the target. The default, x86-64-v3, is AVX2 + FMA: it runs on
+# anything Haswell or Zen 1 and newer, and gives the vector units 4 doubles at a
+# time instead of the 2 the baseline x86-64 target allows. Measured on the OPC
+# GEMC benchmark this is worth roughly 6% (AVX2 on Intel, AVX-512 on Zen 5 gave
+# about the same, because the pair loop does not vectorise -- see
+# CalculateEnergy::BoxInterTemplate -- and the gain comes from the reciprocal
+# space code).
+#
+# Set -DGOMC_ARCH=native to tune for the build machine (faster to type, but the
+# binary then only runs on that microarchitecture), or to any other -march=
+# value such as znver4.
+#
+# NOTE: do not use Intel's -xHost here. It makes icc/icpx emit a GenuineIntel
+# dispatch check, and the binary refuses to start on AMD with "This executable
+# is built with target processor feature specified, it can only be run on
+# Intel(R) processors". -march= carries no such check. Classic icc predates
+# -march= and has no alternative, so it keeps -xHost and stays Intel-only.
 if(GOMC_OPT)
-   set(CMAKE_INTEL_COMP_FLAGS ${CMAKE_INTEL_COMP_FLAGS} -xHost)
-   set(CMAKE_INTEL_CUDA_COMP_FLAGS ${CMAKE_INTEL_CUDA_COMP_FLAGS} "SHELL:-Xcompiler -xHost")
-   set(CMAKE_INTEL_LINK_FLAGS ${CMAKE_INTEL_LINK_FLAGS} -xHost)
-   set(CMAKE_GNU_COMP_FLAGS ${CMAKE_GNU_COMP_FLAGS} -march=native)
-   set(CMAKE_GNU_CUDA_COMP_FLAGS ${CMAKE_GNU_CUDA_COMP_FLAGS} "SHELL:-Xcompiler -march=native")
-   set(CMAKE_GNU_LINK_FLAGS ${CMAKE_GNU_LINK_FLAGS} -march=native)
-   set(CMAKE_CLANG_COMP_FLAGS ${CMAKE_CLANG_COMP_FLAGS} -march=native)
-   set(CMAKE_CLANG_CUDA_COMP_FLAGS ${CMAKE_CLANG_CUDA_COMP_FLAGS} "SHELL:-Xcompiler -march=native")
-   set(CMAKE_CLANG_LINK_FLAGS ${CMAKE_CLANG_LINK_FLAGS} -march=native)
+   set(GOMC_ARCH "x86-64-v3" CACHE STRING
+       "Target architecture for GOMC_OPT (-march=); e.g. x86-64-v3, native, znver4")
+
+   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "^Intel$")
+      # Classic icc: no -march=, fall back to -xHost (Intel CPUs only).
+      set(GOMC_ARCH_FLAG -xHost)
+   else()
+      set(GOMC_ARCH_FLAG -march=${GOMC_ARCH})
+   endif()
+
+   # Older compilers may not know the chosen target; find out before we commit
+   # to it rather than failing the whole build over an optional optimisation.
+   include(CheckCXXCompilerFlag)
+   check_cxx_compiler_flag("${GOMC_ARCH_FLAG}" GOMC_ARCH_FLAG_SUPPORTED)
+   if(NOT GOMC_ARCH_FLAG_SUPPORTED)
+      message(WARNING "Compiler does not accept ${GOMC_ARCH_FLAG}; "
+                      "building without processor-specific optimizations. "
+                      "Try -DGOMC_ARCH=native.")
+      set(GOMC_ARCH_FLAG "")
+   endif()
+
+   if(GOMC_ARCH_FLAG)
+      message(STATUS "GOMC_OPT: using ${GOMC_ARCH_FLAG}")
+      set(CMAKE_INTEL_COMP_FLAGS ${CMAKE_INTEL_COMP_FLAGS} ${GOMC_ARCH_FLAG})
+      set(CMAKE_INTEL_CUDA_COMP_FLAGS ${CMAKE_INTEL_CUDA_COMP_FLAGS} "SHELL:-Xcompiler ${GOMC_ARCH_FLAG}")
+      set(CMAKE_INTEL_LINK_FLAGS ${CMAKE_INTEL_LINK_FLAGS} ${GOMC_ARCH_FLAG})
+      set(CMAKE_GNU_COMP_FLAGS ${CMAKE_GNU_COMP_FLAGS} ${GOMC_ARCH_FLAG})
+      set(CMAKE_GNU_CUDA_COMP_FLAGS ${CMAKE_GNU_CUDA_COMP_FLAGS} "SHELL:-Xcompiler ${GOMC_ARCH_FLAG}")
+      set(CMAKE_GNU_LINK_FLAGS ${CMAKE_GNU_LINK_FLAGS} ${GOMC_ARCH_FLAG})
+      set(CMAKE_CLANG_COMP_FLAGS ${CMAKE_CLANG_COMP_FLAGS} ${GOMC_ARCH_FLAG})
+      set(CMAKE_CLANG_CUDA_COMP_FLAGS ${CMAKE_CLANG_CUDA_COMP_FLAGS} "SHELL:-Xcompiler ${GOMC_ARCH_FLAG}")
+      set(CMAKE_CLANG_LINK_FLAGS ${CMAKE_CLANG_LINK_FLAGS} ${GOMC_ARCH_FLAG})
+   endif()
 endif()
 
 

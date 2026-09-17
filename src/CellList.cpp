@@ -20,6 +20,7 @@ CellList::CellList(const Molecules &mols, BoxDimensions &dims) : mols(&mols) {
   isBuilt = false;
   for (uint b = 0; b < BOX_TOTAL; b++) {
     edgeCells[b][0] = edgeCells[b][1] = edgeCells[b][2] = 0;
+    stencil[b][0] = stencil[b][1] = stencil[b][2] = 1;
   }
 }
 
@@ -30,6 +31,9 @@ CellList::CellList(const CellList &other) : mols(other.mols) {
     edgeCells[b][0] = other.edgeCells[b][0];
     edgeCells[b][1] = other.edgeCells[b][1];
     edgeCells[b][2] = other.edgeCells[b][2];
+    stencil[b][0] = other.stencil[b][0];
+    stencil[b][1] = other.stencil[b][1];
+    stencil[b][2] = other.stencil[b][2];
   }
 
   for (uint b = 0; b < BOX_TOTAL; b++) {
@@ -134,26 +138,102 @@ void CellList::AddMol(const int molIndex, const int box, const XYZArray &pos) {
   }
 }
 
+
+//
+// Pick the cell grid and the matching stencil radius for one box.
+//
+// A stencil of +-R cells around a particle's own cell is only correct if R
+// cells span the cutoff. The classic choice -- cell edge = cutoff, R = 1, 27
+// cells -- breaks down when the box is narrow: `floor(side/cutoff)` is clamped
+// to a minimum of 3 cells per side, and a +-1 stencil over a 3x3x3 grid wraps
+// onto *every* cell. The cell list then accelerates nothing and the pair loop
+// runs all-pairs. A GEMC liquid box hits this squarely: 32.8 A with
+// rCut = max(rCut, rCutCoulomb) = 12 A gives 3x3x3 cells covering 100% of the
+// box, of which only ~20% of the pairs tested are actually inside the cutoff.
+//
+// Finer cells with a wider stencil cover less: (2R+1)^3 cells of edge L/n cover
+// ((2R+1)/n)^3 of the volume, which falls as n grows. So search n for the
+// smallest coverage, subject to two constraints:
+//
+//   n >= 2R+1   -- otherwise the stencil wraps onto itself and a pair would be
+//                  visited (and counted) more than once.
+//   n^3 * (2R+1)^3 <= kMaxNeighborEntries -- the neighbour lists are rebuilt on
+//                  every volume move, so they have to stay small.
+//
+// A cubic stencil cannot do better than (2*rCut)^3 / (4/3 pi rCut^3) = 1.9x the
+// sphere, so this buys roughly 2x fewer distance tests, not the 5x that perfect
+// spherical culling would give.
+//
+static void ChooseGrid(const XYZ &sides, double cutoff, int *eCells,
+                       XYZ &cellSize, int *stencil) {
+  // Neighbour-list entries we are willing to rebuild per volume move (~16 MB).
+  const long kMaxNeighborEntries = 4000000L;
+  const double side[3] = {sides.x, sides.y, sides.z};
+
+  int bestN[3] = {0, 0, 0}, bestR[3] = {0, 0, 0};
+  double bestCoverage = 2.0;
+
+  // n is the number of cells along the shortest axis; the other axes get a
+  // proportional count so cells stay roughly cubic.
+  const double minSide = std::min(side[0], std::min(side[1], side[2]));
+  for (int n = 3; n <= 64; ++n) {
+    int nc[3], r[3];
+    double coverage = 1.0;
+    long entries = 1, cells = 1;
+    bool ok = true;
+    for (int d = 0; d < 3; ++d) {
+      nc[d] = std::max((int)floor(n * side[d] / minSide), 3);
+      const double cs = side[d] / nc[d];
+      r[d] = (int)std::ceil(cutoff / cs - 1e-12);
+      if (2 * r[d] + 1 > nc[d]) { // stencil would wrap onto itself
+        ok = false;
+        break;
+      }
+      coverage *= (double)(2 * r[d] + 1) / nc[d];
+      cells *= nc[d];
+      entries *= (2 * r[d] + 1);
+    }
+    if (!ok || cells * entries > kMaxNeighborEntries)
+      continue;
+    if (coverage < bestCoverage) {
+      bestCoverage = coverage;
+      for (int d = 0; d < 3; ++d) {
+        bestN[d] = nc[d];
+        bestR[d] = r[d];
+      }
+    }
+  }
+
+  if (bestCoverage > 1.5) {
+    // Nothing valid -- fall back to the original cell-edge-equals-cutoff grid
+    // with a +-1 stencil, which is always correct even when it degenerates.
+    for (int d = 0; d < 3; ++d) {
+      bestN[d] = std::max((int)floor(side[d] / cutoff), 3);
+      bestR[d] = 1;
+    }
+  }
+
+  for (int d = 0; d < 3; ++d) {
+    eCells[d] = bestN[d];
+    stencil[d] = bestR[d];
+  }
+  cellSize.x = side[0] / eCells[0];
+  cellSize.y = side[1] / eCells[1];
+  cellSize.z = side[2] / eCells[2];
+}
+
 // Resize all boxes to match current axes
 void CellList::ResizeGrid(const BoxDimensions &dims) {
   for (uint b = 0; b < BOX_TOTAL; ++b) {
     XYZ sides = dims.axis[b];
     bool rebuild = false;
     int *eCells = edgeCells[b];
-    int oldCells = eCells[0];
-    eCells[0] = std::max((int)floor(sides.x / cutoff[b]), 3);
-    cellSize[b].x = sides.x / eCells[0];
-    rebuild |= (!isBuilt || (oldCells != eCells[0]));
-
-    oldCells = eCells[1];
-    eCells[1] = std::max((int)floor(sides.y / cutoff[b]), 3);
-    cellSize[b].y = sides.y / eCells[1];
-    rebuild |= (!isBuilt || (oldCells != eCells[1]));
-
-    oldCells = eCells[2];
-    eCells[2] = std::max((int)floor(sides.z / cutoff[b]), 3);
-    cellSize[b].z = sides.z / eCells[2];
-    rebuild |= (!isBuilt || (oldCells != eCells[2]));
+    int oldCells[3] = {eCells[0], eCells[1], eCells[2]};
+    int oldStencil[3] = {stencil[b][0], stencil[b][1], stencil[b][2]};
+    ChooseGrid(sides, cutoff[b], eCells, cellSize[b], stencil[b]);
+    rebuild |= !isBuilt;
+    for (int d = 0; d < 3; ++d)
+      rebuild |= (oldCells[d] != eCells[d]) || (oldStencil[d] != stencil[b][d]);
 
     if (rebuild) {
       RebuildNeighbors(b);
@@ -167,20 +247,12 @@ void CellList::ResizeGridBox(const BoxDimensions &dims, const uint b) {
   XYZ sides = dims.axis[b];
   bool rebuild = false;
   int *eCells = edgeCells[b];
-  int oldCells = eCells[0];
-  eCells[0] = std::max((int)floor(sides.x / cutoff[b]), 3);
-  cellSize[b].x = sides.x / eCells[0];
-  rebuild |= (!isBuilt || (oldCells != eCells[0]));
-
-  oldCells = eCells[1];
-  eCells[1] = std::max((int)floor(sides.y / cutoff[b]), 3);
-  cellSize[b].y = sides.y / eCells[1];
-  rebuild |= (!isBuilt || (oldCells != eCells[1]));
-
-  oldCells = eCells[2];
-  eCells[2] = std::max((int)floor(sides.z / cutoff[b]), 3);
-  cellSize[b].z = sides.z / eCells[2];
-  rebuild |= (!isBuilt || (oldCells != eCells[2]));
+  int oldCells[3] = {eCells[0], eCells[1], eCells[2]};
+  int oldStencil[3] = {stencil[b][0], stencil[b][1], stencil[b][2]};
+  ChooseGrid(sides, cutoff[b], eCells, cellSize[b], stencil[b]);
+  rebuild |= !isBuilt;
+  for (int d = 0; d < 3; ++d)
+    rebuild |= (oldCells[d] != eCells[d]) || (oldStencil[d] != stencil[b][d]);
 
   if (rebuild) {
     RebuildNeighbors(b);
@@ -201,9 +273,9 @@ void CellList::RebuildNeighbors(int b) {
     for (int y = 0; y < eCells[1]; ++y) {
       for (int z = 0; z < eCells[2]; ++z) {
         int cell = x * eCells[2] * eCells[1] + y * eCells[2] + z;
-        for (int dx = -1; dx <= 1; ++dx) {
-          for (int dy = -1; dy <= 1; ++dy) {
-            for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -stencil[b][0]; dx <= stencil[b][0]; ++dx) {
+          for (int dy = -stencil[b][1]; dy <= stencil[b][1]; ++dy) {
+            for (int dz = -stencil[b][2]; dz <= stencil[b][2]; ++dz) {
               // Cache adjacent cells, wrapping if needed
               neighbors[b][cell].push_back(
                   ((x + dx + eCells[0]) % eCells[0]) * eCells[2] * eCells[1] +
