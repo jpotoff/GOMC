@@ -31,6 +31,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "ConstantDefinitionsCUDAKernel.cuh"
 #endif
 #include "GOMCEventsProfile.h"
+#define NUMBER_OF_NEIGHBOR_CELL 27
 
 //
 //    CalculateEnergy.cpp
@@ -183,11 +184,8 @@ void CalculateEnergy::BoxInterTemplate(
     // find the which cell currParticle belong to
     int currCell = mapParticleToCell[currParticle];
     // loop over currCell neighboring cells
-    // The stencil is no longer fixed at 27: CellList::ChooseGrid picks a finer
-    // grid with a wider stencil when that covers less of the box, so the list
-    // length varies per box.
-    const int numNeighborCells = (int)neighborList[currCell].size();
-    for (int nCellIndex = 0; nCellIndex < numNeighborCells; nCellIndex++) {
+    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
+         nCellIndex++) {
       // find the index of neighboring cell
       int neighborCell = neighborList[currCell][nCellIndex];
 
@@ -276,11 +274,8 @@ void CalculateEnergy::BoxForceTemplate(
     int currMol = particleMol[currParticle];
     int currCell = mapParticleToCell[currParticle];
 
-    // The stencil is no longer fixed at 27: CellList::ChooseGrid picks a finer
-    // grid with a wider stencil when that covers less of the box, so the list
-    // length varies per box.
-    const int numNeighborCells = (int)neighborList[currCell].size();
-    for (int nCellIndex = 0; nCellIndex < numNeighborCells; nCellIndex++) {
+    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
+         nCellIndex++) {
       int neighborCell = neighborList[currCell][nCellIndex];
 
       int endIndex = cellStartIndex[neighborCell + 1];
@@ -375,11 +370,8 @@ void CalculateEnergy::VirialCalcTemplate(
     int currMol = particleMol[currParticle];
     int currCell = mapParticleToCell[currParticle];
 
-    // The stencil is no longer fixed at 27: CellList::ChooseGrid picks a finer
-    // grid with a wider stencil when that covers less of the box, so the list
-    // length varies per box.
-    const int numNeighborCells = (int)neighborList[currCell].size();
-    for (int nCellIndex = 0; nCellIndex < numNeighborCells; nCellIndex++) {
+    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
+         nCellIndex++) {
       int neighborCell = neighborList[currCell][nCellIndex];
 
       int endIndex = cellStartIndex[neighborCell + 1];

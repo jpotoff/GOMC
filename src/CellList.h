@@ -65,10 +65,6 @@ public:
 
   std::vector<int> list;
   std::vector<std::vector<int>> neighbors[BOX_TOTAL];
-  //! Half-width, in cells, of the neighbour stencil for each box and axis.
-  //! Chosen together with edgeCells by ChooseGrid; it is no longer fixed at 1,
-  //! because a +-1 stencil degenerates to the whole box for narrow boxes.
-  int stencil[BOX_TOTAL][3];
   std::vector<int> head[BOX_TOTAL];
 
 private:
