@@ -215,7 +215,7 @@ void CalculateEnergy::BuildCellOrdered(
 // nParticle` monotone in the slot index, so the same test becomes a starting
 // bound found by upper_bound rather than a per-candidate compare.
 //
-template <typename BoxType, typename FFType>
+template <bool HasLambda, typename BoxType, typename FFType>
 void CalculateEnergy::BoxInterTemplate(
     const FFType &ff, XYZArray const &coords, const BoxType &boxAxes,
     const uint box, double &tempREn, double &tempLJEn,
@@ -224,12 +224,14 @@ void CalculateEnergy::BoxInterTemplate(
     const std::vector<int> &mapParticleToCell,
     const std::vector<std::vector<int>> &neighborList) {
 
-  const bool hasFraction = lambdaRef.HasFraction(box);
-  const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
+  // HasLambda is resolved by the caller from Lambda::HasFraction(box). Only
+  // NeMTMC ever sets a fractional molecule, so in an ordinary simulation it is
+  // false for the whole run and everything below folds away.
+  const int fracMol = HasLambda ? lambdaRef.GetMolIndex(box) : -1;
   const double fracVDW =
-      hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+      HasLambda ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
   const double fracCoul =
-      hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+      HasLambda ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
   // Cell-ordered views; see BuildCellOrdered().
   const double *const ordX = cellOrderX.data();
@@ -248,7 +250,7 @@ void CalculateEnergy::BoxInterTemplate(
 #pragma omp parallel for default(none)                                         \
     shared(boxAxes, ff, neighborList)                                          \
     reduction(+ : tempREn, tempLJEn)                                           \
-    firstprivate(box, num::qqFact, hasFraction, fracMol, fracVDW, fracCoul,    \
+    firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul,                 \
                      ordX, ordY, ordZ, ordQ, ordMol, ordKind, ordCell,         \
                      cellVec, cellStart, nAtoms, rCutSqBox)
 #endif
@@ -297,24 +299,35 @@ void CalculateEnergy::BoxInterTemplate(
           if (!(rCutSqBox > distSq[k]))
             continue;
 
-          double lambdaVDW = 1.0;
-          double lambdaCoulomb = 1.0;
-          if (hasFraction) {
+          if constexpr (HasLambda) {
+            double lambdaVDW = 1.0;
+            double lambdaCoulomb = 1.0;
             if (currMol == fracMol || ordMol[j] == fracMol) {
               lambdaVDW = fracVDW;
               lambdaCoulomb = fracCoul;
             }
-          }
 
-          if (electrostatic) {
-            const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
-            if (qi_qj_fact != 0.0) {
-              tempREn += ff.FFType::CalcCoulomb(distSq[k], currKind, ordKind[j],
-                                                qi_qj_fact, lambdaCoulomb, box);
+            if (electrostatic) {
+              const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
+              if (qi_qj_fact != 0.0) {
+                tempREn += ff.FFType::CalcCoulomb(
+                    distSq[k], currKind, ordKind[j], qi_qj_fact, lambdaCoulomb,
+                    box);
+              }
             }
+            tempLJEn +=
+                ff.FFType::CalcEn(distSq[k], currKind, ordKind[j], lambdaVDW);
+          } else {
+            // Same values, reached without the lambda tests; see
+            // FFAdapter::CalcEnFull.
+            if (electrostatic) {
+              const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
+              if (qi_qj_fact != 0.0) {
+                tempREn += ff.CalcCoulombFull(distSq[k], qi_qj_fact, box);
+              }
+            }
+            tempLJEn += ff.CalcEnFull(distSq[k], currKind, ordKind[j]);
           }
-          tempLJEn +=
-              ff.FFType::CalcEn(distSq[k], currKind, ordKind[j], lambdaVDW);
         }
       }
     }
@@ -825,17 +838,34 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
 #else
   // Resolve the concrete forcefield and box types once, then run a kernel
   // with no virtual dispatch in the pair loop.
+  // Resolve the fractional-molecule case here too, so the pair loop is
+  // compiled without any lambda handling in the overwhelmingly common case
+  // where there is none. See BoxInterTemplate's HasLambda parameter.
+  const bool hasFraction = lambdaRef.HasFraction(box);
   DispatchForcefield(forcefield, [&](const auto &ffRef) {
     using FFT = std::decay_t<decltype(ffRef)>;
     if (boxAxes.orthogonal[box]) {
-      BoxInterTemplate<BoxDimensions, FFT>(
-          ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
-          cellStartIndex, mapParticleToCell, neighborList);
+      if (hasFraction) {
+        BoxInterTemplate<true, BoxDimensions, FFT>(
+            ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+            cellStartIndex, mapParticleToCell, neighborList);
+      } else {
+        BoxInterTemplate<false, BoxDimensions, FFT>(
+            ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+            cellStartIndex, mapParticleToCell, neighborList);
+      }
     } else {
-      BoxInterTemplate<BoxDimensionsNonOrth, FFT>(
-          ffRef, coords, static_cast<const BoxDimensionsNonOrth &>(boxAxes),
-          box, tempREn, tempLJEn, cellVector, cellStartIndex,
-          mapParticleToCell, neighborList);
+      const BoxDimensionsNonOrth &nonOrth =
+          static_cast<const BoxDimensionsNonOrth &>(boxAxes);
+      if (hasFraction) {
+        BoxInterTemplate<true, BoxDimensionsNonOrth, FFT>(
+            ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
+            cellStartIndex, mapParticleToCell, neighborList);
+      } else {
+        BoxInterTemplate<false, BoxDimensionsNonOrth, FFT>(
+            ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
+            cellStartIndex, mapParticleToCell, neighborList);
+      }
     }
   });
 #endif

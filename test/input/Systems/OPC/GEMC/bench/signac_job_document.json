@@ -1,1 +1,0 @@
-{"replica_number_int": 2, "gomc_ncpu": 4, "gomc_ngpu": 1, "gomc_cpu_or_gpu": "GPU", "gomc_equilb_design_ensemble_gomc_binary_file": "GOMC_GPU_GEMC", "gomc_production_ensemble_gomc_binary_file": "GOMC_GPU_GEMC"}

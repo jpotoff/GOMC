@@ -61,6 +61,39 @@ struct FFAdapter : public FFParticle {
         forcefield.sc_alpha, forcefield.sc_power, forcefield.sc_sigma_6);
   }
 
+  //
+  // CalcEn and CalcCoulomb at lambda = 1, i.e. the body of the
+  // `lambda >= 0.999999` branch of each, named rather than left for the
+  // optimiser to fold out.
+  //
+  // lambda is 1 for every pair unless a molecule is being coupled in or out,
+  // which only NeMTMC ever does (Lambda::Set has no other caller). In an
+  // ordinary simulation the lambda tests are therefore dead on every pair --
+  // but icpx if-converts them into unconditional mask arithmetic rather than a
+  // predictable branch, which measured 9.5% of BoxInterTemplate on the OPC
+  // GEMC benchmark, computing nothing but `lambdaVDW = lambdaCoulomb = 1.0`.
+  //
+  // Callers that know there is no fractional molecule reach these instead; see
+  // the HasLambda parameter on CalculateEnergy::BoxInterTemplate. The values
+  // produced are identical, so results are bit-for-bit unchanged.
+  //
+  // kind1/kind2 are absent from CalcCoulombFull because they are only read by
+  // the soft-core path, which cannot be taken at lambda = 1.
+  //
+  double CalcEnFull(const double distSq, const uint kind1,
+                    const uint kind2) const {
+    if (forcefield.rCutSq < distSq)
+      return 0.0;
+    return VdwEval::Energy(Self().VdwView(), distSq, FlatIndex(kind1, kind2));
+  }
+
+  double CalcCoulombFull(const double distSq, const double qi_qj_Fact,
+                         const uint b) const {
+    if (forcefield.rCutCoulombSq[b] < distSq)
+      return 0.0;
+    return CoulKernel(distSq, qi_qj_Fact, b);
+  }
+
   void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
                    const uint kind2) const override {
     if (forcefield.rCutSq < distSq)

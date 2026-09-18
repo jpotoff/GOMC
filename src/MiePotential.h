@@ -35,6 +35,28 @@ along with this program, also can be found at
 #endif
 #endif
 
+// Inlining of MiePair is not negotiable, so it is not left to a heuristic.
+// See the note on MieRepulseSlow below for why the heuristic got it wrong.
+#ifndef GOMC_FORCEINLINE
+#ifdef __CUDACC__
+#define GOMC_FORCEINLINE __forceinline__
+#elif defined(_MSC_VER)
+#define GOMC_FORCEINLINE __forceinline
+#else
+#define GOMC_FORCEINLINE inline __attribute__((always_inline))
+#endif
+#endif
+
+#ifndef GOMC_NOINLINE
+#ifdef __CUDACC__
+#define GOMC_NOINLINE __noinline__
+#elif defined(_MSC_VER)
+#define GOMC_NOINLINE __declspec(noinline)
+#else
+#define GOMC_NOINLINE inline __attribute__((noinline))
+#endif
+#endif
+
 namespace ff {
 
 // Sentinel stored in nExp when the exponent is not a usable integer, meaning
@@ -56,6 +78,31 @@ struct MieTerms {
 };
 
 //
+// (sigma/r)^n for every exponent that is not 12.
+//
+// Deliberately out of line, and deliberately not left to the inliner. num::POW
+// is a 26-case switch containing a sqrt, and pow() is a library call; together
+// they made MiePair look expensive enough that icpx 2025.1 at -O3 refused to
+// inline any of it, leaving a real call at all 138 call sites -- including the
+// innermost pair loop of CalculateEnergy::BoxInterTemplate, where a call is an
+// outright vectorisation blocker and a full memory clobber that forces every
+// parameter pointer to be reloaded on the next iteration.
+//
+// Splitting it means the size of this path can no longer price the n = 12 fast
+// path out of being inlined. The arithmetic is unchanged, so results are
+// bit-for-bit identical.
+//
+GOMC_HOSTDEV GOMC_NOINLINE double MieRepulseSlow(const double rRat2,
+                                                 const double rRat4,
+                                                 const double attract,
+                                                 const uint nExp,
+                                                 const double n) {
+  if (nExp != MIE_EXP_NOT_INTEGER)
+    return num::POW(rRat2, rRat4, attract, nExp);
+  return pow(rRat2, n * 0.5);
+}
+
+//
 // Both terms of the Mie potential from rRat2 = (sigma/r)^2.
 //
 // `nExp` is the precomputed integer exponent (MIE_EXP_NOT_INTEGER if n is not a
@@ -64,22 +111,18 @@ struct MieTerms {
 // The operation order here is deliberately identical to the code this replaces,
 // so results are bit-for-bit unchanged.
 //
-GOMC_HOSTDEV inline MieTerms MiePair(const double rRat2, const uint nExp,
-                                     const double n) {
+GOMC_HOSTDEV GOMC_FORCEINLINE MieTerms MiePair(const double rRat2,
+                                               const uint nExp,
+                                               const double n) {
   const double rRat4 = rRat2 * rRat2;
   const double attract = rRat4 * rRat2;
 
-  double repulse;
-  if (nExp == 12) {
-    // n = 12 is overwhelmingly the common case, and (sigma/r)^12 is just the
-    // attractive term squared -- no table lookup, no pow.
-    repulse = attract * attract;
-  } else if (nExp != MIE_EXP_NOT_INTEGER) {
-    repulse = num::POW(rRat2, rRat4, attract, nExp);
-  } else {
-    repulse = pow(rRat2, n * 0.5);
-  }
-  return {attract, repulse};
+  // n = 12 is overwhelmingly the common case, and (sigma/r)^12 is just the
+  // attractive term squared -- no table lookup, no pow.
+  if (nExp == 12)
+    return {attract, attract * attract};
+
+  return {attract, MieRepulseSlow(rRat2, rRat4, attract, nExp, n)};
 }
 
 //
