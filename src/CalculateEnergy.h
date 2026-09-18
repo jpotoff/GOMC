@@ -341,6 +341,18 @@ private:
   std::vector<int> particleIndex;
   // stores charge for each global atom idx
   std::vector<double> particleCharge;
+
+  //! Permute the per-atom arrays into cell-list order, so the BoxInter pair
+  //! walk reads contiguously instead of gathering through cellVector. Buffers
+  //! are members and only ever grow, so this does not allocate per call.
+  void BuildCellOrdered(XYZArray const &coords,
+                        const std::vector<int> &cellVector,
+                        const std::vector<int> &mapParticleToCell);
+
+  // Per-atom data in cell-list order; filled by BuildCellOrdered and read by
+  // BoxInterTemplate. Slot k holds the atom cellVector[k].
+  std::vector<double> cellOrderX, cellOrderY, cellOrderZ, cellOrderCharge;
+  std::vector<int> cellOrderMol, cellOrderKind, cellOrderCell;
   const MoleculeLookup &molLookup;
   const BoxDimensions &currentAxes;
   const CellList &cellList;

@@ -132,6 +132,33 @@ public:
     }
     */
 
+  //
+  // distSq for a contiguous run of j atoms against one fixed i position.
+  //
+  // Same arithmetic as InRcut, in the same order, but reading three plain
+  // contiguous arrays instead of an XYZArray through a scattered index. That
+  // is the whole point: MinImageSigned already compiles to branchless selects
+  // (cmpltsd/andpd/andnpd/orpd), so the arithmetic was always vector-shaped --
+  // it ran one lane wide only because every coordinate read was a gather.
+  // Callers pass cell-ordered arrays (CalculateEnergy::BuildCellOrdered).
+  //
+  void DistSqRange(double *__restrict distSq, const double xi, const double yi,
+                   const double zi, const double *__restrict xj,
+                   const double *__restrict yj, const double *__restrict zj,
+                   const int m, const uint b) const {
+    const double axX = axis.x[b], axY = axis.y[b], axZ = axis.z[b];
+    const double hX = halfAx.x[b], hY = halfAx.y[b], hZ = halfAx.z[b];
+    for (int k = 0; k < m; ++k) {
+      double dx = xi - xj[k];
+      double dy = yi - yj[k];
+      double dz = zi - zj[k];
+      dx = MinImageSigned(dx, axX, hX);
+      dy = MinImageSigned(dy, axY, hY);
+      dz = MinImageSigned(dz, axZ, hZ);
+      distSq[k] = dx * dx + dy * dy + dz * dz;
+    }
+  }
+
   // Dist squared, two different coordinate arrays
   void GetDistSq(double &distSq, XYZArray const &arr1, const uint i,
                  XYZArray const &arr2, const uint j, const uint b) const;

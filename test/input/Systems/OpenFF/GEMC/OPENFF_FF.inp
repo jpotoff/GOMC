@@ -1,0 +1,70 @@
+* initial_box_0 and initial_box_1 - created by MoSDeF-GOMC using the on 2026-09-14 21:42:12.264827
+* These parameters use the non-bonded Mie form --- with these force field(s) via MoSDef  {'ETH': '../../openff-2.2.0.xml'}.
+*  1-4 electrostatic scaling = {'ETH': np.float64(0.833333)} , and 1-4 non-bonded scaling = {'ETH': np.float64(0.5)}, and non-bonded mixing rule = lorentz
+
+*            8000 atoms
+*            7000 bonds
+*           12000 angles
+*            9000 dihedrals
+*               0 impropers
+
+
+* masses
+
+! atom_types      mass            ! atomClass_ResidueName
+* C0              12.0108         ! ETH_C_terminal           
+* H0              1.0079          ! ETH_H_terminal           
+
+BONDS * harmonic
+! 
+! V(bond) = Kb(b - b0)**2
+! 
+! Kb: kcal/mol/A**2 (LJ) and  K/A**2 (Mie and Exp6)
+! b0: A
+! Kb (kcal/mol) = Kb_K (K) * Boltz. const.; (9999999999 if no stretching)
+! 
+! type_1   type_2     Kb              b0              ! extended_type_1      extended_type_2     
+C0         C0         216687.7429     1.533628        ! ETH_C_terminal       ETH_C_terminal      
+C0         H0         360123.1894     1.094206        ! ETH_C_terminal       ETH_H_terminal      
+
+ANGLES * harmonic
+! 
+! V(angle) = Ktheta(Theta - Theta0)**2
+! 
+! Ktheta: kcal/mol/rad**2 (LJ) and  K/rad**2 (Mie and Exp6)
+! Theta0: degrees
+! 
+!  Boltzmann = 0.0019872041 kcal / (mol * K)
+! 
+! Ktheta (kcal/mol) = Ktheta_K (K) * Boltz. const.
+! 
+! type_1   type_2     type_3     Ktheta          Theta0          ! extended_type_1      extended_type_2      extended_type_3     
+C0         C0         H0         33593.0854      109.938053      ! ETH_C_terminal       ETH_C_terminal       ETH_H_terminal      
+H0         C0         H0         18506.7237      108.354314      ! ETH_H_terminal       ETH_C_terminal       ETH_H_terminal      
+
+DIHEDRALS * Mie
+! 
+! V(dihedral) = Kchi(1 + cos(n(chi) - delta)), where delta also called chi0 
+! NOTE: For the CHARMM FF n=0 is a harmonic dihedral, which is not supported. CHARMM FF where n=0 -->  V(dihedral) = Kchi(chi - chi0)**2) 
+! 
+! Kchi: kcal/mol (LJ) and K (Mie and Exp6)
+! n: multiplicity
+! delta: degrees
+! 
+! Kchi (kcal/mol) = Kchi_K (K) * Boltz. const.
+! Boltzmann = 0.0019872041 kcal / (mol * K)
+! 
+! type_1   type_2     type_3     type_4     Kchi            n          delta           ! extended_type_1      extended_type_2      extended_type_3      extended_type_4     
+H0         C0         C0         H0         114.7315        3          0.0             ! ETH_H_terminal       ETH_C_terminal       ETH_C_terminal       ETH_H_terminal      
+! The input dihedral to periodic dihedral conversion error is OK [error <= 10^(-10)]
+! Maximum( |(input dihedral calc)-(periodic dihedral calc)| ) =  0.0
+
+NONBONDED_MIE * Mie
+! 
+! V(Mie) = (n/(n-6)) * (n/6)**(6/(n-6)) * Epsilon * ((sig/r)**n - (sig/r)**6)
+! 
+! type_1   epsilon         sigma           n               epsilon,1-4     sigma,1-4       n,1-4           ! extended_type_1      extended_type_2     
+C0         54.77092        3.379532        12.0            27.38546        3.379532        12.0            ! ETH_C_terminal       ETH_C_terminal      
+H0         7.940301        2.644543        12.0            3.970151        2.644543        12.0            ! ETH_H_terminal       ETH_H_terminal      
+
+END

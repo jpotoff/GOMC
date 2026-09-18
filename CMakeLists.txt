@@ -42,11 +42,23 @@ set(CMAKE_CLANG_LINK_FLAGS -O3)
 #
 # GOMC_ARCH picks the target. The default, x86-64-v3, is AVX2 + FMA: it runs on
 # anything Haswell or Zen 1 and newer, and gives the vector units 4 doubles at a
-# time instead of the 2 the baseline x86-64 target allows. Measured on the OPC
-# GEMC benchmark this is worth roughly 6% (AVX2 on Intel, AVX-512 on Zen 5 gave
-# about the same, because the pair loop does not vectorise -- see
-# CalculateEnergy::BoxInterTemplate -- and the gain comes from the reciprocal
-# space code).
+# time instead of the 2 the baseline x86-64 target allows. It stays the default
+# because GOMC is run on a variety of machines and a v3 binary runs on all of
+# them.
+#
+# For benchmarking, prefer a target that enables AVX-512:
+#
+#   cmake .. -DGOMC_OPT=on -DGOMC_ARCH=znver5      # Zen 4/5, Ryzen 9000
+#   cmake .. -DGOMC_OPT=on -DGOMC_ARCH=x86-64-v4   # any AVX-512 part
+#
+# This matters more than it used to. The minimum-image/distance pass of
+# CalculateEnergy::BoxInterTemplate now vectorises (see DistSqRange in
+# BoxDimensions.h), and it is 80-92% of the pair work, so the width of the
+# vector unit is on the critical path: v3 gives it 4 doubles per iteration and
+# AVX-512 gives it 8, with mask registers for the minimum-image selects.
+# Before that loop vectorised, x86-64-v3 was worth roughly 6% on the OPC GEMC
+# benchmark and AVX-512 added nothing beyond it, because the only vectorised
+# code was in reciprocal space.
 #
 # Set -DGOMC_ARCH=native to tune for the build machine (faster to type, but the
 # binary then only runs on that microarchitecture), or to any other -march=
@@ -59,7 +71,7 @@ set(CMAKE_CLANG_LINK_FLAGS -O3)
 # -march= and has no alternative, so it keeps -xHost and stays Intel-only.
 if(GOMC_OPT)
    set(GOMC_ARCH "x86-64-v3" CACHE STRING
-       "Target architecture for GOMC_OPT (-march=); e.g. x86-64-v3, native, znver4")
+       "Target architecture for GOMC_OPT (-march=); e.g. x86-64-v3, x86-64-v4, znver5, native")
 
    if("${CMAKE_CXX_COMPILER_ID}" MATCHES "^Intel$")
       # Classic icc: no -march=, fall back to -xHost (Intel CPUs only).

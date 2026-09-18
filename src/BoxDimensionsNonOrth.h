@@ -50,6 +50,36 @@ public:
   bool InRcut(double &distSq, XYZArray const &arr1, const uint i,
               XYZArray const &arr2, const uint j, const uint b) const;
 
+  //! Non-orthogonal counterpart of BoxDimensions::DistSqRange. Same operation
+  //! order as MinImage(): unslant, minimum image, slant back.
+  void DistSqRange(double *__restrict distSq, const double xi, const double yi,
+                   const double zi, const double *__restrict xj,
+                   const double *__restrict yj, const double *__restrict zj,
+                   const int m, const uint b) const {
+    const XYZ i0 = cellBasis_Inv[b].Get(0), i1 = cellBasis_Inv[b].Get(1),
+              i2 = cellBasis_Inv[b].Get(2);
+    const XYZ c0 = cellBasis[b].Get(0), c1 = cellBasis[b].Get(1),
+              c2 = cellBasis[b].Get(2);
+    const double axX = axis.x[b], axY = axis.y[b], axZ = axis.z[b];
+    const double hX = halfAx.x[b], hY = halfAx.y[b], hZ = halfAx.z[b];
+    for (int k = 0; k < m; ++k) {
+      const double rx = xi - xj[k], ry = yi - yj[k], rz = zi - zj[k];
+      // TransformUnSlant
+      double ux = rx * i0.x + ry * i1.x + rz * i2.x;
+      double uy = rx * i0.y + ry * i1.y + rz * i2.y;
+      double uz = rx * i0.z + ry * i1.z + rz * i2.z;
+      // BoxDimensions::MinImage
+      ux = MinImageSigned(ux, axX, hX);
+      uy = MinImageSigned(uy, axY, hY);
+      uz = MinImageSigned(uz, axZ, hZ);
+      // TransformSlant
+      const double sx = ux * c0.x + uy * c1.x + uz * c2.x;
+      const double sy = ux * c0.y + uy * c1.y + uz * c2.y;
+      const double sz = ux * c0.z + uy * c1.z + uz * c2.z;
+      distSq[k] = sx * sx + sy * sy + sz * sz;
+    }
+  }
+
   void Init(config_setup::RestartSettings const &restart,
             config_setup::Volume const &confVolume,
             pdb_setup::Cryst1 const &cryst, Forcefield const &ff) override;
