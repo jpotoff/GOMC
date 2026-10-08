@@ -232,7 +232,7 @@ private:
                                  const uint box, const uint trials,
                                  const BoxType &boxAxes) const;
 
-  template <typename BoxType, typename FFType>
+  template <bool HasCharge, typename BoxType, typename FFType>
   void ParticleInterTemplate(const FFType &ff, double *en, double *real,
                              XYZArray const &trialPos,
                              bool *overlap, const uint partIndex,

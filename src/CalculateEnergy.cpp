@@ -1138,7 +1138,7 @@ void CalculateEnergy::ParticleNonbondedTemplate(
   GOMC_EVENT_STOP(1, GomcProfileEvent::EN_CBMC_INTRA_NB);
 }
 
-template <typename BoxType, typename FFType>
+template <bool HasCharge, typename BoxType, typename FFType>
 void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
                                             double *real,
                                             XYZArray const &trialPos,
@@ -1179,7 +1179,6 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
     const int *const pMol = boxPackMol.data();
     const double rCutSqBox = boxAxes.rCutSq[box];
     const double rCutLowSq = forcefield.rCutLowSq;
-
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
     shared(overlap, trialPos, boxAxes, en, ff, real)                           \
@@ -1193,8 +1192,12 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
       bool over = false;
       const double xi = trialPos.x[t], yi = trialPos.y[t], zi = trialPos.z[t];
 
-      // Scratch for pass 1. Per thread, 2 KiB, L1-resident.
+      // Scratch, per thread, ~6 KiB and L1-resident.
       double distSq[GOMC_DISTSQ_CHUNK];
+      double sDistSq[GOMC_DISTSQ_CHUNK + 8];
+      double sQ[GOMC_DISTSQ_CHUNK + 8];
+      int sKind[GOMC_DISTSQ_CHUNK + 8];
+      int sMol[GOMC_DISTSQ_CHUNK + 8];
 
       for (int base = 0; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
         const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
@@ -1203,16 +1206,54 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
         boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, pX + base, pY + base,
                                      pZ + base, m, box);
 
-        // ---- pass 2: the pairs that survive ----
-        for (int k = 0; k < m; k++) {
+        // ---- pass 2: compact the survivors ----
+        //
+        // As in BoxInterTemplate. Simpler here: the moving molecule was taken
+        // out of the cell list before this call, so there is no same-molecule
+        // test to fold into the mask -- only the cutoff. Survival is ~20%,
+        // which is the regime where this pays; see the note on the cell path
+        // about why it does not at ~11%.
+        int ns = 0;
+        int k = 0;
+#ifdef GOMC_HAVE_COMPRESS
+        {
+          const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          for (; k + 8 <= m; k += 8) {
+            const int j = base + k;
+            const __m512d d = _mm512_loadu_pd(distSq + k);
+            const __mmask8 keep = _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ);
+            _mm512_mask_compressstoreu_pd(sDistSq + ns, keep, d);
+            _mm512_mask_compressstoreu_pd(sQ + ns, keep,
+                                          _mm512_loadu_pd(pQ + j));
+            _mm256_mask_compressstoreu_epi32(
+                sKind + ns, keep,
+                _mm256_loadu_si256((const __m256i *)(pKind + j)));
+            _mm256_mask_compressstoreu_epi32(
+                sMol + ns, keep,
+                _mm256_loadu_si256((const __m256i *)(pMol + j)));
+            ns += _mm_popcnt_u32((unsigned)keep);
+          }
+        }
+#endif
+        for (; k < m; k++) {
           if (!(rCutSqBox > distSq[k]))
             continue;
           const int j = base + k;
+          sDistSq[ns] = distSq[k];
+          sQ[ns] = pQ[j];
+          sKind[ns] = pKind[j];
+          sMol[ns] = pMol[j];
+          ++ns;
+        }
+
+        // ---- pass 3: kernels over a dense run, no cutoff test ----
+        for (int sIdx = 0; sIdx < ns; sIdx++) {
+          const double dsq = sDistSq[sIdx];
 
           double lambdaVDW = 1.0;
           double lambdaCoulomb = 1.0;
           if (hasFraction) {
-            int nMol = pMol[j];
+            int nMol = sMol[sIdx];
             if (molIndex == fracMol && nMol == fracMol) {
               lambdaVDW = fracVDW * fracVDW;
               lambdaCoulomb = fracCoul * fracCoul;
@@ -1222,15 +1263,15 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
             }
           }
 
-          if (distSq[k] < rCutLowSq) {
+          if (dsq < rCutLowSq) {
             over = true;
           }
-          tempLJ += ff.FFType::CalcEn(distSq[k], kindI, pKind[j], lambdaVDW);
-          if (electrostatic) {
-            double qi_qj_fact = pQ[j] * kindICharge * num::qqFact;
+          tempLJ += ff.FFType::CalcEn(dsq, kindI, sKind[sIdx], lambdaVDW);
+          if constexpr (HasCharge) {
+            double qi_qj_fact = sQ[sIdx] * kindICharge * num::qqFact;
 
             if (qi_qj_fact != 0.0) {
-              tempReal += ff.FFType::CalcCoulomb(distSq[k], kindI, pKind[j],
+              tempReal += ff.FFType::CalcCoulomb(dsq, kindI, sKind[sIdx],
                                                  qi_qj_fact, lambdaCoulomb,
                                                  box);
             }
@@ -1695,16 +1736,33 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
                                     XYZArray const &trialPos, bool *overlap,
                                     const uint partIndex, const uint molIndex,
                                     const uint box, const uint trials) const {
+  // `electrostatic` as a template parameter, as in BoxInterTemplate. Hoisting
+  // it into a local was tried first and was not enough: inside the OpenMP
+  // outlined region the firstprivate copy gets spilled and re-loaded anyway,
+  // and the disassembly still showed four byte-loads from memory in the hot
+  // clone. The template removes the test rather than the load.
   DispatchForcefield(forcefield, [&](const auto &ffRef) {
     using FFT = std::decay_t<decltype(ffRef)>;
     if (currentAxes.orthogonal[box]) {
-      ParticleInterTemplate<BoxDimensions, FFT>(
-          ffRef, en, real, trialPos, overlap, partIndex, molIndex, box, trials,
-          currentAxes);
+      if (electrostatic)
+        ParticleInterTemplate<true, BoxDimensions, FFT>(
+            ffRef, en, real, trialPos, overlap, partIndex, molIndex, box,
+            trials, currentAxes);
+      else
+        ParticleInterTemplate<false, BoxDimensions, FFT>(
+            ffRef, en, real, trialPos, overlap, partIndex, molIndex, box,
+            trials, currentAxes);
     } else {
-      ParticleInterTemplate<BoxDimensionsNonOrth, FFT>(
-          ffRef, en, real, trialPos, overlap, partIndex, molIndex, box, trials,
-          static_cast<const BoxDimensionsNonOrth &>(currentAxes));
+      const BoxDimensionsNonOrth &nonOrth =
+          static_cast<const BoxDimensionsNonOrth &>(currentAxes);
+      if (electrostatic)
+        ParticleInterTemplate<true, BoxDimensionsNonOrth, FFT>(
+            ffRef, en, real, trialPos, overlap, partIndex, molIndex, box,
+            trials, nonOrth);
+      else
+        ParticleInterTemplate<false, BoxDimensionsNonOrth, FFT>(
+            ffRef, en, real, trialPos, overlap, partIndex, molIndex, box,
+            trials, nonOrth);
     }
   });
 }
