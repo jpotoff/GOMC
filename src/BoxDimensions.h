@@ -159,6 +159,35 @@ public:
     }
   }
 
+  // As DistSqRange, but also keeps the minimum-image displacement components.
+  // VirialCalc needs the vector, not just its length, to contract against the
+  // molecule centre-of-mass separation. Writing four streams instead of one
+  // costs 6 KiB more L1-resident scratch per thread and keeps the arithmetic
+  // in one place: recomputing the components for survivors in the scalar pass
+  // would duplicate MinImage, and the orthogonal and non-orthogonal forms
+  // differ.
+  void DistVecRange(double *__restrict distSq, double *__restrict dxOut,
+                    double *__restrict dyOut, double *__restrict dzOut,
+                    const double xi, const double yi, const double zi,
+                    const double *__restrict xj, const double *__restrict yj,
+                    const double *__restrict zj, const int m,
+                    const uint b) const {
+    const double axX = axis.x[b], axY = axis.y[b], axZ = axis.z[b];
+    const double hX = halfAx.x[b], hY = halfAx.y[b], hZ = halfAx.z[b];
+    for (int k = 0; k < m; ++k) {
+      double dx = xi - xj[k];
+      double dy = yi - yj[k];
+      double dz = zi - zj[k];
+      dx = MinImageSigned(dx, axX, hX);
+      dy = MinImageSigned(dy, axY, hY);
+      dz = MinImageSigned(dz, axZ, hZ);
+      dxOut[k] = dx;
+      dyOut[k] = dy;
+      dzOut[k] = dz;
+      distSq[k] = dx * dx + dy * dy + dz * dz;
+    }
+  }
+
   // Dist squared, two different coordinate arrays
   void GetDistSq(double &distSq, XYZArray const &arr1, const uint i,
                  XYZArray const &arr2, const uint j, const uint b) const;

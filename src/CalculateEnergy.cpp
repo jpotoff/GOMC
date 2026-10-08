@@ -587,7 +587,7 @@ void CalculateEnergy::VirialCalcTemplate(
     double &rT12, double &rT13, double &rT22, double &rT23, double &rT33,
     const std::vector<int> &cellVector, const std::vector<int> &cellStartIndex,
     const std::vector<int> &mapParticleToCell,
-    const std::vector<std::vector<int>> &neighborList) {
+    const std::vector<std::vector<int>> &neighborList, const int nPacked) {
 
   const bool hasFraction = lambdaRef.HasFraction(box);
   const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
@@ -595,6 +595,91 @@ void CalculateEnergy::VirialCalcTemplate(
       hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
   const double fracCoul =
       hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+
+  // Whole-box path; see StencilCoversBox() and the comment in BoxInter().
+  // Same two-pass shape as BoxInterTemplate, but pass 1 keeps the
+  // minimum-image components as well, because the virial contracts them
+  // against the molecule centre-of-mass separation.
+  if (nPacked >= 0) {
+    const double *const pX = boxPackX.data();
+    const double *const pY = boxPackY.data();
+    const double *const pZ = boxPackZ.data();
+    const double *const pQ = boxPackCharge.data();
+    const int *const pKind = boxPackKind.data();
+    const int *const pMol = boxPackMol.data();
+    const double rCutSqBox = boxAxes.rCutSq[box];
+
+    // schedule(static, 1): triangular loop, see BoxInterTemplate.
+#if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+#pragma omp parallel for schedule(static, 1) default(none)                     \
+    shared(boxAxes, ff) firstprivate(box, hasFraction, fracMol, fracVDW,       \
+                                         fracCoul, nPacked, pX, pY, pZ, pQ,    \
+                                         pKind, pMol, rCutSqBox)               \
+    reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22,  \
+                  rT23, rT33)
+#endif
+    for (int i = 0; i < nPacked; i++) {
+      const int currMol = pMol[i];
+      const int currKind = pKind[i];
+      const double currQ = pQ[i];
+      const double xi = pX[i], yi = pY[i], zi = pZ[i];
+
+      // Per thread, 8 KiB, L1-resident.
+      double distSq[GOMC_DISTSQ_CHUNK];
+      double dxs[GOMC_DISTSQ_CHUNK], dys[GOMC_DISTSQ_CHUNK],
+          dzs[GOMC_DISTSQ_CHUNK];
+
+      for (int base = i + 1; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
+        const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
+
+        // ---- pass 1: contiguous, branch-free, vectorisable ----
+        boxAxes.BoxType::DistVecRange(distSq, dxs, dys, dzs, xi, yi, zi,
+                                      pX + base, pY + base, pZ + base, m, box);
+
+        // ---- pass 2: the pairs that survive ----
+        for (int k = 0; k < m; k++) {
+          const int j = base + k;
+          const int nMol = pMol[j];
+          if (currMol == nMol)
+            continue;
+          if (!(rCutSqBox > distSq[k]))
+            continue;
+
+          // distance between the centres of mass of the two molecules
+          XYZ comC = currentCOM.Difference(currMol, nMol);
+          comC = boxAxes.BoxType::MinImage(comC, box);
+
+          double lambdaVDW = 1.0;
+          double lambdaCoulomb = 1.0;
+          if (hasFraction) {
+            if (currMol == fracMol || nMol == fracMol) {
+              lambdaVDW = fracVDW;
+              lambdaCoulomb = fracCoul;
+            }
+          }
+
+          if (electrostatic) {
+            const double qi_qj = currQ * pQ[j];
+            // skip particle pairs with no charge
+            if (qi_qj != 0.0) {
+              const double pRF = ff.FFType::CalcCoulombVir(
+                  distSq[k], currKind, pKind[j], qi_qj, lambdaCoulomb, box);
+              rT11 += pRF * (dxs[k] * comC.x);
+              rT22 += pRF * (dys[k] * comC.y);
+              rT33 += pRF * (dzs[k] * comC.z);
+            }
+          }
+
+          const double pVF =
+              ff.FFType::CalcVir(distSq[k], currKind, pKind[j], lambdaVDW);
+          vT11 += pVF * (dxs[k] * comC.x);
+          vT22 += pVF * (dys[k] * comC.y);
+          vT33 += pVF * (dzs[k] * comC.z);
+        }
+      }
+    }
+    return;
+  }
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) shared(                                 \
@@ -1226,9 +1311,20 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
 
   std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
   std::vector<std::vector<int>> neighborList;
-  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
-                               cellStartIndex, mapParticleToCell);
-  neighborList = cellList.GetNeighborList(box);
+
+  // Whole-box path, as in BoxInter(); see StencilCoversBox().
+  int nPacked = -1;
+#ifndef GOMC_CUDA
+  if (StencilCoversBox(box)) {
+    nPacked = BuildBoxPacked(currentCoords, box);
+  }
+  if (nPacked < 0)
+#endif
+  {
+    cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
+                                 cellStartIndex, mapParticleToCell);
+    neighborList = cellList.GetNeighborList(box);
+  }
 
 #ifdef GOMC_CUDA
   // update unitcell in GPU
@@ -1262,12 +1358,13 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
       VirialCalcTemplate<BoxDimensions, FFT>(
           ffRef, currentAxes, box, vT11, vT12, vT13, vT22, vT23, vT33, rT11,
           rT12, rT13, rT22, rT23, rT33, cellVector, cellStartIndex,
-          mapParticleToCell, neighborList);
+          mapParticleToCell, neighborList, nPacked);
     } else {
       VirialCalcTemplate<BoxDimensionsNonOrth, FFT>(
           ffRef, static_cast<const BoxDimensionsNonOrth &>(currentAxes), box,
           vT11, vT12, vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22, rT23,
-          rT33, cellVector, cellStartIndex, mapParticleToCell, neighborList);
+          rT33, cellVector, cellStartIndex, mapParticleToCell, neighborList,
+          nPacked);
     }
   });
 #endif

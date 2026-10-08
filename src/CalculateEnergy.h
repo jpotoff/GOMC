@@ -215,7 +215,8 @@ private:
                           const std::vector<int> &cellVector,
                           const std::vector<int> &cellStartIndex,
                           const std::vector<int> &mapParticleToCell,
-                          const std::vector<std::vector<int>> &neighborList);
+                          const std::vector<std::vector<int>> &neighborList,
+                          const int nPacked);
   // templates used for single molecule moves
   template <typename BoxType, typename FFType>
   bool MoleculeInterTemplate(const FFType &ff, Intermolecular &inter_LJ,
