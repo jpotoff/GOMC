@@ -395,9 +395,9 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
       int nx = std::abs(kx_ind[box][i]);
       int ny = std::abs(ky_ind[box][i]);
       int nz = std::abs(kz_ind[box][i]);
-      int sign_x = kx_ind[box][i] < 0 ? -1 : 1;
-      int sign_y = ky_ind[box][i] < 0 ? -1 : 1;
-      int sign_z = kz_ind[box][i] < 0 ? -1 : 1;
+      const double sign_x = kx_ind[box][i] < 0 ? -1.0 : 1.0;
+      const double sign_y = ky_ind[box][i] < 0 ? -1.0 : 1.0;
+      const double sign_z = kz_ind[box][i] < 0 ? -1.0 : 1.0;
 
       // The cache is accessed using (n * numAtoms + j), which allows inner-loop
       // contiguous access across the `numAtoms` dimension.
@@ -405,37 +405,50 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
       int ny_offset = ny * numFlatAtoms;
       int nz_offset = nz * numFlatAtoms;
 
-      // Accumulate structure factors molecule-by-molecule to prevent catastrophic
-      // cancellation. Grouping by neutral molecules keeps the partial sums small
-      // and preserves double precision when adding to the global sum.
-      int numMolecules = molLengths.size();
-      int atomIdx = 0;
-      for (int m = 0; m < numMolecules; m++) {
-        double molReal = 0.0;
-        double molImaginary = 0.0;
-        int len = molLengths[m];
-        
-        for (int k = 0; k < len; k++) {
-          int j = atomIdx + k;
-          double cx = cos_x[nx_offset + j];
-          double sx = sin_x[nx_offset + j] * sign_x;
-          double cy = cos_y[ny_offset + j];
-          double sy = sin_y[ny_offset + j] * sign_y;
-          double cz = cos_z[nz_offset + j];
-          double sz = sin_z[nz_offset + j] * sign_z;
+      // One flat pass over the charged atoms.
+      //
+      // This used to be nested molecule-by-molecule, to keep the partial sums
+      // small. That grouping came out of a bug hunt whose real cause turned out
+      // to be the k-vector update after an accepted volume move, not summation
+      // accuracy -- and it cost the loop all of its vector width, because the
+      // inner trip count was the charged atoms in one molecule: 3 for OPC
+      // water. No compiler vectorises a 3-trip loop, so this ran one lane wide
+      // at 69% of runtime.
+      //
+      // It was not buying accuracy either. |S(k)| ~ sqrt(N) built from O(1)
+      // terms is a random walk, not catastrophic cancellation; the one k where
+      // the charges sum to zero exactly, k = 0, is excluded from the Ewald sum.
+      // The vector accumulators the compiler builds here are a wider reduction
+      // tree than the per-molecule one was, so the error bound improves rather
+      // than degrades: ~N/8 * eps against ~N/3 * eps.
+      const double *const cxp = cos_x.data() + nx_offset;
+      const double *const sxp = sin_x.data() + nx_offset;
+      const double *const cyp = cos_y.data() + ny_offset;
+      const double *const syp = sin_y.data() + ny_offset;
+      const double *const czp = cos_z.data() + nz_offset;
+      const double *const szp = sin_z.data() + nz_offset;
+      const double *const qp = flatCharges.data();
 
-          double cxy = cx * cy - sx * sy;
-          double sxy = sx * cy + cx * sy;
+      // The reduction is what kept this scalar even after flattening: icpx will
+      // not reassociate floating-point adds at -O3 without being told it may,
+      // and we are not building with fast-math. omp simd grants exactly that
+      // permission and nothing else.
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : totalReal, totalImaginary)
+#endif
+      for (int j = 0; j < numFlatAtoms; j++) {
+        const double cx = cxp[j];
+        const double sx = sxp[j] * sign_x;
+        const double cy = cyp[j];
+        const double sy = syp[j] * sign_y;
+        const double cz = czp[j];
+        const double sz = szp[j] * sign_z;
 
-          double c = cxy * cz - sxy * sz;
-          double s = sxy * cz + cxy * sz;
+        const double cxy = cx * cy - sx * sy;
+        const double sxy = sx * cy + cx * sy;
 
-          molReal += flatCharges[j] * c;
-          molImaginary += flatCharges[j] * s;
-        }
-        totalReal += molReal;
-        totalImaginary += molImaginary;
-        atomIdx += len;
+        totalReal += qp[j] * (cxy * cz - sxy * sz);
+        totalImaginary += qp[j] * (sxy * cz + cxy * sz);
       }
       sumRnew[box][i] = totalReal;
       sumInew[box][i] = totalImaginary;
@@ -548,45 +561,58 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
       int nx = std::abs(kx_indRef[box][i]);
       int ny = std::abs(ky_indRef[box][i]);
       int nz = std::abs(kz_indRef[box][i]);
-      int sign_x = kx_indRef[box][i] < 0 ? -1 : 1;
-      int sign_y = ky_indRef[box][i] < 0 ? -1 : 1;
-      int sign_z = kz_indRef[box][i] < 0 ? -1 : 1;
+      const double sign_x = kx_indRef[box][i] < 0 ? -1.0 : 1.0;
+      const double sign_y = ky_indRef[box][i] < 0 ? -1.0 : 1.0;
+      const double sign_z = kz_indRef[box][i] < 0 ? -1.0 : 1.0;
 
       int nx_offset = nx * numFlatAtoms;
       int ny_offset = ny * numFlatAtoms;
       int nz_offset = nz * numFlatAtoms;
 
-      // Accumulate structure factors molecule-by-molecule to prevent catastrophic
-      // cancellation. Grouping by neutral molecules keeps the partial sums small
-      // and preserves double precision when adding to the global sum.
-      int numMolecules = molLengths.size();
-      int atomIdx = 0;
-      for (int m = 0; m < numMolecules; m++) {
-        double molReal = 0.0;
-        double molImaginary = 0.0;
-        int len = molLengths[m];
-        
-        for (int k = 0; k < len; k++) {
-          int j = atomIdx + k;
-          double cx = cos_x[nx_offset + j];
-          double sx = sin_x[nx_offset + j] * sign_x;
-          double cy = cos_y[ny_offset + j];
-          double sy = sin_y[ny_offset + j] * sign_y;
-          double cz = cos_z[nz_offset + j];
-          double sz = sin_z[nz_offset + j] * sign_z;
+      // One flat pass over the charged atoms.
+      //
+      // This used to be nested molecule-by-molecule, to keep the partial sums
+      // small. That grouping came out of a bug hunt whose real cause turned out
+      // to be the k-vector update after an accepted volume move, not summation
+      // accuracy -- and it cost the loop all of its vector width, because the
+      // inner trip count was the charged atoms in one molecule: 3 for OPC
+      // water. No compiler vectorises a 3-trip loop, so this ran one lane wide
+      // at 69% of runtime.
+      //
+      // It was not buying accuracy either. |S(k)| ~ sqrt(N) built from O(1)
+      // terms is a random walk, not catastrophic cancellation; the one k where
+      // the charges sum to zero exactly, k = 0, is excluded from the Ewald sum.
+      // The vector accumulators the compiler builds here are a wider reduction
+      // tree than the per-molecule one was, so the error bound improves rather
+      // than degrades: ~N/8 * eps against ~N/3 * eps.
+      const double *const cxp = cos_x.data() + nx_offset;
+      const double *const sxp = sin_x.data() + nx_offset;
+      const double *const cyp = cos_y.data() + ny_offset;
+      const double *const syp = sin_y.data() + ny_offset;
+      const double *const czp = cos_z.data() + nz_offset;
+      const double *const szp = sin_z.data() + nz_offset;
+      const double *const qp = flatCharges.data();
 
-          double cxy = cx * cy - sx * sy;
-          double sxy = sx * cy + cx * sy;
+      // The reduction is what kept this scalar even after flattening: icpx will
+      // not reassociate floating-point adds at -O3 without being told it may,
+      // and we are not building with fast-math. omp simd grants exactly that
+      // permission and nothing else.
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : totalReal, totalImaginary)
+#endif
+      for (int j = 0; j < numFlatAtoms; j++) {
+        const double cx = cxp[j];
+        const double sx = sxp[j] * sign_x;
+        const double cy = cyp[j];
+        const double sy = syp[j] * sign_y;
+        const double cz = czp[j];
+        const double sz = szp[j] * sign_z;
 
-          double c = cxy * cz - sxy * sz;
-          double s = sxy * cz + cxy * sz;
+        const double cxy = cx * cy - sx * sy;
+        const double sxy = sx * cy + cx * sy;
 
-          molReal += flatCharges[j] * c;
-          molImaginary += flatCharges[j] * s;
-        }
-        totalReal += molReal;
-        totalImaginary += molImaginary;
-        atomIdx += len;
+        totalReal += qp[j] * (cxy * cz - sxy * sz);
+        totalImaginary += qp[j] * (sxy * cz + cxy * sz);
       }
       sumRnew[box][i] = totalReal;
       sumInew[box][i] = totalImaginary;
