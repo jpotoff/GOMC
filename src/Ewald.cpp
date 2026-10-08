@@ -1831,8 +1831,13 @@ Virial Ewald::VirialReciprocal(Virial &virial, uint box) const {
                           thisBoxCOMDiff, chargeBox, wT11, wT12, wT13, wT22,
                           wT23, wT33, imageSizeRef[box], constVal, box);
 #else
+  // `simd` as well as `parallel for`: without it icpx keeps this scalar, the
+  // same way it did in BoxReciprocalSetup -- it will not reassociate the
+  // floating-point reduction at -O3 and we do not build with fast-math. The
+  // body is a straight k-vector sweep with unit-stride loads, so the only
+  // thing that was ever holding it back was permission.
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(box, constVal)                   \
+#pragma omp parallel for simd default(none) shared(box, constVal)              \
     reduction(+ : wT11, wT22, wT33)
 #endif
   for (int i = 0; i < (int)imageSizeRef[box]; i++) {

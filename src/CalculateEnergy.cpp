@@ -781,74 +781,101 @@ void CalculateEnergy::VirialCalcTemplate(
     return;
   }
 
+  // Cell-ordered views; see BuildCellOrdered(). Same two-pass shape as
+  // BoxInterTemplate's cell path, with DistVecRange because the virial needs
+  // the minimum-image components, not just the length.
+  const double *const ordX = cellOrderX.data();
+  const double *const ordY = cellOrderY.data();
+  const double *const ordZ = cellOrderZ.data();
+  const double *const ordQ = cellOrderCharge.data();
+  const int *const ordMol = cellOrderMol.data();
+  const int *const ordKind = cellOrderKind.data();
+  const int *const ordCell = cellOrderCell.data();
+  const int *const cellVec = cellVector.data();
+  const int *const cellStart = cellStartIndex.data();
+  const int nAtoms = (int)cellVector.size();
+  const double rCutSqBox = boxAxes.rCutSq[box];
+
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none) shared(                                 \
-        cellStartIndex, cellVector, ff, mapParticleToCell, neighborList,       \
-            boxAxes)                                                           \
-    firstprivate(box, hasFraction, fracMol, fracVDW, fracCoul)                 \
+#pragma omp parallel for default(none) shared(ff, neighborList, boxAxes)       \
+    firstprivate(box, hasFraction, fracMol, fracVDW, fracCoul, ordX, ordY,     \
+                     ordZ, ordQ, ordMol, ordKind, ordCell, cellVec, cellStart, \
+                     nAtoms, rCutSqBox)                                        \
     reduction(+ : vT11, vT12, vT13, vT22, vT23, vT33, rT11, rT12, rT13, rT22,  \
                   rT23, rT33)
 #endif
-  for (int currParticleIdx = 0; currParticleIdx < (int)cellVector.size();
-       currParticleIdx++) {
-    int currParticle = cellVector[currParticleIdx];
-    int currMol = particleMol[currParticle];
-    int currCell = mapParticleToCell[currParticle];
+  for (int i = 0; i < nAtoms; i++) {
+    const int currParticle = cellVec[i];
+    const int currMol = ordMol[i];
+    const int currKind = ordKind[i];
+    const double currQ = ordQ[i];
+    const double xi = ordX[i], yi = ordY[i], zi = ordZ[i];
+    const int currCell = ordCell[i];
+
+    // Per thread, 8 KiB, L1-resident.
+    double distSq[GOMC_DISTSQ_CHUNK];
+    double dxs[GOMC_DISTSQ_CHUNK], dys[GOMC_DISTSQ_CHUNK],
+        dzs[GOMC_DISTSQ_CHUNK];
 
     for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
          nCellIndex++) {
-      int neighborCell = neighborList[currCell][nCellIndex];
+      const int neighborCell = neighborList[currCell][nCellIndex];
+      const int endIndex = cellStart[neighborCell + 1];
+      // `currParticle < nParticle` is monotone in the slot index because a
+      // cell's slots are sorted by atom index, so it becomes a starting bound.
+      const int firstIndex =
+          (int)(std::upper_bound(cellVec + cellStart[neighborCell],
+                                 cellVec + endIndex, currParticle) -
+                cellVec);
 
-      int endIndex = cellStartIndex[neighborCell + 1];
-      for (int nParticleIndex = cellStartIndex[neighborCell];
-           nParticleIndex < endIndex; nParticleIndex++) {
-        int nParticle = cellVector[nParticleIndex];
-        int nMol = particleMol[nParticle];
+      for (int base = firstIndex; base < endIndex;
+           base += GOMC_DISTSQ_CHUNK) {
+        const int m = std::min(GOMC_DISTSQ_CHUNK, endIndex - base);
 
-        // make sure the pairs are unique and they belong to different molecules
-        if (currParticle < nParticle && currMol != nMol) {
-          double distSq;
-          XYZ virC;
-          if (boxAxes.InRcut(distSq, virC, currentCoords, currParticle,
-                             nParticle, box)) {
-            // calculate the distance between com of two molecules
-            XYZ comC = currentCOM.Difference(currMol, nMol);
-            // calculate the minimum image between com of two molecules
-            comC = boxAxes.BoxType::MinImage(comC, box);
+        // ---- pass 1: contiguous, branch-free, vectorisable ----
+        boxAxes.BoxType::DistVecRange(distSq, dxs, dys, dzs, xi, yi, zi,
+                                      ordX + base, ordY + base, ordZ + base, m,
+                                      box);
 
-            double lambdaVDW = 1.0;
-            double lambdaCoulomb = 1.0;
-            if (hasFraction) {
-              if (currMol == fracMol || nMol == fracMol) {
-                lambdaVDW = fracVDW;
-                lambdaCoulomb = fracCoul;
-              }
+        // ---- pass 2: the pairs that survive ----
+        for (int k = 0; k < m; k++) {
+          const int j = base + k;
+          const int nMol = ordMol[j];
+          if (currMol == nMol)
+            continue;
+          if (!(rCutSqBox > distSq[k]))
+            continue;
+
+          // distance between the centres of mass of the two molecules
+          XYZ comC = currentCOM.Difference(currMol, nMol);
+          comC = boxAxes.BoxType::MinImage(comC, box);
+
+          double lambdaVDW = 1.0;
+          double lambdaCoulomb = 1.0;
+          if (hasFraction) {
+            if (currMol == fracMol || nMol == fracMol) {
+              lambdaVDW = fracVDW;
+              lambdaCoulomb = fracCoul;
             }
-
-            if (electrostatic) {
-              double qi_qj =
-                  particleCharge[currParticle] * particleCharge[nParticle];
-
-              // skip particle pairs with no charge
-              if (qi_qj != 0.0) {
-                double pRF = ff.FFType::CalcCoulombVir(
-                    distSq, particleKind[currParticle], particleKind[nParticle],
-                    qi_qj, lambdaCoulomb, box);
-                // calculate the top diagonal of pressure tensor
-                rT11 += pRF * (virC.x * comC.x);
-                rT22 += pRF * (virC.y * comC.y);
-                rT33 += pRF * (virC.z * comC.z);
-              }
-            }
-
-            double pVF = ff.FFType::CalcVir(
-                distSq, particleKind[currParticle], particleKind[nParticle],
-                lambdaVDW);
-            // calculate the top diagonal of pressure tensor
-            vT11 += pVF * (virC.x * comC.x);
-            vT22 += pVF * (virC.y * comC.y);
-            vT33 += pVF * (virC.z * comC.z);
           }
+
+          if (electrostatic) {
+            const double qi_qj = currQ * ordQ[j];
+            // skip particle pairs with no charge
+            if (qi_qj != 0.0) {
+              const double pRF = ff.FFType::CalcCoulombVir(
+                  distSq[k], currKind, ordKind[j], qi_qj, lambdaCoulomb, box);
+              rT11 += pRF * (dxs[k] * comC.x);
+              rT22 += pRF * (dys[k] * comC.y);
+              rT33 += pRF * (dzs[k] * comC.z);
+            }
+          }
+
+          const double pVF =
+              ff.FFType::CalcVir(distSq[k], currKind, ordKind[j], lambdaVDW);
+          vT11 += pVF * (dxs[k] * comC.x);
+          vT22 += pVF * (dys[k] * comC.y);
+          vT33 += pVF * (dzs[k] * comC.z);
         }
       }
     }
@@ -1602,6 +1629,12 @@ Virial CalculateEnergy::VirialCalc(const uint box) {
     cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
                                  cellStartIndex, mapParticleToCell);
     neighborList = cellList.GetNeighborList(box);
+#ifndef GOMC_CUDA
+    // Permute into cell order for the pair walk, as BoxInter does. This was
+    // missing here, which is why VirialCalcTemplate's cell path was still
+    // gathering currentCoords through cellVector one pair at a time.
+    BuildCellOrdered(currentCoords, cellVector, mapParticleToCell);
+#endif
   }
 
 #ifdef GOMC_CUDA
