@@ -356,6 +356,31 @@ private:
   // BoxInterTemplate. Slot k holds the atom cellVector[k].
   std::vector<double> cellOrderX, cellOrderY, cellOrderZ, cellOrderCharge;
   std::vector<int> cellOrderMol, cellOrderKind, cellOrderCell;
+
+  //! Pack every atom the cell list currently holds for `box` into contiguous
+  //! arrays, so a trial-position walk reads unit stride instead of gathering
+  //! through a chased index list. Returns the number of atoms packed.
+  //!
+  //! Only valid when the 27-cell stencil covers the whole box, which
+  //! StencilCoversBox() tests; otherwise the neighbor set depends on where the
+  //! trial position lands and this would enumerate too much.
+  //!
+  //! Built from the cell list rather than from molLookup on purpose: moves
+  //! like MoleculeExchange call RemoveMol on several molecules before running
+  //! their CBMC trials, so "every molecule the lookup says is in this box" is
+  //! not the same set. The cell list is the authority.
+  int BuildBoxPacked(const uint box) const;
+
+  //! True when a cell's 27 neighbors are every cell in the box, i.e. the cell
+  //! list selects the whole box and prunes nothing. Happens whenever an edge
+  //! is under 4 cutoffs, which covers every GEMC box we benchmark.
+  bool StencilCoversBox(const uint box) const;
+
+  // Per-atom data for one box, contiguous; filled by BuildBoxPacked and read
+  // by ParticleInterTemplate. Mutable because that walk is const; it is built
+  // before the trial loop's parallel region and only read inside it.
+  mutable std::vector<double> boxPackX, boxPackY, boxPackZ, boxPackCharge;
+  mutable std::vector<int> boxPackKind, boxPackMol;
   const MoleculeLookup &molLookup;
   const BoxDimensions &currentAxes;
   const CellList &cellList;

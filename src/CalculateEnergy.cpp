@@ -196,6 +196,62 @@ void CalculateEnergy::BuildCellOrdered(
 }
 
 //
+// True when the cell list prunes nothing.
+//
+// ResizeGrid clamps the grid to 3 cells per side and sizes cells by the
+// cutoff, and RebuildNeighbors uses a fixed +-1 stencil. So as soon as a box
+// edge is under 4 cutoffs the grid is 3x3x3 and a cell's 27 neighbors are all
+// 27 cells: the "neighbor" set is the entire box. Measured on the GEMC
+// benchmarks, only 20.4% (OPC) and 7.7% (OpenFF ethane) of the enumerated
+// pairs are inside the cutoff, which is exactly the cutoff-sphere/box volume
+// ratio -- the signature of enumerating everything.
+//
+// Larger systems (BPTI at 70 A, the K channel at 80x80x132) do get a real
+// grid and are unaffected by the paths this gates.
+//
+bool CalculateEnergy::StencilCoversBox(const uint box) const {
+  return cellList.CellsInBox(box) == NUMBER_OF_NEIGHBOR_CELL;
+}
+
+//
+// Pack the whole box into contiguous per-atom arrays.
+//
+// Costs one walk of the cell list. ParticleInterTemplate used to do that walk
+// once per trial position and then gather currentCoords through the resulting
+// index list for every pair; packing once per call amortizes the walk over all
+// trials and turns the gathers into unit-stride loads, which is what lets
+// DistSqRange vectorize.
+//
+// Buffers are members and only grow, so steady state does not allocate.
+//
+int CalculateEnergy::BuildBoxPacked(const uint box) const {
+  const int cap = (int)currentCoords.Count();
+  if ((int)boxPackX.size() < cap) {
+    boxPackX.resize(cap);
+    boxPackY.resize(cap);
+    boxPackZ.resize(cap);
+    boxPackCharge.resize(cap);
+    boxPackKind.resize(cap);
+    boxPackMol.resize(cap);
+  }
+  int n = 0;
+  // Cell 0's neighbors are every cell in the box; see StencilCoversBox().
+  CellList::Neighbors it = cellList.EnumerateLocal(0, box);
+  while (!it.Done()) {
+    const int p = *it;
+    boxPackX[n] = currentCoords.x[p];
+    boxPackY[n] = currentCoords.y[p];
+    boxPackZ[n] = currentCoords.z[p];
+    boxPackCharge[n] = particleCharge[p];
+    boxPackKind[n] = particleKind[p];
+    boxPackMol[n] = particleMol[p];
+    ++n;
+    it.Next();
+  }
+  return n;
+}
+
+//
 // Interaction energy of one box, over the cell list.
 //
 // Two nested passes per neighbor cell rather than one:
@@ -726,6 +782,88 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
       hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
   const double fracCoul =
       hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+
+  // Whole-box path. When the stencil selects every cell, each trial's
+  // neighbor set is the same set -- the box -- so the cell-list walk that used
+  // to run once per trial runs once per call, and the pair loop reads packed
+  // arrays instead of gathering currentCoords through the chased index list.
+  // That is what lets DistSqRange vectorize here, the way it already does in
+  // BoxInterTemplate.
+  if (StencilCoversBox(box)) {
+    const int nPacked = BuildBoxPacked(box);
+    const double *const pX = boxPackX.data();
+    const double *const pY = boxPackY.data();
+    const double *const pZ = boxPackZ.data();
+    const double *const pQ = boxPackCharge.data();
+    const int *const pKind = boxPackKind.data();
+    const int *const pMol = boxPackMol.data();
+    const double rCutSqBox = boxAxes.rCutSq[box];
+    const double rCutLowSq = forcefield.rCutLowSq;
+
+#ifdef _OPENMP
+#pragma omp parallel for default(none)                                         \
+    shared(overlap, trialPos, boxAxes, en, ff, real)                           \
+    firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials,       \
+                     hasFraction, fracMol, fracVDW, fracCoul, nPacked, pX, pY, \
+                     pZ, pQ, pKind, pMol, rCutSqBox, rCutLowSq)
+#endif
+    for (uint t = 0; t < trials; ++t) {
+      double tempReal = 0.0;
+      double tempLJ = 0.0;
+      bool over = false;
+      const double xi = trialPos.x[t], yi = trialPos.y[t], zi = trialPos.z[t];
+
+      // Scratch for pass 1. Per thread, 2 KiB, L1-resident.
+      double distSq[GOMC_DISTSQ_CHUNK];
+
+      for (int base = 0; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
+        const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
+
+        // ---- pass 1: contiguous, branch-free, vectorisable ----
+        boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, pX + base, pY + base,
+                                     pZ + base, m, box);
+
+        // ---- pass 2: the pairs that survive ----
+        for (int k = 0; k < m; k++) {
+          if (!(rCutSqBox > distSq[k]))
+            continue;
+          const int j = base + k;
+
+          double lambdaVDW = 1.0;
+          double lambdaCoulomb = 1.0;
+          if (hasFraction) {
+            int nMol = pMol[j];
+            if (molIndex == fracMol && nMol == fracMol) {
+              lambdaVDW = fracVDW * fracVDW;
+              lambdaCoulomb = fracCoul * fracCoul;
+            } else if (molIndex == fracMol || nMol == fracMol) {
+              lambdaVDW = fracVDW;
+              lambdaCoulomb = fracCoul;
+            }
+          }
+
+          if (distSq[k] < rCutLowSq) {
+            over = true;
+          }
+          tempLJ += ff.FFType::CalcEn(distSq[k], kindI, pKind[j], lambdaVDW);
+          if (electrostatic) {
+            double qi_qj_fact = pQ[j] * kindICharge * num::qqFact;
+
+            if (qi_qj_fact != 0.0) {
+              tempReal += ff.FFType::CalcCoulomb(distSq[k], kindI, pKind[j],
+                                                 qi_qj_fact, lambdaCoulomb,
+                                                 box);
+            }
+          }
+        }
+      }
+      overlap[t] |= over;
+      en[t] += tempLJ;
+      real[t] += tempReal;
+    }
+    GOMC_EVENT_STOP(1, GomcProfileEvent::EN_CBMC_INTER);
+    return;
+  }
 
 // use OpenMP to distribute the workload over CBMC trials
 #ifdef _OPENMP
