@@ -788,15 +788,14 @@ bool CalculateEnergy::MoleculeInterTemplate(const FFType &ff,
     // index list. When the stencil selects every cell all eight walks see the
     // same set, so one pack serves all of them and the arithmetic vectorizes.
     //
-    // It is also deliberately serial. The loop below used to be an
-    // `omp parallel for` over `length`, which is 4 for water: a parallel
-    // region entered once per Translate or Rotation -- about 98% of all moves
-    // -- dispatching four iterations. In the 1,000-molecule profile
-    // kmp_flag_64::wait was 15.8% of runtime against MoleculeInter's own
-    // 8.8%, i.e. the region spent more thread-time waiting than working.
-    // Vectorizing shrinks the work further, which only makes fork/join a worse
-    // trade. Molecules big enough to be worth splitting still take the
-    // parallel path below via the `if` clause.
+    // The loop stays parallel. I first made it serial, reasoning that a
+    // region dispatching four iterations could not be worth its fork/join
+    // against a kmp_flag_64::wait that was 15.8% of runtime. That was
+    // backwards, and measuring said so: serial cost 7% of wall clock and
+    // pushed the wait UP to 24.6%, because that symbol counts thread
+    // *idleness*. Three threads spinning through a serial region is more
+    // idleness, not less. The wait is a symptom of too little parallel work
+    // per region in this system, and the cure is more parallelism, not less.
     if (StencilCoversBox(box)) {
       const int nPacked = BuildBoxPacked(currentCoords, box);
       const double *const pX = boxPackX.data();
@@ -808,11 +807,18 @@ bool CalculateEnergy::MoleculeInterTemplate(const FFType &ff,
       const double rCutSqBox = boxAxes.rCutSq[box];
       const double rCutLowSq = forcefield.rCutLowSq;
 
-      // Scratch for pass 1. 2 KiB, L1-resident.
-      double distSq[GOMC_DISTSQ_CHUNK];
       double oldREn = 0.0, oldLJEn = 0.0, newREn = 0.0, newLJEn = 0.0;
 
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(boxAxes, ff, molCoords)          \
+    firstprivate(box, molIndex, num::qqFact, length, start, hasFraction,       \
+                     fracMol, fracVDW, fracCoul, nPacked, pX, pY, pZ, pQ,      \
+                     pKind, pMol, rCutSqBox, rCutLowSq)                        \
+    reduction(+ : oldREn, oldLJEn, newREn, newLJEn) reduction(| : overlap)
+#endif
       for (uint p = 0; p < length; ++p) {
+        // Scratch for pass 1, per thread. 2 KiB, L1-resident.
+        double distSq[GOMC_DISTSQ_CHUNK];
         const uint atom = start + p;
         const int currKind = particleKind[atom];
         const double currQ = particleCharge[atom];
@@ -889,8 +895,7 @@ bool CalculateEnergy::MoleculeInterTemplate(const FFType &ff,
     }
 
 #ifdef _OPENMP
-#pragma omp parallel for if (length > 16) default(none)                        \
-    shared(boxAxes, ff, molCoords)                                             \
+#pragma omp parallel for default(none) shared(boxAxes, ff, molCoords)          \
     firstprivate(box, molIndex, num::qqFact, length, start, hasFraction,       \
                      fracMol, fracVDW, fracCoul)                               \
     reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
