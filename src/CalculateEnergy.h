@@ -186,7 +186,8 @@ private:
   //! HasLambda: whether this box has a fractional (being coupled in/out)
   //! molecule. False for every ordinary simulation, and when false the lambda
   //! and soft-core handling is compiled out of the pair loop entirely.
-  template <bool HasLambda, typename BoxType, typename FFType>
+  template <bool HasLambda, bool HasCharge, typename BoxType,
+            typename FFType>
   void BoxInterTemplate(const FFType &ff, XYZArray const &coords,
                         const BoxType &boxAxes, const uint box, double &tempREn,
                         double &tempLJEn, const std::vector<int> &cellVector,

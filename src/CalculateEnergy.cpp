@@ -6,6 +6,10 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "CalculateEnergy.h" //header for this
 
 #include <algorithm>
+#if defined(__AVX512F__) && defined(__AVX512VL__)
+#include <immintrin.h>
+#define GOMC_HAVE_COMPRESS 1
+#endif
 #include <cassert>
 
 #include "BasicTypes.h" //uint
@@ -272,7 +276,7 @@ int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
 // nParticle` monotone in the slot index, so the same test becomes a starting
 // bound found by upper_bound rather than a per-candidate compare.
 //
-template <bool HasLambda, typename BoxType, typename FFType>
+template <bool HasLambda, bool HasCharge, typename BoxType, typename FFType>
 void CalculateEnergy::BoxInterTemplate(
     const FFType &ff, XYZArray const &coords, const BoxType &boxAxes,
     const uint box, double &tempREn, double &tempLJEn,
@@ -319,8 +323,15 @@ void CalculateEnergy::BoxInterTemplate(
       const double currQ = pQ[i];
       const double xi = pX[i], yi = pY[i], zi = pZ[i];
 
-      // Scratch for pass 1. Per thread, 2 KiB, L1-resident.
+      // Scratch, per thread, ~6 KiB total and L1-resident. A masked
+      // compressing store writes only the active lanes, so the survivor
+      // buffers never need more than m slots; the 8 extra are slack against
+      // an off-by-one, not a requirement.
       double distSq[GOMC_DISTSQ_CHUNK];
+      double sDistSq[GOMC_DISTSQ_CHUNK + 8];
+      double sQ[GOMC_DISTSQ_CHUNK + 8];
+      int sKind[GOMC_DISTSQ_CHUNK + 8];
+      int sMol[GOMC_DISTSQ_CHUNK + 8];
 
       for (int base = i + 1; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
         const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
@@ -329,41 +340,86 @@ void CalculateEnergy::BoxInterTemplate(
         boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, pX + base, pY + base,
                                      pZ + base, m, box);
 
-        // ---- pass 2: the pairs that survive ----
-        for (int k = 0; k < m; k++) {
+        // ---- pass 2: compact the survivors ----
+        //
+        // The annotate this replaces had 7.84% of the symbol on the cutoff
+        // branch alone -- taken for ~20% of candidates, close to the worst
+        // case for a predictor -- plus 11.35% on the loop control around it.
+        // Compacting first turns that into a mask and lets pass 3 run over a
+        // dense array with no cutoff test at all.
+        //
+        // Compaction preserves order, so pass 3 sees the pairs in the same
+        // sequence as the fused loop did and the sums are bit-for-bit equal.
+        //
+        // Written with intrinsics because the branchless `ns += keep` form
+        // was tried first and icpx 2025.1 did not recognise it: no vcompress
+        // in the object and 17% MORE instructions than the branchy original.
+        int ns = 0;
+        int k = 0;
+#ifdef GOMC_HAVE_COMPRESS
+        {
+          const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          const __m256i vCurrMol = _mm256_set1_epi32(currMol);
+          for (; k + 8 <= m; k += 8) {
+            const int j = base + k;
+            const __m512d d = _mm512_loadu_pd(distSq + k);
+            const __m256i mol =
+                _mm256_loadu_si256((const __m256i *)(pMol + j));
+            const __mmask8 keep =
+                _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ) &
+                _mm256_cmpneq_epi32_mask(mol, vCurrMol);
+            _mm512_mask_compressstoreu_pd(sDistSq + ns, keep, d);
+            _mm512_mask_compressstoreu_pd(sQ + ns, keep,
+                                          _mm512_loadu_pd(pQ + j));
+            _mm256_mask_compressstoreu_epi32(
+                sKind + ns, keep,
+                _mm256_loadu_si256((const __m256i *)(pKind + j)));
+            _mm256_mask_compressstoreu_epi32(sMol + ns, keep, mol);
+            ns += _mm_popcnt_u32((unsigned)keep);
+          }
+        }
+#endif
+        for (; k < m; k++) {
           const int j = base + k;
-          // avoid same molecule
           if (currMol == pMol[j])
             continue;
           if (!(rCutSqBox > distSq[k]))
             continue;
+          sDistSq[ns] = distSq[k];
+          sQ[ns] = pQ[j];
+          sKind[ns] = pKind[j];
+          sMol[ns] = pMol[j];
+          ++ns;
+        }
 
+        // ---- pass 3: kernels over a dense run, no cutoff test ----
+        for (int s = 0; s < ns; s++) {
           if constexpr (HasLambda) {
             double lambdaVDW = 1.0;
             double lambdaCoulomb = 1.0;
-            if (currMol == fracMol || pMol[j] == fracMol) {
+            if (currMol == fracMol || sMol[s] == fracMol) {
               lambdaVDW = fracVDW;
               lambdaCoulomb = fracCoul;
             }
 
-            if (electrostatic) {
-              const double qi_qj_fact = currQ * pQ[j] * num::qqFact;
+            if constexpr (HasCharge) {
+              const double qi_qj_fact = currQ * sQ[s] * num::qqFact;
               if (qi_qj_fact != 0.0) {
-                tempREn += ff.FFType::CalcCoulomb(distSq[k], currKind, pKind[j],
-                                                  qi_qj_fact, lambdaCoulomb,
-                                                  box);
+                tempREn += ff.FFType::CalcCoulomb(sDistSq[s], currKind,
+                                                  sKind[s], qi_qj_fact,
+                                                  lambdaCoulomb, box);
               }
             }
             tempLJEn +=
-                ff.FFType::CalcEn(distSq[k], currKind, pKind[j], lambdaVDW);
+                ff.FFType::CalcEn(sDistSq[s], currKind, sKind[s], lambdaVDW);
           } else {
-            if (electrostatic) {
-              const double qi_qj_fact = currQ * pQ[j] * num::qqFact;
+            if constexpr (HasCharge) {
+              const double qi_qj_fact = currQ * sQ[s] * num::qqFact;
               if (qi_qj_fact != 0.0) {
-                tempREn += ff.CalcCoulombFull(distSq[k], qi_qj_fact, box);
+                tempREn += ff.CalcCoulombFull(sDistSq[s], qi_qj_fact, box);
               }
             }
-            tempLJEn += ff.CalcEnFull(distSq[k], currKind, pKind[j]);
+            tempLJEn += ff.CalcEnFull(sDistSq[s], currKind, sKind[s]);
           }
         }
       }
@@ -445,7 +501,7 @@ void CalculateEnergy::BoxInterTemplate(
               lambdaCoulomb = fracCoul;
             }
 
-            if (electrostatic) {
+            if constexpr (HasCharge) {
               const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
               if (qi_qj_fact != 0.0) {
                 tempREn += ff.FFType::CalcCoulomb(
@@ -458,7 +514,7 @@ void CalculateEnergy::BoxInterTemplate(
           } else {
             // Same values, reached without the lambda tests; see
             // FFAdapter::CalcEnFull.
-            if (electrostatic) {
+            if constexpr (HasCharge) {
               const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
               if (qi_qj_fact != 0.0) {
                 tempREn += ff.CalcCoulombFull(distSq[k], qi_qj_fact, box);
@@ -1279,29 +1335,53 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
   // compiled without any lambda handling in the overwhelmingly common case
   // where there is none. See BoxInterTemplate's HasLambda parameter.
   const bool hasFraction = lambdaRef.HasFraction(box);
+  // `electrostatic` is fixed for the whole run, but the annotate showed it
+  // being re-loaded from `this` and branched on for every surviving pair --
+  // 8.56% of this symbol. Resolving it here costs instantiations and buys a
+  // pair loop with no charge test in it at all.
   DispatchForcefield(forcefield, [&](const auto &ffRef) {
     using FFT = std::decay_t<decltype(ffRef)>;
     if (boxAxes.orthogonal[box]) {
       if (hasFraction) {
-        BoxInterTemplate<true, BoxDimensions, FFT>(
-            ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        if (electrostatic)
+          BoxInterTemplate<true, true, BoxDimensions, FFT>(
+              ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        else
+          BoxInterTemplate<true, false, BoxDimensions, FFT>(
+              ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
       } else {
-        BoxInterTemplate<false, BoxDimensions, FFT>(
-            ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        if (electrostatic)
+          BoxInterTemplate<false, true, BoxDimensions, FFT>(
+              ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        else
+          BoxInterTemplate<false, false, BoxDimensions, FFT>(
+              ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
       }
     } else {
       const BoxDimensionsNonOrth &nonOrth =
           static_cast<const BoxDimensionsNonOrth &>(boxAxes);
       if (hasFraction) {
-        BoxInterTemplate<true, BoxDimensionsNonOrth, FFT>(
-            ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        if (electrostatic)
+          BoxInterTemplate<true, true, BoxDimensionsNonOrth, FFT>(
+              ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        else
+          BoxInterTemplate<true, false, BoxDimensionsNonOrth, FFT>(
+              ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
       } else {
-        BoxInterTemplate<false, BoxDimensionsNonOrth, FFT>(
-            ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        if (electrostatic)
+          BoxInterTemplate<false, true, BoxDimensionsNonOrth, FFT>(
+              ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
+        else
+          BoxInterTemplate<false, false, BoxDimensionsNonOrth, FFT>(
+              ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
+              cellStartIndex, mapParticleToCell, neighborList, nPacked);
       }
     }
   });
