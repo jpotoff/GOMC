@@ -781,8 +781,116 @@ bool CalculateEnergy::MoleculeInterTemplate(const FFType &ff,
     const double fracCoul =
         hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
+    // Whole-box path. This function walks the cell list twice per atom of the
+    // moving molecule -- once at the old position to subtract, once at the new
+    // one to add -- so for OPC water it was doing eight full-box pointer
+    // chases per trial move, each feeding a scalar InRcut through a gathered
+    // index list. When the stencil selects every cell all eight walks see the
+    // same set, so one pack serves all of them and the arithmetic vectorizes.
+    //
+    // It is also deliberately serial. The loop below used to be an
+    // `omp parallel for` over `length`, which is 4 for water: a parallel
+    // region entered once per Translate or Rotation -- about 98% of all moves
+    // -- dispatching four iterations. In the 1,000-molecule profile
+    // kmp_flag_64::wait was 15.8% of runtime against MoleculeInter's own
+    // 8.8%, i.e. the region spent more thread-time waiting than working.
+    // Vectorizing shrinks the work further, which only makes fork/join a worse
+    // trade. Molecules big enough to be worth splitting still take the
+    // parallel path below via the `if` clause.
+    if (StencilCoversBox(box)) {
+      const int nPacked = BuildBoxPacked(currentCoords, box);
+      const double *const pX = boxPackX.data();
+      const double *const pY = boxPackY.data();
+      const double *const pZ = boxPackZ.data();
+      const double *const pQ = boxPackCharge.data();
+      const int *const pKind = boxPackKind.data();
+      const int *const pMol = boxPackMol.data();
+      const double rCutSqBox = boxAxes.rCutSq[box];
+      const double rCutLowSq = forcefield.rCutLowSq;
+
+      // Scratch for pass 1. 2 KiB, L1-resident.
+      double distSq[GOMC_DISTSQ_CHUNK];
+      double oldREn = 0.0, oldLJEn = 0.0, newREn = 0.0, newLJEn = 0.0;
+
+      for (uint p = 0; p < length; ++p) {
+        const uint atom = start + p;
+        const int currKind = particleKind[atom];
+        const double currQ = particleCharge[atom];
+
+        // side 0: the old position, which this move removes.
+        // side 1: the trial position, which it adds.
+        for (int side = 0; side < 2; ++side) {
+          const double xi = side ? molCoords.x[p] : currentCoords.x[atom];
+          const double yi = side ? molCoords.y[p] : currentCoords.y[atom];
+          const double zi = side ? molCoords.z[p] : currentCoords.z[atom];
+          double sumREn = 0.0, sumLJEn = 0.0;
+
+          for (int base = 0; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
+            const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
+
+            // ---- pass 1: contiguous, branch-free, vectorisable ----
+            boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, pX + base,
+                                         pY + base, pZ + base, m, box);
+
+            // ---- pass 2: the pairs that survive ----
+            for (int k = 0; k < m; k++) {
+              if (!(rCutSqBox > distSq[k]))
+                continue;
+              const int j = base + k;
+
+              double lambdaVDW = 1.0;
+              double lambdaCoulomb = 1.0;
+              if (hasFraction) {
+                int nMol = pMol[j];
+                if (molIndex == fracMol && nMol == fracMol) {
+                  lambdaVDW = fracVDW * fracVDW;
+                  lambdaCoulomb = fracCoul * fracCoul;
+                } else if (molIndex == fracMol || nMol == fracMol) {
+                  lambdaVDW = fracVDW;
+                  lambdaCoulomb = fracCoul;
+                }
+              }
+
+              // Only the trial position can overlap; the old one is where the
+              // molecule already sits.
+              if (side && distSq[k] < rCutLowSq) {
+                overlap = true;
+              }
+
+              if (electrostatic) {
+                const double qi_qj_fact = currQ * pQ[j] * num::qqFact;
+                if (qi_qj_fact != 0.0) {
+                  sumREn += ff.FFType::CalcCoulomb(distSq[k], currKind,
+                                                   pKind[j], qi_qj_fact,
+                                                   lambdaCoulomb, box);
+                }
+              }
+              sumLJEn +=
+                  ff.FFType::CalcEn(distSq[k], currKind, pKind[j], lambdaVDW);
+            }
+          }
+
+          if (side) {
+            newREn += sumREn;
+            newLJEn += sumLJEn;
+          } else {
+            oldREn += sumREn;
+            oldLJEn += sumLJEn;
+          }
+        }
+      }
+
+      tempREn = newREn - oldREn;
+      tempLJEn = newLJEn - oldLJEn;
+      GOMC_EVENT_STOP(1, GomcProfileEvent::EN_MOL_INTER);
+      inter_LJ.energy = tempLJEn;
+      inter_coulomb.energy = tempREn;
+      return overlap;
+    }
+
 #ifdef _OPENMP
-#pragma omp parallel for default(none) shared(boxAxes, ff, molCoords)          \
+#pragma omp parallel for if (length > 16) default(none)                        \
+    shared(boxAxes, ff, molCoords)                                             \
     firstprivate(box, molIndex, num::qqFact, length, start, hasFraction,       \
                      fracMol, fracVDW, fracCoul)                               \
     reduction(+ : tempREn, tempLJEn) reduction(| : overlap)
