@@ -224,8 +224,9 @@ bool CalculateEnergy::StencilCoversBox(const uint box) const {
 //
 // Buffers are members and only grow, so steady state does not allocate.
 //
-int CalculateEnergy::BuildBoxPacked(const uint box) const {
-  const int cap = (int)currentCoords.Count();
+int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
+                                    const uint box) const {
+  const int cap = (int)coords.Count();
   if ((int)boxPackX.size() < cap) {
     boxPackX.resize(cap);
     boxPackY.resize(cap);
@@ -239,9 +240,9 @@ int CalculateEnergy::BuildBoxPacked(const uint box) const {
   CellList::Neighbors it = cellList.EnumerateLocal(0, box);
   while (!it.Done()) {
     const int p = *it;
-    boxPackX[n] = currentCoords.x[p];
-    boxPackY[n] = currentCoords.y[p];
-    boxPackZ[n] = currentCoords.z[p];
+    boxPackX[n] = coords.x[p];
+    boxPackY[n] = coords.y[p];
+    boxPackZ[n] = coords.z[p];
     boxPackCharge[n] = particleCharge[p];
     boxPackKind[n] = particleKind[p];
     boxPackMol[n] = particleMol[p];
@@ -278,7 +279,7 @@ void CalculateEnergy::BoxInterTemplate(
     const std::vector<int> &cellVector,
     const std::vector<int> &cellStartIndex,
     const std::vector<int> &mapParticleToCell,
-    const std::vector<std::vector<int>> &neighborList) {
+    const std::vector<std::vector<int>> &neighborList, const int nPacked) {
 
   // HasLambda is resolved by the caller from Lambda::HasFraction(box). Only
   // NeMTMC ever sets a fractional molecule, so in an ordinary simulation it is
@@ -288,6 +289,87 @@ void CalculateEnergy::BoxInterTemplate(
       HasLambda ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
   const double fracCoul =
       HasLambda ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+
+  // Whole-box path; see the comment in BoxInter(). Same pair set as the cell
+  // walk below -- every unordered pair once -- reached as a single j > i scan
+  // over packed arrays instead of 27 ranges each needing an upper_bound.
+  if (nPacked >= 0) {
+    const double *const pX = boxPackX.data();
+    const double *const pY = boxPackY.data();
+    const double *const pZ = boxPackZ.data();
+    const double *const pQ = boxPackCharge.data();
+    const int *const pKind = boxPackKind.data();
+    const int *const pMol = boxPackMol.data();
+    const double rCutSqBox = boxAxes.rCutSq[box];
+
+    // schedule(static, 1) because this loop is triangular: atom i does
+    // nPacked-i-1 distances, so the default blocked schedule would hand the
+    // first thread several times the work of the last. Round-robin over a
+    // linearly decreasing profile balances to within one iteration's work and
+    // costs nothing at runtime, unlike dynamic.
+#if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
+#pragma omp parallel for schedule(static, 1) default(none)                     \
+    shared(boxAxes, ff) reduction(+ : tempREn, tempLJEn)                       \
+    firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul, nPacked, pX,    \
+                     pY, pZ, pQ, pKind, pMol, rCutSqBox)
+#endif
+    for (int i = 0; i < nPacked; i++) {
+      const int currMol = pMol[i];
+      const int currKind = pKind[i];
+      const double currQ = pQ[i];
+      const double xi = pX[i], yi = pY[i], zi = pZ[i];
+
+      // Scratch for pass 1. Per thread, 2 KiB, L1-resident.
+      double distSq[GOMC_DISTSQ_CHUNK];
+
+      for (int base = i + 1; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
+        const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
+
+        // ---- pass 1: contiguous, branch-free, vectorisable ----
+        boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, pX + base, pY + base,
+                                     pZ + base, m, box);
+
+        // ---- pass 2: the pairs that survive ----
+        for (int k = 0; k < m; k++) {
+          const int j = base + k;
+          // avoid same molecule
+          if (currMol == pMol[j])
+            continue;
+          if (!(rCutSqBox > distSq[k]))
+            continue;
+
+          if constexpr (HasLambda) {
+            double lambdaVDW = 1.0;
+            double lambdaCoulomb = 1.0;
+            if (currMol == fracMol || pMol[j] == fracMol) {
+              lambdaVDW = fracVDW;
+              lambdaCoulomb = fracCoul;
+            }
+
+            if (electrostatic) {
+              const double qi_qj_fact = currQ * pQ[j] * num::qqFact;
+              if (qi_qj_fact != 0.0) {
+                tempREn += ff.FFType::CalcCoulomb(distSq[k], currKind, pKind[j],
+                                                  qi_qj_fact, lambdaCoulomb,
+                                                  box);
+              }
+            }
+            tempLJEn +=
+                ff.FFType::CalcEn(distSq[k], currKind, pKind[j], lambdaVDW);
+          } else {
+            if (electrostatic) {
+              const double qi_qj_fact = currQ * pQ[j] * num::qqFact;
+              if (qi_qj_fact != 0.0) {
+                tempREn += ff.CalcCoulombFull(distSq[k], qi_qj_fact, box);
+              }
+            }
+            tempLJEn += ff.CalcEnFull(distSq[k], currKind, pKind[j]);
+          }
+        }
+      }
+    }
+    return;
+  }
 
   // Cell-ordered views; see BuildCellOrdered().
   const double *const ordX = cellOrderX.data();
@@ -790,7 +872,7 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
   // That is what lets DistSqRange vectorize here, the way it already does in
   // BoxInterTemplate.
   if (StencilCoversBox(box)) {
-    const int nPacked = BuildBoxPacked(box);
+    const int nPacked = BuildBoxPacked(currentCoords, box);
     const double *const pX = boxPackX.data();
     const double *const pY = boxPackY.data();
     const double *const pZ = boxPackZ.data();
@@ -942,14 +1024,33 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
 
   std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
   std::vector<std::vector<int>> neighborList;
-  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
-                               cellStartIndex, mapParticleToCell);
-  neighborList = cellList.GetNeighborList(box);
 
+  // Whole-box path. When the stencil selects every cell (StencilCoversBox),
+  // the 27 per-cell ranges are the whole box between them, so none of the CSR
+  // machinery earns its keep: GetCellListNeighbor walks the linked list and
+  // sorts all 27 cells, GetNeighborList deep-copies a vector<vector<int>>, and
+  // the pair walk then does 27 upper_bound searches per atom to recover a
+  // bound it could have had for free. Pack once and walk j > i instead. That
+  // also takes the contiguous run handed to DistSqRange from one cell (~146
+  // atoms here) to the whole box.
+  //
+  // nPacked < 0 means "not taken"; the CUDA kernels always want the CSR form.
+  int nPacked = -1;
 #ifndef GOMC_CUDA
-  // Permute the per-atom data into cell order for the pair walk below.
-  BuildCellOrdered(coords, cellVector, mapParticleToCell);
+  if (StencilCoversBox(box)) {
+    nPacked = BuildBoxPacked(coords, box);
+  }
+  if (nPacked < 0)
 #endif
+  {
+    cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
+                                 cellStartIndex, mapParticleToCell);
+    neighborList = cellList.GetNeighborList(box);
+#ifndef GOMC_CUDA
+    // Permute the per-atom data into cell order for the pair walk below.
+    BuildCellOrdered(coords, cellVector, mapParticleToCell);
+#endif
+  }
 
 #ifdef GOMC_CUDA
   // update unitcell in GPU
@@ -986,11 +1087,11 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
       if (hasFraction) {
         BoxInterTemplate<true, BoxDimensions, FFT>(
             ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList);
+            cellStartIndex, mapParticleToCell, neighborList, nPacked);
       } else {
         BoxInterTemplate<false, BoxDimensions, FFT>(
             ffRef, coords, boxAxes, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList);
+            cellStartIndex, mapParticleToCell, neighborList, nPacked);
       }
     } else {
       const BoxDimensionsNonOrth &nonOrth =
@@ -998,11 +1099,11 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
       if (hasFraction) {
         BoxInterTemplate<true, BoxDimensionsNonOrth, FFT>(
             ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList);
+            cellStartIndex, mapParticleToCell, neighborList, nPacked);
       } else {
         BoxInterTemplate<false, BoxDimensionsNonOrth, FFT>(
             ffRef, coords, nonOrth, box, tempREn, tempLJEn, cellVector,
-            cellStartIndex, mapParticleToCell, neighborList);
+            cellStartIndex, mapParticleToCell, neighborList, nPacked);
       }
     }
   });

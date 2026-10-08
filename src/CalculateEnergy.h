@@ -192,7 +192,8 @@ private:
                         double &tempLJEn, const std::vector<int> &cellVector,
                         const std::vector<int> &cellStartIndex,
                         const std::vector<int> &mapParticleToCell,
-                        const std::vector<std::vector<int>> &neighborList);
+                        const std::vector<std::vector<int>> &neighborList,
+                        const int nPacked);
 
   template <typename BoxType, typename FFType>
   void BoxForceTemplate(const FFType &ff, XYZArray const &coords,
@@ -369,7 +370,7 @@ private:
   //! like MoleculeExchange call RemoveMol on several molecules before running
   //! their CBMC trials, so "every molecule the lookup says is in this box" is
   //! not the same set. The cell list is the authority.
-  int BuildBoxPacked(const uint box) const;
+  int BuildBoxPacked(XYZArray const &coords, const uint box) const;
 
   //! True when a cell's 27 neighbors are every cell in the box, i.e. the cell
   //! list selects the whole box and prunes nothing. Happens whenever an edge
