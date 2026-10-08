@@ -458,8 +458,12 @@ void CalculateEnergy::BoxInterTemplate(
     // find the which cell currParticle belong to
     const int currCell = ordCell[i];
 
-    // Scratch for pass 1. Per thread, 2 KiB, L1-resident.
+    // Scratch, per thread, ~6 KiB and L1-resident; see the whole-box path.
     double distSq[GOMC_DISTSQ_CHUNK];
+    double sDistSq[GOMC_DISTSQ_CHUNK + 8];
+    double sQ[GOMC_DISTSQ_CHUNK + 8];
+    int sKind[GOMC_DISTSQ_CHUNK + 8];
+    int sMol[GOMC_DISTSQ_CHUNK + 8];
 
     // loop over currCell neighboring cells
     for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
@@ -484,43 +488,83 @@ void CalculateEnergy::BoxInterTemplate(
         boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, ordX + base,
                                      ordY + base, ordZ + base, m, box);
 
-        // ---- pass 2: the pairs that survive ----
-        for (int k = 0; k < m; k++) {
+        // ---- pass 2: compact the survivors ----
+        //
+        // Same transform as the whole-box path above, and for the same reason;
+        // see the comment there. Two things differ here and are worth watching
+        // when this is measured: the ranges are per-cell, so they are shorter
+        // than 256 and the 8-wide compress has a larger scalar tail; but only
+        // ~11% of candidates survive at a 5^3 grid against ~20% in the
+        // degenerate case, so proportionally more of the branchy scan goes
+        // away.
+        int ns = 0;
+        int k = 0;
+#ifdef GOMC_HAVE_COMPRESS
+        {
+          const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          const __m256i vCurrMol = _mm256_set1_epi32(currMol);
+          for (; k + 8 <= m; k += 8) {
+            const int j = base + k;
+            const __m512d d = _mm512_loadu_pd(distSq + k);
+            const __m256i mol =
+                _mm256_loadu_si256((const __m256i *)(ordMol + j));
+            const __mmask8 keep =
+                _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ) &
+                _mm256_cmpneq_epi32_mask(mol, vCurrMol);
+            _mm512_mask_compressstoreu_pd(sDistSq + ns, keep, d);
+            _mm512_mask_compressstoreu_pd(sQ + ns, keep,
+                                          _mm512_loadu_pd(ordQ + j));
+            _mm256_mask_compressstoreu_epi32(
+                sKind + ns, keep,
+                _mm256_loadu_si256((const __m256i *)(ordKind + j)));
+            _mm256_mask_compressstoreu_epi32(sMol + ns, keep, mol);
+            ns += _mm_popcnt_u32((unsigned)keep);
+          }
+        }
+#endif
+        for (; k < m; k++) {
           const int j = base + k;
-          // avoid same molecule
           if (currMol == ordMol[j])
             continue;
           if (!(rCutSqBox > distSq[k]))
             continue;
+          sDistSq[ns] = distSq[k];
+          sQ[ns] = ordQ[j];
+          sKind[ns] = ordKind[j];
+          sMol[ns] = ordMol[j];
+          ++ns;
+        }
 
+        // ---- pass 3: kernels over a dense run, no cutoff test ----
+        for (int sIdx = 0; sIdx < ns; sIdx++) {
           if constexpr (HasLambda) {
             double lambdaVDW = 1.0;
             double lambdaCoulomb = 1.0;
-            if (currMol == fracMol || ordMol[j] == fracMol) {
+            if (currMol == fracMol || sMol[sIdx] == fracMol) {
               lambdaVDW = fracVDW;
               lambdaCoulomb = fracCoul;
             }
 
             if constexpr (HasCharge) {
-              const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
+              const double qi_qj_fact = currQ * sQ[sIdx] * num::qqFact;
               if (qi_qj_fact != 0.0) {
-                tempREn += ff.FFType::CalcCoulomb(
-                    distSq[k], currKind, ordKind[j], qi_qj_fact, lambdaCoulomb,
-                    box);
+                tempREn += ff.FFType::CalcCoulomb(sDistSq[sIdx], currKind,
+                                                  sKind[sIdx], qi_qj_fact,
+                                                  lambdaCoulomb, box);
               }
             }
-            tempLJEn +=
-                ff.FFType::CalcEn(distSq[k], currKind, ordKind[j], lambdaVDW);
+            tempLJEn += ff.FFType::CalcEn(sDistSq[sIdx], currKind, sKind[sIdx],
+                                          lambdaVDW);
           } else {
             // Same values, reached without the lambda tests; see
             // FFAdapter::CalcEnFull.
             if constexpr (HasCharge) {
-              const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
+              const double qi_qj_fact = currQ * sQ[sIdx] * num::qqFact;
               if (qi_qj_fact != 0.0) {
-                tempREn += ff.CalcCoulombFull(distSq[k], qi_qj_fact, box);
+                tempREn += ff.CalcCoulombFull(sDistSq[sIdx], qi_qj_fact, box);
               }
             }
-            tempLJEn += ff.CalcEnFull(distSq[k], currKind, ordKind[j]);
+            tempLJEn += ff.CalcEnFull(sDistSq[sIdx], currKind, sKind[sIdx]);
           }
         }
       }
