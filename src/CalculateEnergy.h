@@ -196,7 +196,8 @@ private:
                         const std::vector<std::vector<int>> &neighborList,
                         const int nPacked);
 
-  template <typename BoxType, typename FFType>
+  template <bool HasLambda, bool HasCharge, typename BoxType,
+            typename FFType>
   void BoxForceTemplate(const FFType &ff, XYZArray const &coords,
                         XYZArray &atomForce,
                         XYZArray &molForce, const BoxType &boxAxes,

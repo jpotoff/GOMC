@@ -930,7 +930,7 @@ void CalculateEnergy::BoxInterTemplate(
 #endif
 }
 
-template <typename BoxType, typename FFType>
+template <bool HasLambda, bool HasCharge, typename BoxType, typename FFType>
 void CalculateEnergy::BoxForceTemplate(
     const FFType &ff, XYZArray const &coords, XYZArray &atomForce,
     XYZArray &molForce,
@@ -948,12 +948,11 @@ void CalculateEnergy::BoxForceTemplate(
   int atomCount = atomForce.Count();
   int molCount = molForce.Count();
 
-  const bool hasFraction = lambdaRef.HasFraction(box);
-  const int fracMol = hasFraction ? lambdaRef.GetMolIndex(box) : -1;
+  const int fracMol = HasLambda ? lambdaRef.GetMolIndex(box) : -1;
   const double fracVDW =
-      hasFraction ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
+      HasLambda ? lambdaRef.GetLambdaVDW(fracMol, box) : 1.0;
   const double fracCoul =
-      hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
+      HasLambda ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
   // Cell-ordered views; see BuildCellOrdered(). Same two-pass shape as
   // VirialCalcTemplate's cell path: DistVecRange because the force needs the
@@ -979,7 +978,7 @@ void CalculateEnergy::BoxForceTemplate(
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) shared(boxAxes, ff, neighborList)       \
-    firstprivate(box, atomCount, molCount, num::qqFact, hasFraction, fracMol,  \
+    firstprivate(box, atomCount, molCount, num::qqFact, fracMol,              \
                      fracVDW, fracCoul, ordX, ordY, ordZ, ordQ, ordMol,        \
                      ordKind, ordCell, cellVec, cellStart, nAtoms, rCutSqBox)  \
     reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
@@ -1033,14 +1032,14 @@ void CalculateEnergy::BoxForceTemplate(
 
           double lambdaVDW = 1.0;
           double lambdaCoulomb = 1.0;
-          if (hasFraction) {
+          if constexpr (HasLambda) {
             if (currMol == fracMol || nMol == fracMol) {
               lambdaVDW = fracVDW;
               lambdaCoulomb = fracCoul;
             }
           }
 
-          if (electrostatic) {
+          if constexpr (HasCharge) {
             const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
             if (qi_qj_fact != 0.0) {
               tempREn += ff.FFType::CalcCoulomb(distSq[k], currKind, ordKind[j],
@@ -2073,19 +2072,46 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
                   forcefield.sc_alpha, forcefield.sc_power, box);
 
 #else
+  // Resolved here for the same reason BoxInter resolves them: the annotate
+  // showed `electrostatic` and the fractional-molecule tests being re-read and
+  // branched on for every surviving pair, inside a 29% block of pure filtering
+  // and setup.
+  const bool hasFractionF = lambdaRef.HasFraction(box);
   DispatchForcefield(forcefield, [&](const auto &ffRef) {
     using FFT = std::decay_t<decltype(ffRef)>;
+#define GOMC_BF_CALL(L, C, BT, AXES)                                           \
+  BoxForceTemplate<L, C, BT, FFT>(ffRef, coords, atomForce, molForce, AXES,    \
+                                  box, tempREn, tempLJEn, cellVector,          \
+                                  cellStartIndex, mapParticleToCell,           \
+                                  neighborList)
     if (boxAxes.orthogonal[box]) {
-      BoxForceTemplate<BoxDimensions, FFT>(
-          ffRef, coords, atomForce, molForce, boxAxes, box, tempREn, tempLJEn,
-          cellVector, cellStartIndex, mapParticleToCell, neighborList);
+      if (hasFractionF) {
+        if (electrostatic)
+          GOMC_BF_CALL(true, true, BoxDimensions, boxAxes);
+        else
+          GOMC_BF_CALL(true, false, BoxDimensions, boxAxes);
+      } else {
+        if (electrostatic)
+          GOMC_BF_CALL(false, true, BoxDimensions, boxAxes);
+        else
+          GOMC_BF_CALL(false, false, BoxDimensions, boxAxes);
+      }
     } else {
-      BoxForceTemplate<BoxDimensionsNonOrth, FFT>(
-          ffRef, coords, atomForce, molForce,
-          static_cast<const BoxDimensionsNonOrth &>(boxAxes), box, tempREn,
-          tempLJEn, cellVector, cellStartIndex, mapParticleToCell,
-          neighborList);
+      const BoxDimensionsNonOrth &nonOrth =
+          static_cast<const BoxDimensionsNonOrth &>(boxAxes);
+      if (hasFractionF) {
+        if (electrostatic)
+          GOMC_BF_CALL(true, true, BoxDimensionsNonOrth, nonOrth);
+        else
+          GOMC_BF_CALL(true, false, BoxDimensionsNonOrth, nonOrth);
+      } else {
+        if (electrostatic)
+          GOMC_BF_CALL(false, true, BoxDimensionsNonOrth, nonOrth);
+        else
+          GOMC_BF_CALL(false, false, BoxDimensionsNonOrth, nonOrth);
+      }
     }
+#undef GOMC_BF_CALL
   });
 #endif
 
