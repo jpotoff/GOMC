@@ -381,22 +381,6 @@ private:
   std::vector<double> cellOrderX, cellOrderY, cellOrderZ, cellOrderCharge;
   std::vector<int> cellOrderMol, cellOrderKind, cellOrderCell;
 
-  //
-  // Per-thread force accumulators for BoxForceTemplate.
-  //
-  // Replaces `reduction(+ : aForcex[:atomCount], ...)` on six arrays. The
-  // runtime allocates and zeroes a private copy per thread on entry and
-  // combines them at the barrier, and that combine is serial: on a 1,000
-  // molecule MultiParticle run it measured as ~8.2% of BoxForceTemplate on
-  // the master thread alone, with three workers idling behind it for ~24.7%
-  // more. Its cost scales with atom count, not with pair count -- which is
-  // why four successive changes to the pair loop left the master/worker
-  // ratio at 1.52 against an ideal 3.0.
-  //
-  // A member, so it is allocated once instead of per call, zeroed in
-  // parallel, and combined in a parallel loop over atom ranges.
-  //
-  mutable std::vector<double> forceScratch;
 
   //! Pack every atom the cell list currently holds for `box` into contiguous
   //! arrays, so a trial-position walk reads unit stride instead of gathering
