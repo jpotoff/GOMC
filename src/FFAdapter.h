@@ -114,6 +114,13 @@ struct FFAdapter : public FFParticle {
     return VdwEval::Energy(Self().VdwView(), distSq, FlatIndex(kind1, kind2));
   }
 
+  //! The vdW virial for a pair already inside rCut. BoxForce needs the energy
+  //! and the virial for the same pair, so leaving one checked keeps a branch.
+  double CalcVirFullInRange(const double distSq, const uint kind1,
+                            const uint kind2) const {
+    return VdwEval::Virial(Self().VdwView(), distSq, FlatIndex(kind1, kind2));
+  }
+
   double CalcCoulombFullInRange(const double distSq, const double qi_qj_Fact,
                                 const uint b) const {
     return CoulKernel(distSq, qi_qj_Fact, b);
@@ -128,6 +135,13 @@ struct FFAdapter : public FFParticle {
   double CalcCoulombTabUnchecked(const double distSq, const double qi_qj_Fact,
                                  const uint b) const {
     return ff::EwaldReal::EnergyUnchecked(CoulView(b), distSq, qi_qj_Fact);
+  }
+
+  //! The virial counterpart, same preconditions. BoxForce needs both per
+  //! pair, so leaving either one checked keeps the branch in the loop.
+  double CalcCoulombVirTabUnchecked(const double distSq, const double qi_qj,
+                                    const uint b) const {
+    return ff::EwaldReal::VirialUnchecked(CoulView(b), distSq, qi_qj);
   }
 
   //

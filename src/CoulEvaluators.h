@@ -75,6 +75,13 @@ struct EwaldReal {
     return qi_qj_Fact * c.table->EnergyUnchecked(distSq, c.box);
   }
 
+  //! As Virial, for a pair the caller has already placed inside the table's
+  //! range: no null test, no range test, no erfc fallback.
+  static double VirialUnchecked(const CoulParams &c, const double distSq,
+                                const double qi_qj) {
+    return qi_qj * c.table->VirialUnchecked(distSq, c.box);
+  }
+
   static double Virial(const CoulParams &c, const double distSq,
                        const double qi_qj) {
     double tab;

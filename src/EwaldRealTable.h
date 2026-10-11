@@ -109,6 +109,12 @@ public:
   }
 
   // (erfc(alpha*r)/r + alpha*2/sqrt(pi)*exp(-alpha^2 r^2)) / r^2
+  //! The virial kernel for distSq KNOWN to lie in Range(b); no test, no
+  //! fallback. The energy counterpart is EnergyUnchecked above.
+  inline double VirialUnchecked(const double distSq, const uint b) const {
+    return box[b].EvalUnchecked(box[b].vir, distSq);
+  }
+
   inline bool Virial(const double distSq, const uint b, double &out) const {
     return box[b].Eval(box[b].vir, distSq, out);
   }
