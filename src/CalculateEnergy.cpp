@@ -564,7 +564,20 @@ void CalculateEnergy::BoxInterTemplate(
         // leaves both bit-for-bit unchanged. The pairs that are dropped are
         // exactly the ones whose kernel returned 0.0.
         //
+        //
+        // The Coulomb sum goes into a local first. tempREn is the OpenMP
+        // reduction variable and so lives on the stack: accumulating into it
+        // directly costs a load, an add and a store per pair, a dependent
+        // round trip through memory that showed up as 10.8% of the symbol --
+        // the store alone was the hottest instruction in the loop. It also
+        // clobbers memory, which is why the `c.table` null test below was
+        // being re-read every iteration instead of hoisted.
+        //
+        // Like the vdW accumulator in MieVdwRunFixed, this changes the
+        // addition order and so is not bit-for-bit.
+        //
         if constexpr (HasCharge) {
+          double realEn = 0.0;
           for (int s = 0; s < nc; s++) {
             const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
             if (qi_qj_fact == 0.0)
@@ -572,12 +585,13 @@ void CalculateEnergy::BoxInterTemplate(
             if constexpr (HasLambda) {
               const double lambdaCoulomb =
                   (currMol == fracMol || cMol[s] == fracMol) ? fracCoul : 1.0;
-              tempREn += ff.FFType::CalcCoulomb(cDistSq[s], currKind, cKind[s],
-                                                qi_qj_fact, lambdaCoulomb, box);
+              realEn += ff.FFType::CalcCoulomb(cDistSq[s], currKind, cKind[s],
+                                               qi_qj_fact, lambdaCoulomb, box);
             } else {
-              tempREn += ff.CalcCoulombFullInRange(cDistSq[s], qi_qj_fact, box);
+              realEn += ff.CalcCoulombFullInRange(cDistSq[s], qi_qj_fact, box);
             }
           }
+          tempREn += realEn;
         }
         if constexpr (HasLambda) {
           for (int s = 0; s < nv; s++) {
@@ -754,7 +768,20 @@ void CalculateEnergy::BoxInterTemplate(
         // ---- pass 3: one dense run per kernel, no cutoff test ----
         // Separate accumulators and order-preserving lists, so splitting the
         // fused loop leaves both sums bit-for-bit unchanged.
+        //
+        // The Coulomb sum goes into a local first. tempREn is the OpenMP
+        // reduction variable and so lives on the stack: accumulating into it
+        // directly costs a load, an add and a store per pair, a dependent
+        // round trip through memory that showed up as 10.8% of the symbol --
+        // the store alone was the hottest instruction in the loop. It also
+        // clobbers memory, which is why the `c.table` null test below was
+        // being re-read every iteration instead of hoisted.
+        //
+        // Like the vdW accumulator in MieVdwRunFixed, this changes the
+        // addition order and so is not bit-for-bit.
+        //
         if constexpr (HasCharge) {
+          double realEn = 0.0;
           for (int sIdx = 0; sIdx < nc; sIdx++) {
             const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
             if (qi_qj_fact == 0.0)
@@ -763,14 +790,15 @@ void CalculateEnergy::BoxInterTemplate(
               const double lambdaCoulomb =
                   (currMol == fracMol || cMol[sIdx] == fracMol) ? fracCoul
                                                                 : 1.0;
-              tempREn +=
+              realEn +=
                   ff.FFType::CalcCoulomb(cDistSq[sIdx], currKind, cKind[sIdx],
                                          qi_qj_fact, lambdaCoulomb, box);
             } else {
-              tempREn +=
+              realEn +=
                   ff.CalcCoulombFullInRange(cDistSq[sIdx], qi_qj_fact, box);
             }
           }
+          tempREn += realEn;
         }
         if constexpr (HasLambda) {
           for (int sIdx = 0; sIdx < nv; sIdx++) {
