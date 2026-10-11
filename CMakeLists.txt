@@ -201,6 +201,36 @@ include(${PROJECT_SOURCE_DIR}/CMake/FileLists.cmake)
 option(GOMC_GTEST    "Build unit tests for GOMC" OFF)
 option(GOMC_GTEST_MPI    "Build unit tests for GOMC - MPI Enabled" OFF)
 
+# GOMC_CELL_REFINE controls how finely the cell grid is cut relative to the
+# cutoff, and hence how wide the neighbour stencil has to be.
+#
+# 1 is the historical behaviour: cells about one cutoff wide and a +-1, 27-cell
+# stencil. That stencil encloses far more volume than can contribute. Measured
+# on a 9,000 molecule OPC box (70 A, cutoff 12 A), cells come out 14 A wide and
+# only 10.03% of the pairs the distance loop evaluates are inside the cutoff --
+# the other 90% are excluded by construction.
+#
+# 2 cuts cells near half a cutoff and uses a radius-2, 125-cell stencil. On the
+# same box that is 11x11x11 cells of 6.36 A, 1,715 candidates per atom instead
+# of 3,920, and 22.92% of them survive: 2.29x fewer distance evaluations.
+#
+# Whether that is FASTER is a separate question and depends on the system:
+# finer cells hold fewer atoms, so the contiguous runs the distance loop
+# vectorises over get shorter and the per-range overhead is paid more often.
+# Benchmark before adopting it. Boxes small enough that the stencil already
+# covers them are left at radius 1 either way, since those bypass the cell
+# list entirely.
+#
+# CUDA builds are pinned to 1: both GPU kernels index a flattened neighbour
+# list with a hard-coded stride of 27.
+#
+#   ./metamake.sh -C 2            or      cmake .. -DGOMC_CELL_REFINE=2
+#
+set(GOMC_CELL_REFINE "1" CACHE STRING
+    "Cell grid refinement relative to the cutoff (1 = historical 27-cell stencil)")
+add_definitions(-DGOMC_CELL_REFINE=${GOMC_CELL_REFINE})
+message(STATUS "GOMC_CELL_REFINE: ${GOMC_CELL_REFINE}")
+
 # GOMC_RECIP_BLOCKING tiles the atom loop of the Ewald reciprocal sum so that
 # one block of the trig cache stays resident in L2 while every k-vector sweeps
 # it. Without it the sum re-reads six rows of numFlatAtoms doubles for each of

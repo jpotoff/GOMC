@@ -69,10 +69,12 @@ if command -v nvcc &> /dev/null; then
 	fi
 fi
 
-while getopts 'A:acdglmOpt' opt; do
+while getopts 'A:C:acdglmOpt' opt; do
     case "$opt" in
         A)
             CMAKEARGS+="-DGOMC_ARCH=$OPTARG ";;
+        C)
+            CMAKEARGS+="-DGOMC_CELL_REFINE=$OPTARG ";;
         a)
             use_asan=1;;
         c)
@@ -98,6 +100,12 @@ while getopts 'A:acdglmOpt' opt; do
             echo "-A <arch>, target architecture for -march= (default x86-64-v3)."
             echo "           e.g. -A znver5, -A x86-64-v4, -A native."
             echo "           AVX-512 kernels are only compiled in with a v4+ target."
+            echo "-C <n>, cell grid refinement relative to the cutoff (default 1)."
+            echo "           1 = cells ~1 cutoff wide, 27-cell stencil (historical)."
+            echo "           2 = cells ~1/2 cutoff, 125-cell stencil; 2.3x fewer"
+            echo "           distance evaluations on a 9k-molecule box, but finer"
+            echo "           cells shorten the vectorised runs -- benchmark it."
+            echo "           Ignored by CUDA builds, which require 27."
             echo "-a, enables address sanitizer runtime checking"
             echo "-c, enables clang-tidy source code checks"
             echo "-d, enables Debug Mode compilation"

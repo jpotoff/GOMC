@@ -281,7 +281,10 @@ void CalculateEnergy::BuildCellOrdered(
 // grid and are unaffected by the paths this gates.
 //
 bool CalculateEnergy::StencilCoversBox(const uint box) const {
-  return cellList.CellsInBox(box) == NUMBER_OF_NEIGHBOR_CELL;
+  // The stencil is as wide as the box when it names every cell. With a radius
+  // of 1 that is the historical `27 cells` test; with a wider stencil the cell
+  // count it has to match is larger, so the constant will not do.
+  return cellList.StencilCells(box) == cellList.CellsInBox(box);
 }
 
 //
@@ -702,8 +705,10 @@ void CalculateEnergy::BoxInterTemplate(
     int vKind[SURV], vMol[VLAM];
 
     // loop over currCell neighboring cells
-    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
-         nCellIndex++) {
+    // Not NUMBER_OF_NEIGHBOR_CELL: the stencil radius varies with the cell
+    // grid now, so its size comes from the list itself.
+    const int nStencil = (int)neighborList[currCell].size();
+    for (int nCellIndex = 0; nCellIndex < nStencil; nCellIndex++) {
       // find the index of neighboring cell
       const int neighborCell = neighborList[currCell][nCellIndex];
       // find the ending index in neighboring cell
@@ -812,6 +817,17 @@ void CalculateEnergy::BoxInterTemplate(
           }
         }
 
+#ifdef GOMC_PAIR_STATS
+        // Atomics, not a reduction: this build is for counting, not timing,
+        // and the pragma above cannot be varied by #ifdef.
+#pragma omp atomic
+        statCandidates += (double)m;
+#pragma omp atomic
+        statSurvVdw += (double)nv;
+#pragma omp atomic
+        statSurvCoul += (double)nc;
+#endif
+
         // ---- pass 3: one dense run per kernel, no cutoff test ----
         // Separate accumulators and order-preserving lists, so splitting the
         // fused loop leaves both sums bit-for-bit unchanged.
@@ -877,6 +893,19 @@ void CalculateEnergy::BoxInterTemplate(
       }
     }
   }
+
+#ifdef GOMC_PAIR_STATS
+  if (!statPrinted && statCandidates > 0.0) {
+    statPrinted = true;
+    const int cells = cellList.CellsInBox(box);
+    printf("Info: BoxInter cell path, box %u: %d atoms, %d cells, "
+           "%.3g candidates (%.0f per atom), vdW survivors %.2f%%, "
+           "Coulomb survivors %.2f%%\n",
+           box, nAtoms, cells, statCandidates, statCandidates / nAtoms,
+           100.0 * statSurvVdw / statCandidates,
+           100.0 * statSurvCoul / statCandidates);
+  }
+#endif
 }
 
 template <typename BoxType, typename FFType>
@@ -921,8 +950,10 @@ void CalculateEnergy::BoxForceTemplate(
     int currMol = particleMol[currParticle];
     int currCell = mapParticleToCell[currParticle];
 
-    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
-         nCellIndex++) {
+    // Not NUMBER_OF_NEIGHBOR_CELL: the stencil radius varies with the cell
+    // grid now, so its size comes from the list itself.
+    const int nStencil = (int)neighborList[currCell].size();
+    for (int nCellIndex = 0; nCellIndex < nStencil; nCellIndex++) {
       int neighborCell = neighborList[currCell][nCellIndex];
 
       int endIndex = cellStartIndex[neighborCell + 1];
@@ -1124,8 +1155,10 @@ void CalculateEnergy::VirialCalcTemplate(
     double dxs[GOMC_DISTSQ_CHUNK], dys[GOMC_DISTSQ_CHUNK],
         dzs[GOMC_DISTSQ_CHUNK];
 
-    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
-         nCellIndex++) {
+    // Not NUMBER_OF_NEIGHBOR_CELL: the stencil radius varies with the cell
+    // grid now, so its size comes from the list itself.
+    const int nStencil = (int)neighborList[currCell].size();
+    for (int nCellIndex = 0; nCellIndex < nStencil; nCellIndex++) {
       const int neighborCell = neighborList[currCell][nCellIndex];
       const int endIndex = cellStart[neighborCell + 1];
       // `currParticle < nParticle` is monotone in the slot index because a

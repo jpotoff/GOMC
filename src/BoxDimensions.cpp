@@ -85,17 +85,21 @@ void BoxDimensions::Init(config_setup::RestartSettings const &restart,
     //
     {
       const XYZ side = axis.Get(b);
-      const int ex = CellList::EdgeCellsFor(side.x, rCut[b]);
-      const int ey = CellList::EdgeCellsFor(side.y, rCut[b]);
-      const int ez = CellList::EdgeCellsFor(side.z, rCut[b]);
+      const int r = CellList::ChooseStencilRadius(side.x, side.y, side.z,
+                                                  rCut[b], GOMC_CELL_REFINE);
+      const int ex = CellList::EdgeCellsFor(side.x, rCut[b], r);
+      const int ey = CellList::EdgeCellsFor(side.y, rCut[b], r);
+      const int ez = CellList::EdgeCellsFor(side.z, rCut[b], r);
+      const int stencil = (2 * r + 1) * (2 * r + 1) * (2 * r + 1);
       printf("%s %-d: %-25s %d x %d x %d, spacing %.3f x %.3f x %.3f A "
              "(cutoff %.3f A)\n",
              "Info: Box ", b, " Cell grid", ex, ey, ez, side.x / ex,
              side.y / ey, side.z / ez, rCut[b]);
+      printf("%s %-d: %-25s radius %d, %d cells\n", "Info: Box ", b,
+             " Stencil", r, stencil);
       printf("%s %-d: %-25s %s\n\n", "Info: Box ", b, " Pair search",
-             (ex == 3 && ey == 3 && ez == 3)
-                 ? "whole box -- cell list not used"
-                 : "cell list");
+             (stencil >= ex * ey * ez) ? "whole box -- cell list not used"
+                                       : "cell list");
     }
 
     // Find Cosine Angle of alpha, beta and gamma

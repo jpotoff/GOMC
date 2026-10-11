@@ -348,6 +348,24 @@ private:
   // stores charge for each global atom idx
   std::vector<double> particleCharge;
 
+#ifdef GOMC_PAIR_STATS
+  //
+  // Diagnostic counters for BoxInterTemplate's cell path, built only under
+  // -DGOMC_PAIR_STATS. They answer one question: what fraction of the pairs
+  // pass 1 evaluates are actually inside the cutoff?
+  //
+  // The cell grid is sized by the cutoff and then CLAMPED, so cells can be
+  // wider than the cutoff -- at 10K box 0 they are 14 A for a 12 A cutoff --
+  // and the fixed +-1 stencil then encloses far more volume than can
+  // contribute. The ratio below is the measured version of that, and it is
+  // what decides whether a variable stencil radius is worth building.
+  //
+  mutable double statCandidates = 0.0;
+  mutable double statSurvVdw = 0.0;
+  mutable double statSurvCoul = 0.0;
+  mutable bool statPrinted = false;
+#endif
+
   //! Permute the per-atom arrays into cell-list order, so the BoxInter pair
   //! walk reads contiguously instead of gathering through cellVector. Buffers
   //! are members and only ever grow, so this does not allocate per call.

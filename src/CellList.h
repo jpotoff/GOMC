@@ -21,6 +21,27 @@ class XYZArray;
 class BoxDimensions;
 class MoleculeLookup;
 
+//
+// How finely the cell grid is cut, relative to the cutoff.
+//
+// 1 reproduces the historical behaviour exactly: cells about one cutoff wide
+// and a +-1 stencil. Higher values cut finer cells and widen the stencil to
+// match, which encloses less dead volume -- see ChooseStencilRadius.
+//
+// Pinned to 1 for CUDA builds: both GPU kernels index their flattened
+// neighbour list with a hard-coded stride of 27
+// (NUMBER_OF_NEIGHBOR_CELL in CalculateEnergyCUDAKernel.cu and
+// CalculateForceCUDAKernel.cu), so a wider stencil would silently read the
+// wrong cells.
+//
+#ifndef GOMC_CELL_REFINE
+#define GOMC_CELL_REFINE 1
+#endif
+#ifdef GOMC_CUDA
+#undef GOMC_CELL_REFINE
+#define GOMC_CELL_REFINE 1
+#endif
+
 class CellList {
 public:
   //
@@ -37,8 +58,66 @@ public:
   // box, not Rcut.
   //
   static int EdgeCellsFor(const double side, const double cutoff) {
-    return std::max((int)std::floor(side / cutoff), 3);
+    return EdgeCellsFor(side, cutoff, 1);
   }
+
+  //
+  // Cells along one edge for a stencil of radius r.
+  //
+  // Two constraints, both load bearing:
+  //   correctness  r * cellSize >= cutoff, so the stencil reaches the whole
+  //                cutoff sphere. cellSize = side / eCells, hence
+  //                eCells <= r * side / cutoff.
+  //   no aliasing  eCells >= 2r + 1, or the wrap-around in RebuildNeighbors
+  //                lists the same cell twice and pairs get counted twice.
+  //
+  // Both hold only when side >= cutoff * (2 + 1/r), so a box can be too small
+  // for a given radius; ChooseStencilRadius falls back in that case.
+  //
+  static int EdgeCellsFor(const double side, const double cutoff,
+                          const int r) {
+    return std::max((int)std::floor(side * r / cutoff), 2 * r + 1);
+  }
+
+  //
+  // The largest usable stencil radius, up to maxR.
+  //
+  // A bigger radius means smaller cells, and smaller cells mean the stencil
+  // encloses less dead volume: at 10K box 0 (70 A, cutoff 12) radius 1 gives
+  // 14 A cells whose 27-cell stencil encloses 74,088 A^3 to find pairs inside
+  // 7,238 A^3 -- measured, 10.03% of candidates survive. Radius 2 gives 6.36 A
+  // cells and a 125-cell stencil of 32,186 A^3, about 22%.
+  //
+  // It is not free: finer cells hold fewer atoms, so the contiguous runs that
+  // pass 1 vectorises over get shorter and the per-range overhead is paid more
+  // often. Which way that trades is measured, not assumed.
+  //
+  static int ChooseStencilRadius(const double sx, const double sy,
+                                 const double sz, const double cutoff,
+                                 const int maxR) {
+    // A box that is already degenerate at radius 1 -- grid clamped to 3 per
+    // edge -- is left alone. CalculateEnergy bypasses the cell list entirely
+    // for those (StencilCoversBox), and refining one just scatters a handful
+    // of atoms over hundreds of mostly empty cells: 10K box 1 is 24 molecules
+    // in a 300 A box, which radius 2 would spread over 216 cells and then
+    // walk 125 ranges per atom to find nothing.
+    if ((int)std::floor(sx / cutoff) <= 3 && (int)std::floor(sy / cutoff) <= 3 &&
+        (int)std::floor(sz / cutoff) <= 3)
+      return 1;
+    for (int r = maxR; r > 1; --r) {
+      const int need = 2 * r + 1;
+      if ((int)std::floor(sx * r / cutoff) >= need &&
+          (int)std::floor(sy * r / cutoff) >= need &&
+          (int)std::floor(sz * r / cutoff) >= need)
+        return r;
+    }
+    return 1;
+  }
+
+  //! Cells in this box's stencil. Equal to CellsInBox when the stencil covers
+  //! the whole box, which is the case CalculateEnergy bypasses the cell list
+  //! for entirely.
+  int StencilCells(int box) const { return (int)neighbors[box][0].size(); }
 
   explicit CellList(const Molecules &mols, BoxDimensions &dims);
   CellList(const CellList &other);
@@ -106,6 +185,7 @@ private:
 
   XYZ cellSize[BOX_TOTAL];
   int edgeCells[BOX_TOTAL][3];
+  int stencilRadius[BOX_TOTAL] = {};
   const Molecules *mols;
   BoxDimensions *dimensions;
   double cutoff[BOX_TOTAL];

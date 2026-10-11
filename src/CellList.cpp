@@ -142,18 +142,23 @@ void CellList::ResizeGrid(const BoxDimensions &dims) {
     XYZ sides = dims.axis[b];
     bool rebuild = false;
     int *eCells = edgeCells[b];
+    const int oldR = stencilRadius[b];
+    stencilRadius[b] = ChooseStencilRadius(sides.x, sides.y, sides.z,
+                                           cutoff[b], GOMC_CELL_REFINE);
+    rebuild |= (oldR != stencilRadius[b]);
+    const int r = stencilRadius[b];
     int oldCells = eCells[0];
-    eCells[0] = EdgeCellsFor(sides.x, cutoff[b]);
+    eCells[0] = EdgeCellsFor(sides.x, cutoff[b], r);
     cellSize[b].x = sides.x / eCells[0];
     rebuild |= (!isBuilt || (oldCells != eCells[0]));
 
     oldCells = eCells[1];
-    eCells[1] = EdgeCellsFor(sides.y, cutoff[b]);
+    eCells[1] = EdgeCellsFor(sides.y, cutoff[b], r);
     cellSize[b].y = sides.y / eCells[1];
     rebuild |= (!isBuilt || (oldCells != eCells[1]));
 
     oldCells = eCells[2];
-    eCells[2] = EdgeCellsFor(sides.z, cutoff[b]);
+    eCells[2] = EdgeCellsFor(sides.z, cutoff[b], r);
     cellSize[b].z = sides.z / eCells[2];
     rebuild |= (!isBuilt || (oldCells != eCells[2]));
 
@@ -169,18 +174,23 @@ void CellList::ResizeGridBox(const BoxDimensions &dims, const uint b) {
   XYZ sides = dims.axis[b];
   bool rebuild = false;
   int *eCells = edgeCells[b];
+  const int oldR = stencilRadius[b];
+  stencilRadius[b] = ChooseStencilRadius(sides.x, sides.y, sides.z, cutoff[b],
+                                         GOMC_CELL_REFINE);
+  rebuild |= (oldR != stencilRadius[b]);
+  const int r = stencilRadius[b];
   int oldCells = eCells[0];
-  eCells[0] = EdgeCellsFor(sides.x, cutoff[b]);
+  eCells[0] = EdgeCellsFor(sides.x, cutoff[b], r);
   cellSize[b].x = sides.x / eCells[0];
   rebuild |= (!isBuilt || (oldCells != eCells[0]));
 
   oldCells = eCells[1];
-  eCells[1] = EdgeCellsFor(sides.y, cutoff[b]);
+  eCells[1] = EdgeCellsFor(sides.y, cutoff[b], r);
   cellSize[b].y = sides.y / eCells[1];
   rebuild |= (!isBuilt || (oldCells != eCells[1]));
 
   oldCells = eCells[2];
-  eCells[2] = EdgeCellsFor(sides.z, cutoff[b]);
+  eCells[2] = EdgeCellsFor(sides.z, cutoff[b], r);
   cellSize[b].z = sides.z / eCells[2];
   rebuild |= (!isBuilt || (oldCells != eCells[2]));
 
@@ -193,6 +203,7 @@ void CellList::ResizeGridBox(const BoxDimensions &dims, const uint b) {
 
 void CellList::RebuildNeighbors(int b) {
   int *eCells = edgeCells[b];
+  const int r = stencilRadius[b] > 0 ? stencilRadius[b] : 1;
   int nCells = eCells[0] * eCells[1] * eCells[2];
   head[b].resize(nCells);
   neighbors[b].resize(nCells);
@@ -204,9 +215,9 @@ void CellList::RebuildNeighbors(int b) {
     for (int y = 0; y < eCells[1]; ++y) {
       for (int z = 0; z < eCells[2]; ++z) {
         int cell = x * eCells[2] * eCells[1] + y * eCells[2] + z;
-        for (int dx = -1; dx <= 1; ++dx) {
-          for (int dy = -1; dy <= 1; ++dy) {
-            for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -r; dx <= r; ++dx) {
+          for (int dy = -r; dy <= r; ++dy) {
+            for (int dz = -r; dz <= r; ++dz) {
               // Cache adjacent cells, wrapping if needed
               neighbors[b][cell].push_back(
                   ((x + dx + eCells[0]) % eCells[0]) * eCells[2] * eCells[1] +
