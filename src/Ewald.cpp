@@ -343,9 +343,13 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     // coordinates. We also track the number of charged atoms per molecule
     // (molLengths) so that we can accumulate structure factors on a per-molecule
     // basis later, avoiding catastrophic cancellation issues.
-    std::vector<XYZ> flatCoords;
-    std::vector<double> flatCharges;
-    std::vector<uint> molLengths;
+    // Members, cleared rather than constructed; see Ewald.h.
+    std::vector<XYZ> &flatCoords = flatCoordsBuf;
+    std::vector<double> &flatCharges = flatChargesBuf;
+    std::vector<uint> &molLengths = molLengthsBuf;
+    flatCoords.clear();
+    flatCharges.clear();
+    molLengths.clear();
 
     thisMol = molLookup.BoxBegin(box);
     while (thisMol != end) {
@@ -370,10 +374,18 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     int kmax_val = kmax[box];
     int cacheSize = numFlatAtoms * (kmax_val + 1);
 
-    // Create 1D Caches for all atoms
-    std::vector<double> cos_x(cacheSize), sin_x(cacheSize);
-    std::vector<double> cos_y(cacheSize), sin_y(cacheSize);
-    std::vector<double> cos_z(cacheSize), sin_z(cacheSize);
+    // Create 1D Caches for all atoms. Members that only grow; see Ewald.h.
+    if ((int)trigCosX.size() < cacheSize) {
+      trigCosX.resize(cacheSize);
+      trigSinX.resize(cacheSize);
+      trigCosY.resize(cacheSize);
+      trigSinY.resize(cacheSize);
+      trigCosZ.resize(cacheSize);
+      trigSinZ.resize(cacheSize);
+    }
+    std::vector<double> &cos_x = trigCosX, &sin_x = trigSinX;
+    std::vector<double> &cos_y = trigCosY, &sin_y = trigSinY;
+    std::vector<double> &cos_z = trigCosZ, &sin_z = trigSinZ;
 
     XYZ b1 = b1_vec[box];
     XYZ b2 = b2_vec[box];
@@ -510,9 +522,13 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     // coordinates. We also track the number of charged atoms per molecule
     // (molLengths) so that we can accumulate structure factors on a per-molecule
     // basis later, avoiding catastrophic cancellation issues.
-    std::vector<XYZ> flatCoords;
-    std::vector<double> flatCharges;
-    std::vector<uint> molLengths;
+    // Members, cleared rather than constructed; see Ewald.h.
+    std::vector<XYZ> &flatCoords = flatCoordsBuf;
+    std::vector<double> &flatCharges = flatChargesBuf;
+    std::vector<uint> &molLengths = molLengthsBuf;
+    flatCoords.clear();
+    flatCharges.clear();
+    molLengths.clear();
 
     thisMol = molLookup.BoxBegin(box);
     while (thisMol != end) {
@@ -536,10 +552,18 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     int kmax_val = kmax[box];
     int cacheSize = numFlatAtoms * (kmax_val + 1);
 
-    // Create 1D Caches for all atoms
-    std::vector<double> cos_x(cacheSize), sin_x(cacheSize);
-    std::vector<double> cos_y(cacheSize), sin_y(cacheSize);
-    std::vector<double> cos_z(cacheSize), sin_z(cacheSize);
+    // Create 1D Caches for all atoms. Members that only grow; see Ewald.h.
+    if ((int)trigCosX.size() < cacheSize) {
+      trigCosX.resize(cacheSize);
+      trigSinX.resize(cacheSize);
+      trigCosY.resize(cacheSize);
+      trigSinY.resize(cacheSize);
+      trigCosZ.resize(cacheSize);
+      trigSinZ.resize(cacheSize);
+    }
+    std::vector<double> &cos_x = trigCosX, &sin_x = trigSinX;
+    std::vector<double> &cos_y = trigCosY, &sin_y = trigSinY;
+    std::vector<double> &cos_z = trigCosZ, &sin_z = trigSinZ;
 
     XYZ b1 = b1_vecRef[box];
     XYZ b2 = b2_vecRef[box];

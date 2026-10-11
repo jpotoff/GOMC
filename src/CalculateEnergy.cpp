@@ -230,6 +230,52 @@ bool CalculateEnergy::StencilCoversBox(const uint box) const {
 //
 int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
                                     const uint box) const {
+  // Reuse the previous pack when nothing it depends on has changed. The
+  // profile showed CBMC rebuilding an identical pack three times per swap
+  // move -- DCFreeHedron::BuildOld, BuildNew and DCSingle::BuildNew -- with no
+  // cell-list mutation in between, and this walk is a serial pointer chase
+  // that idles every worker at the fork barrier while it runs.
+  //
+  // Two guards, both load-bearing:
+  //
+  //  - `&coords == &currentCoords`. BoxInter passes newMolsPos during a volume
+  //    move: different coordinates, same cell-list version. Caching that would
+  //    hand back a pack built from the wrong positions. Volume moves rebuild
+  //    unconditionally, which is free -- once per move against an O(N^2) walk.
+  //  - `box`. Otherwise box 0's pack gets returned for box 1.
+  //
+  // The invariant this rests on is that coordinates never change without a
+  // cell-list mutation following. Accept paths do `CopyRange` then `AddMol`,
+  // and nothing reads the pack in between. Get that wrong and the result is
+  // silently wrong energies rather than a crash, so the debug check below
+  // recomputes and compares.
+  const bool cacheable = (&coords == &currentCoords);
+  if (cacheable && boxPackValid && boxPackBox == box &&
+      boxPackVersion == cellList.Version()) {
+#ifndef NDEBUG
+    // Compare contents, not just the count: a coordinate change with no
+    // cell-list mutation would leave the count intact and the positions stale,
+    // which is exactly the failure this cache can have.
+    const int cached = boxPackCount;
+    const std::vector<double> prevX(boxPackX.begin(), boxPackX.begin() + cached);
+    const std::vector<double> prevY(boxPackY.begin(), boxPackY.begin() + cached);
+    const std::vector<double> prevZ(boxPackZ.begin(), boxPackZ.begin() + cached);
+    const std::vector<int> prevMol(boxPackMol.begin(),
+                                   boxPackMol.begin() + cached);
+    boxPackValid = false;
+    const int fresh = BuildBoxPacked(coords, box);
+    assert(fresh == cached && "BuildBoxPacked cache stale: atom count changed "
+                              "without a CellList::version bump");
+    for (int chk = 0; chk < cached; ++chk) {
+      assert(prevX[chk] == boxPackX[chk] && prevY[chk] == boxPackY[chk] &&
+             prevZ[chk] == boxPackZ[chk] && prevMol[chk] == boxPackMol[chk] &&
+             "BuildBoxPacked cache stale: contents changed without a "
+             "CellList::version bump");
+    }
+#endif
+    return boxPackCount;
+  }
+
   const int cap = (int)coords.Count();
   if ((int)boxPackX.size() < cap) {
     boxPackX.resize(cap);
@@ -253,6 +299,10 @@ int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
     ++n;
     it.Next();
   }
+  boxPackValid = cacheable;
+  boxPackBox = box;
+  boxPackVersion = cellList.Version();
+  boxPackCount = n;
   return n;
 }
 

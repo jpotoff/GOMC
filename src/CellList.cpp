@@ -80,6 +80,7 @@ bool CellList::IsExhaustive() const {
 
 void CellList::RemoveMol(const int molIndex, const int box,
                          const XYZArray &pos) {
+  ++version;
   // For each atom in molecule
   int p = mols->MolStart(molIndex);
   int end = mols->MolEnd(molIndex);
@@ -110,6 +111,7 @@ void CellList::RemoveMol(const int molIndex, const int box,
 }
 
 void CellList::AddMol(const int molIndex, const int box, const XYZArray &pos) {
+  ++version;
   // For each atom in molecule
   int p = mols->MolStart(molIndex);
   int end = mols->MolEnd(molIndex);
@@ -220,6 +222,7 @@ void CellList::RebuildNeighbors(int b) {
 void CellList::GridAll(BoxDimensions &dims, const XYZArray &pos,
                        const MoleculeLookup &lookup) {
   dimensions = &dims;
+  ++version;
   list.resize(pos.Count());
   ResizeGrid(dims);
   for (int b = 0; b < BOX_TOTAL; ++b) {
@@ -239,6 +242,7 @@ void CellList::GridAll(BoxDimensions &dims, const XYZArray &pos,
 void CellList::GridBox(BoxDimensions &dims, const XYZArray &pos,
                        const MoleculeLookup &lookup, const uint b) {
   dimensions = &dims;
+  ++version;
   list.resize(pos.Count());
   ResizeGridBox(dims, b);
   head[b].assign(edgeCells[b][0] * edgeCells[b][1] * edgeCells[b][2], END_CELL);

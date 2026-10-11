@@ -384,6 +384,13 @@ private:
   // before the trial loop's parallel region and only read inside it.
   mutable std::vector<double> boxPackX, boxPackY, boxPackZ, boxPackCharge;
   mutable std::vector<int> boxPackKind, boxPackMol;
+
+  // Cache state for BuildBoxPacked. See the comment on it in the .cpp for why
+  // the coords-pointer guard matters.
+  mutable bool boxPackValid = false;
+  mutable uint boxPackBox = 0;
+  mutable unsigned boxPackVersion = 0;
+  mutable int boxPackCount = 0;
   const MoleculeLookup &molLookup;
   const BoxDimensions &currentAxes;
   const CellList &cellList;

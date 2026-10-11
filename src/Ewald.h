@@ -182,6 +182,21 @@ private:
   double currentEnergyRecip[BOXES_WITH_U_NB];
 
 protected:
+  //! Scratch for BoxReciprocalSetup / BoxReciprocalSums. Members rather than
+  //! locals because `std::vector<double> v(n)` value-initialises: the six trig
+  //! caches were 32 MB of zeroing per call at 10,000 molecules -- immediately
+  //! overwritten by build_tiny_cache -- plus the page faults for 32 MB of
+  //! fresh pages, all of it on the master thread with every worker blocked at
+  //! the fork barrier. The profile showed it as __intel_avx_rep_memset.
+  //! These only ever grow, and the flat* buffers are clear()ed so they keep
+  //! their capacity and the push_back loops stop reallocating.
+  //! Both functions run on the master thread only, so sharing is safe.
+  std::vector<double> trigCosX, trigSinX, trigCosY, trigSinY, trigCosZ,
+      trigSinZ;
+  std::vector<XYZ> flatCoordsBuf;
+  std::vector<double> flatChargesBuf;
+  std::vector<uint> molLengthsBuf;
+
   const Forcefield &ff;
   const Molecules &mols;
   const Coordinates &currentCoords;

@@ -55,6 +55,13 @@ public:
 
   int CellsInBox(int box) const { return head[box].size(); }
 
+  //! Bumped by every mutator below. Lets a consumer cache something derived
+  //! from the list contents and know when it went stale. Private setter by
+  //! design: the increments live inside AddMol/RemoveMol/GridAll/GridBox so a
+  //! caller cannot forget one. A missed bump gives silently wrong energies,
+  //! not a crash, so nothing outside this class may touch it.
+  unsigned Version() const { return version; }
+
   // true if every particle is a member of exactly one cell
   bool IsExhaustive() const;
 
@@ -69,6 +76,7 @@ public:
 
 private:
   static const int END_CELL = -1;
+  unsigned version = 0;
 
   // Resize all boxes to match current axes
   void ResizeGrid(const BoxDimensions &dims);
