@@ -10,14 +10,12 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <cassert>
 
 // Target working set for one atom block of the reciprocal contraction, in
-// bytes. The k-vector sweep touches six trig rows per k-vector; unblocked that
-// is 6 * numFlatAtoms * 8 bytes re-read for every one of ~36,000 k-vectors --
-// 51 GB per call at 10,000 molecules, at an arithmetic intensity of 0.33
-// flop/byte, i.e. hard bandwidth bound. Tiling the ATOM loop outside the k
-// loop keeps one block's rows resident while every k-vector sweeps them. L2 is
-// per-core, so this is sized well under it to leave room for the streamed
-// accumulators.
+// bytes; 0 disables blocking entirely. Set from CMake via
+// -DGOMC_RECIP_BLOCKING=off, which reproduces the pre-blocking summation order
+// bit for bit at the cost of the speedup. See CMakeLists.txt.
+#ifndef GOMC_RECIP_BLOCK_BYTES
 #define GOMC_RECIP_BLOCK_BYTES (256 * 1024)
+#endif
 
 #include "BasicTypes.h" //uint
 #include "BoxDimensions.h"
@@ -409,7 +407,8 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     // sumRnew/sumInew were memset to zero above, so blocks accumulate with +=.
     const int recipRowBytes = 6 * (kmax_val + 1) * 8;
     int atomBlock = numFlatAtoms;
-    if ((long)recipRowBytes * numFlatAtoms > GOMC_RECIP_BLOCK_BYTES)
+    if (GOMC_RECIP_BLOCK_BYTES > 0 &&
+        (long)recipRowBytes * numFlatAtoms > GOMC_RECIP_BLOCK_BYTES)
       atomBlock = std::max(64, GOMC_RECIP_BLOCK_BYTES / recipRowBytes);
 
     for (int jBlock = 0; jBlock < numFlatAtoms; jBlock += atomBlock) {
@@ -597,7 +596,8 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     // sumRnew/sumInew were memset to zero above, so blocks accumulate with +=.
     const int recipRowBytes = 6 * (kmax_val + 1) * 8;
     int atomBlock = numFlatAtoms;
-    if ((long)recipRowBytes * numFlatAtoms > GOMC_RECIP_BLOCK_BYTES)
+    if (GOMC_RECIP_BLOCK_BYTES > 0 &&
+        (long)recipRowBytes * numFlatAtoms > GOMC_RECIP_BLOCK_BYTES)
       atomBlock = std::max(64, GOMC_RECIP_BLOCK_BYTES / recipRowBytes);
 
     for (int jBlock = 0; jBlock < numFlatAtoms; jBlock += atomBlock) {

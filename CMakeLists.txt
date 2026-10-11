@@ -178,6 +178,31 @@ include(${PROJECT_SOURCE_DIR}/CMake/FileLists.cmake)
 option(GOMC_GTEST    "Build unit tests for GOMC" OFF)
 option(GOMC_GTEST_MPI    "Build unit tests for GOMC - MPI Enabled" OFF)
 
+# GOMC_RECIP_BLOCKING tiles the atom loop of the Ewald reciprocal sum so that
+# one block of the trig cache stays resident in L2 while every k-vector sweeps
+# it. Without it the sum re-reads six rows of numFlatAtoms doubles for each of
+# the ~36,000 k-vectors -- 51 GB of traffic per call on a 10,000 molecule box,
+# at 0.33 flop/byte -- and the loop stalls on memory. Measured 1.24x on the
+# whole GEMC run at that size.
+#
+# It changes the ORDER in which the reciprocal sum is accumulated. Energies
+# therefore differ in the last few digits, and a long Monte Carlo run will
+# eventually diverge from a trajectory produced without it. The physics is
+# unaffected; what you lose is bitwise reproducibility against older runs.
+#
+# Turn it off to reproduce pre-blocking trajectories exactly:
+#
+#   cmake .. -DGOMC_RECIP_BLOCKING=off
+#
+option(GOMC_RECIP_BLOCKING
+       "Cache-block the Ewald reciprocal sum (faster; changes summation order)"
+       ON)
+if(NOT GOMC_RECIP_BLOCKING)
+   message(STATUS "GOMC_RECIP_BLOCKING=off: Ewald reciprocal sum will not be "
+                  "cache-blocked, reproducing pre-blocking summation order")
+   add_definitions(-DGOMC_RECIP_BLOCK_BYTES=0)
+endif()
+
 # Enable config header
 configure_file(
     "${PROJECT_SOURCE_DIR}/GOMC_Config.h.in"
