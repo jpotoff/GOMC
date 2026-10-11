@@ -119,6 +119,40 @@ struct FFAdapter : public FFParticle {
     return CoulKernel(distSq, qi_qj_Fact, b);
   }
 
+  //! Whether the fixed-exponent path below exists for this forcefield.
+  static constexpr bool kHasFixedExp = VdwEval::kHasFixedExp;
+
+  //
+  // In-range vdW energy with the Mie exponent as a template parameter. Reached
+  // only when every pair kind shares one integer exponent
+  // (FFParticle::nExpUniform), which is what lets the caller hoist the
+  // dispatch out of the pair loop. Arithmetic is unchanged.
+  //
+  template <uint NEXP>
+  double CalcEnFullInRangeFixed(const double distSq, const uint kind1,
+                                const uint kind2) const {
+    return VdwEval::template EnergyFixed<NEXP>(Self().VdwView(), distSq,
+                                               FlatIndex(kind1, kind2));
+  }
+
+  //
+  // The same, against a parameter view the caller already built.
+  //
+  // VdwView() value-initialises a ~25 member struct (FFParticle.h), which the
+  // compiler emits as memsets. One per pair is invisible in a scalar loop and
+  // fatal in a vector one: GCC reports "statement clobbers memory" and gives
+  // up on the loop. Hoisting the view to the caller is the difference between
+  // this loop vectorising and not.
+  //
+  // KindCount() is exposed for the same reason -- it lets the caller lift the
+  // flat-index arithmetic out of the body too.
+  //
+  template <uint NEXP>
+  double CalcEnFixedAt(const ff::VdwParams &p, const double distSq,
+                       const uint idx) const {
+    return VdwEval::template EnergyFixed<NEXP>(p, distSq, idx);
+  }
+
   void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
                    const uint kind2) const override {
     if (forcefield.rCutSq < distSq)

@@ -92,6 +92,13 @@ struct MieCore {
                                      const uint i) {
     return MiePair(p.sigmaSq[i] / distSq, p.nExp[i], p.n[i]);
   }
+
+  //! Same, with the exponent a compile-time constant; see MiePairFixed.
+  template <uint NEXP>
+  GOMC_HOSTDEV static MieTerms TermsFixed(const VdwParams &p,
+                                          const double distSq, const uint i) {
+    return MiePairFixed<NEXP>(p.sigmaSq[i] / distSq);
+  }
 };
 
 // ---------------------------------------------------------- truncations ----
@@ -162,9 +169,25 @@ struct SwitchVir {
 // ------------------------------------------------------------ composition --
 
 template <class Core, class Trunc, class Vir> struct PairEval {
+  //! Whether EnergyFixed below is worth dispatching to; see FFParticle.
+  static constexpr bool kHasFixedExp = true;
+
   GOMC_HOSTDEV static double Energy(const VdwParams &p, const double distSq,
                                     const uint i) {
     return Trunc::Energy(p, Core::Terms(p, distSq, i), distSq, i);
+  }
+
+  //
+  // Energy with the Mie exponent fixed at compile time. Only the truncation
+  // varies between the three Mie forcefields and none of them reads nExp, so
+  // this is the plain Energy with the core's runtime exponent dispatch folded
+  // away. Identical arithmetic -- see MiePairFixed.
+  //
+  template <uint NEXP>
+  GOMC_HOSTDEV static double EnergyFixed(const VdwParams &p,
+                                         const double distSq, const uint i) {
+    return Trunc::Energy(p, Core::template TermsFixed<NEXP>(p, distSq, i),
+                         distSq, i);
   }
   GOMC_HOSTDEV static double Virial(const VdwParams &p, const double distSq,
                                     const uint i) {
@@ -183,6 +206,9 @@ typedef PairEval<MieCore, SwitchTrunc, SwitchVir> MieSwitch; //!< VDW_SWITCH
 // shift, so it is not a truncation of the plain form.
 //
 struct MartiniEval {
+  //! No compile-time-exponent form; callers keep the ordinary Energy.
+  static constexpr bool kHasFixedExp = false;
+
   GOMC_HOSTDEV static double Energy(const VdwParams &p, const double distSq,
                                     const uint i) {
     const double r_2 = 1.0 / distSq;
@@ -244,6 +270,9 @@ struct MartiniEval {
 // `n` carries alpha here.
 //
 struct Exp6Eval {
+  //! No compile-time-exponent form; callers keep the ordinary Energy.
+  static constexpr bool kHasFixedExp = false;
+
   GOMC_HOSTDEV static double Energy(const VdwParams &p, const double distSq,
                                     const uint i) {
     const double dist = sqrt(distSq);

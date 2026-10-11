@@ -43,6 +43,73 @@ A copy of the MIT License can be found in License.txt with this program or at
 #define GOMC_DISTSQ_CHUNK 256
 
 //
+// The dense van der Waals run of pass 3, with the Mie exponent fixed at
+// compile time.
+//
+// Hoisting the exponent out of the pair loop is what makes this body
+// straight-line: num::POW's 26-case switch folds to a couple of multiplies and
+// the out-of-line MieRepulseSlow call disappears, taking with it both the
+// data-dependent branch and the memory clobber that forced every forcefield
+// pointer to be reloaded on the next iteration.
+//
+// The local accumulator and the simd reduction are what this is for, and they
+// are ALSO the one thing here that changes results: a vector reduction sums
+// lane-wise and combines at the end, so the pairs are added in a different
+// order than the scalar loop used. Values agree to rounding, not to the bit.
+// Everything else in the fixed-exponent path is bit-for-bit -- see
+// MiePairFixed -- so if a trajectory ever has to be explained, this pragma is
+// the only thing in step 2 that could have moved it.
+//
+template <uint NEXP, typename FFType>
+static inline void MieVdwRunFixed(const FFType &ff, const double *vDistSq,
+                                  const int *vKind, const int nv,
+                                  const uint currKind, double &en) {
+  // Both of these are loop invariant and both have to be lifted by hand: the
+  // parameter view because building it emits memsets that stop the loop
+  // vectorising outright, the kind stride because it otherwise stays a load
+  // off the forcefield object inside the body.
+  const ff::VdwParams vp = ff.VdwView();
+  const uint stride = ff.KindCount();
+  double acc = 0.0;
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : acc)
+#endif
+  for (int s = 0; s < nv; s++)
+    acc += ff.template CalcEnFixedAt<NEXP>(vp, vDistSq[s],
+                                           currKind + (uint)vKind[s] * stride);
+  en += acc;
+}
+
+//
+// Pick the specialisation for a uniform exponent. Runs once per chunk, not
+// once per pair; returns false when the exponent is not one of the listed
+// ones, and the caller keeps the runtime path.
+//
+// The set is the exponents that actually occur rather than all of
+// [MIE_EXP_MIN, MIE_EXP_MAX]: 12 for Lennard-Jones and the water models, 16
+// for the Potoff Mie force fields. Each entry is another instantiation of the
+// loop above, so adding one is a line here but is not free. Systems with mixed
+// integer exponents never reach this at all -- FFParticle::nExpUniform is
+// false for them -- and want the pair list partitioned by exponent instead.
+//
+template <typename FFType>
+static inline bool MieVdwDispatch(const FFType &ff, const double *vDistSq,
+                                  const int *vKind, const int nv,
+                                  const uint currKind, const uint nExp,
+                                  double &en) {
+  switch (nExp) {
+  case 12:
+    MieVdwRunFixed<12>(ff, vDistSq, vKind, nv, currKind, en);
+    return true;
+  case 16:
+    MieVdwRunFixed<16>(ff, vDistSq, vKind, nv, currKind, en);
+    return true;
+  default:
+    return false;
+  }
+}
+
+//
 //    CalculateEnergy.cpp
 //    Energy Calculation functions for Monte Carlo simulation
 //    Calculates using const references to a particular Simulation's members
@@ -512,14 +579,23 @@ void CalculateEnergy::BoxInterTemplate(
             }
           }
         }
-        for (int s = 0; s < nv; s++) {
-          if constexpr (HasLambda) {
+        if constexpr (HasLambda) {
+          for (int s = 0; s < nv; s++) {
             const double lambdaVDW =
                 (currMol == fracMol || vMol[s] == fracMol) ? fracVDW : 1.0;
             tempLJEn +=
                 ff.FFType::CalcEn(vDistSq[s], currKind, vKind[s], lambdaVDW);
-          } else {
-            tempLJEn += ff.CalcEnFullInRange(vDistSq[s], currKind, vKind[s]);
+          }
+        } else {
+          bool fixed = false;
+          if constexpr (FFType::kHasFixedExp) {
+            if (ff.nExpUniform)
+              fixed = MieVdwDispatch(ff, vDistSq, vKind, nv, currKind,
+                                     ff.nExpValue, tempLJEn);
+          }
+          if (!fixed) {
+            for (int s = 0; s < nv; s++)
+              tempLJEn += ff.CalcEnFullInRange(vDistSq[s], currKind, vKind[s]);
           }
         }
       }
@@ -696,15 +772,24 @@ void CalculateEnergy::BoxInterTemplate(
             }
           }
         }
-        for (int sIdx = 0; sIdx < nv; sIdx++) {
-          if constexpr (HasLambda) {
+        if constexpr (HasLambda) {
+          for (int sIdx = 0; sIdx < nv; sIdx++) {
             const double lambdaVDW =
                 (currMol == fracMol || vMol[sIdx] == fracMol) ? fracVDW : 1.0;
             tempLJEn += ff.FFType::CalcEn(vDistSq[sIdx], currKind, vKind[sIdx],
                                           lambdaVDW);
-          } else {
-            tempLJEn +=
-                ff.CalcEnFullInRange(vDistSq[sIdx], currKind, vKind[sIdx]);
+          }
+        } else {
+          bool fixed = false;
+          if constexpr (FFType::kHasFixedExp) {
+            if (ff.nExpUniform)
+              fixed = MieVdwDispatch(ff, vDistSq, vKind, nv, currKind,
+                                     ff.nExpValue, tempLJEn);
+          }
+          if (!fixed) {
+            for (int sIdx = 0; sIdx < nv; sIdx++)
+              tempLJEn +=
+                  ff.CalcEnFullInRange(vDistSq[sIdx], currKind, vKind[sIdx]);
           }
         }
       }

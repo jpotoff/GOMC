@@ -88,6 +88,8 @@ void FFParticle::Init(ff_setup::Particle const &mie,
   Blend(mie);
   // Adjusting VDW parameter using NBFIX
   AdjNBfix(nbfix);
+  // Both of the above write nExp, so classify only once they are done.
+  ClassifyExponents();
 
 #ifdef GOMC_CUDA
   double diElectric_1 = 1.0 / forcefield.dielectric;
@@ -155,6 +157,40 @@ double FFParticle::ImpulsePressureCorrection(const uint kind1,
       2.0 * M_PI * epsilon_cn[idx] * forcefield.rCutSq * forcefield.rCut;
   tailCorrection *= (pow(rRat, N) - pow(rRat, 6.0));
   return tailCorrection;
+}
+
+//
+// Decide whether the Mie exponent is uniform across every pair kind.
+//
+// NBFIX can give a single pair its own n, and MeanA mixing gives a cross term
+// (n_i + n_j)/2 -- an integer only when the two parents share parity -- so
+// neither "one kind, one exponent" nor "all exponents integral" can be assumed
+// from the parameter file alone. Anything but a clean sweep leaves the
+// runtime path in place.
+//
+void FFParticle::ClassifyExponents() {
+  nExpUniform = false;
+  nExpValue = 0;
+  const uint size = count * count;
+  if (size == 0 || nExp == NULL)
+    return;
+  const uint first = nExp[0];
+  if (first == ff::MIE_EXP_NOT_INTEGER) {
+    printf("Info: Mie exponents are not all integers; using the general vdW "
+           "kernel\n");
+    return;
+  }
+  for (uint i = 1; i < size; ++i)
+    if (nExp[i] != first) {
+      printf("Info: Mie exponents differ between pair kinds; using the "
+             "general vdW kernel\n");
+      return;
+    }
+  nExpUniform = true;
+  nExpValue = first;
+  printf("Info: Mie exponent is %u for every pair kind; using the "
+         "fixed-exponent vdW kernel\n",
+         nExpValue);
 }
 
 void FFParticle::Blend(ff_setup::Particle const &mie) {

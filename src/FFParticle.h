@@ -130,7 +130,28 @@ public:
   //! Parameter view for the electrostatic evaluators.
   ff::CoulParams CoulView(const uint b) const;
 
+  //
+  // Whether every pair kind shares one usable integer Mie exponent, and what
+  // it is. Set once at the end of Init, after Blend and AdjNBfix have both had
+  // their say about nExp. Public because the energy kernels read them to pick
+  // a specialisation; see CalculateEnergy's pass 3.
+  //
+  // This is the predicate to dispatch on, rather than "nExp == 12": a uniform
+  // 16 (the Potoff force fields) vectorises exactly as well as a uniform 12,
+  // and testing for 12 would quietly exclude it. Mixed integer exponents and
+  // the non-integer case keep the runtime path -- see the note on
+  // MIE_EXP_NOT_INTEGER in MiePotential.h.
+  //
+  bool nExpUniform = false;
+  uint nExpValue = 0;
+
+  //! Number of particle kinds; the stride of the flat pair-parameter arrays.
+  //! Public so callers can hoist FlatIndex out of a vectorised pair loop.
+  uint KindCount() const { return count; }
+
 protected:
+  void ClassifyExponents();
+
   virtual double CalcEn(const double distSq, const uint index) const = 0;
   virtual double CalcVir(const double distSq, const uint index) const = 0;
   virtual double CalcCoulomb(const double distSq, const double qi_qj_Fact,
@@ -174,11 +195,26 @@ inline ff::CoulParams FFParticle::CoulView(const uint b) const {
   return c;
 }
 
+//
+// Every member is assigned, none left to value-initialisation.
+//
+// `ff::VdwParams p = {}` looks harmless and is not: the struct is ~176 bytes,
+// so the compiler emits memsets for the fields the function does not go on to
+// set. Inside a vectorised pair loop GCC reports those as "statement clobbers
+// memory" and abandons the loop. The cost is invisible anywhere else, which is
+// why it survived -- but a caller that hoists this out of a loop pays it once
+// and a caller that does not pays it per pair.
+//
 inline ff::VdwParams FFParticle::VdwView() const {
-  ff::VdwParams p = {};   // value-initialised; evaluators read a subset
+  ff::VdwParams p;
   p.sigmaSq = sigmaSq; p.epsilon_cn = epsilon_cn; p.n = n; p.nExp = nExp;
   p.epsilon_cn_6 = epsilon_cn_6; p.nOver6 = nOver6;
+  p.shiftConst = NULL;
   p.rCutSq = forcefield.rCutSq;
+  p.rOnSq = 0.0; p.factor1 = 0.0; p.factor2 = 0.0;
+  p.An = NULL; p.Bn = NULL; p.Cn = NULL; p.sig6 = NULL; p.sign = NULL;
+  p.A6 = 0.0; p.B6 = 0.0; p.C6 = 0.0; p.rOn = 0.0;
+  p.expConst = NULL; p.rMin = NULL;
   return p;
   }
   //! Same, over the 1-4 parameter set.

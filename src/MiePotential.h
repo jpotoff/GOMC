@@ -126,6 +126,31 @@ GOMC_HOSTDEV GOMC_FORCEINLINE MieTerms MiePair(const double rRat2,
 }
 
 //
+// MiePair with the exponent fixed at compile time.
+//
+// Same arithmetic, reached without the runtime tests: `nExp == 12` folds, and
+// num::POW's 26-case switch folds to two or three multiplies (plus a sqrt for
+// an odd exponent). Both of those are what stop the caller's pair loop from
+// vectorising -- the switch is a data-dependent indirect branch, and the
+// nExp != 12 arm calls MieRepulseSlow, which is deliberately out of line and
+// so is a full memory clobber in the middle of the loop body.
+//
+// The grouping is num::POW's own, not a re-derivation, so results are
+// bit-for-bit identical to MiePair for the same exponent. Callers reach this
+// only when every pair kind shares one integer exponent; see
+// FFParticle::nExpUniform.
+//
+template <uint NEXP>
+GOMC_HOSTDEV GOMC_FORCEINLINE MieTerms MiePairFixed(const double rRat2) {
+  const double rRat4 = rRat2 * rRat2;
+  const double attract = rRat4 * rRat2;
+  if constexpr (NEXP == 12)
+    return {attract, attract * attract};
+  else
+    return {attract, num::POW(rRat2, rRat4, attract, NEXP)};
+}
+
+//
 // Soft-core free-energy path.
 //
 // When a molecule is being coupled in or out (lambda < 1) the pair is evaluated
