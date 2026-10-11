@@ -955,84 +955,120 @@ void CalculateEnergy::BoxForceTemplate(
   const double fracCoul =
       hasFraction ? lambdaRef.GetLambdaCoulomb(fracMol, box) : 1.0;
 
+  // Cell-ordered views; see BuildCellOrdered(). Same two-pass shape as
+  // VirialCalcTemplate's cell path: DistVecRange because the force needs the
+  // minimum-image components, not just the length.
+  //
+  // What this replaces walked the neighbour cells calling InRcut per
+  // candidate, which fuses the distance and the cutoff test -- so a branch on
+  // every one -- and reached the coordinates through cellVector, gathering
+  // rather than streaming. Pass 1 now runs over contiguous cell-ordered
+  // coordinates and vectorises.
+  //
+  const double *const ordX = cellOrderX.data();
+  const double *const ordY = cellOrderY.data();
+  const double *const ordZ = cellOrderZ.data();
+  const double *const ordQ = cellOrderCharge.data();
+  const int *const ordMol = cellOrderMol.data();
+  const int *const ordKind = cellOrderKind.data();
+  const int *const ordCell = cellOrderCell.data();
+  const int *const cellVec = cellVector.data();
+  const int *const cellStart = cellStartIndex.data();
+  const int nAtoms = (int)cellVector.size();
+  const double rCutSqBox = boxAxes.rCutSq[box];
+
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none)                                         \
-    shared(boxAxes, cellStartIndex, cellVector, coords, ff,                    \
-               mapParticleToCell, neighborList)                                \
+#pragma omp parallel for default(none) shared(boxAxes, ff, neighborList)       \
     firstprivate(box, atomCount, molCount, num::qqFact, hasFraction, fracMol,  \
-                     fracVDW, fracCoul)                                        \
+                     fracVDW, fracCoul, ordX, ordY, ordZ, ordQ, ordMol,        \
+                     ordKind, ordCell, cellVec, cellStart, nAtoms, rCutSqBox)  \
     reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
                   aForcey[ : atomCount], aForcez[ : atomCount],                \
                   mForcex[ : molCount], mForcey[ : molCount],                  \
                   mForcez[ : molCount])
 #endif
-  for (int currParticleIdx = 0; currParticleIdx < (int)cellVector.size();
-       currParticleIdx++) {
-    int currParticle = cellVector[currParticleIdx];
-    int currMol = particleMol[currParticle];
-    int currCell = mapParticleToCell[currParticle];
+  for (int i = 0; i < nAtoms; i++) {
+    const int currParticle = cellVec[i];
+    const int currMol = ordMol[i];
+    const int currKind = ordKind[i];
+    const double currQ = ordQ[i];
+    const double xi = ordX[i], yi = ordY[i], zi = ordZ[i];
+    const int currCell = ordCell[i];
+
+    // Per thread, 8 KiB, L1-resident.
+    double distSq[GOMC_DISTSQ_CHUNK];
+    double dxs[GOMC_DISTSQ_CHUNK], dys[GOMC_DISTSQ_CHUNK],
+        dzs[GOMC_DISTSQ_CHUNK];
 
     // Not NUMBER_OF_NEIGHBOR_CELL: the stencil radius varies with the cell
-    // grid now, so its size comes from the list itself.
+    // grid, so its size comes from the list itself.
     const int nStencil = (int)neighborList[currCell].size();
     for (int nCellIndex = 0; nCellIndex < nStencil; nCellIndex++) {
-      int neighborCell = neighborList[currCell][nCellIndex];
+      const int neighborCell = neighborList[currCell][nCellIndex];
+      const int endIndex = cellStart[neighborCell + 1];
+      // Slot order, not particle order; see the note in BoxInterTemplate.
+      const int firstIndex = std::max(cellStart[neighborCell], i + 1);
 
-      int endIndex = cellStartIndex[neighborCell + 1];
-      for (int nParticleIndex = cellStartIndex[neighborCell];
-           nParticleIndex < endIndex; nParticleIndex++) {
-        int nParticle = cellVector[nParticleIndex];
-        int nMol = particleMol[nParticle];
+      for (int base = firstIndex; base < endIndex;
+           base += GOMC_DISTSQ_CHUNK) {
+        const int m = std::min(GOMC_DISTSQ_CHUNK, endIndex - base);
 
-        if (currParticle < nParticle && currMol != nMol) {
-          double distSq;
-          XYZ virComponents, forceLJ, forceReal;
-          if (boxAxes.InRcut(distSq, virComponents, coords, currParticle,
-                             nParticle, box)) {
+        // ---- pass 1: contiguous, branch-free, vectorisable ----
+        boxAxes.BoxType::DistVecRange(distSq, dxs, dys, dzs, xi, yi, zi,
+                                      ordX + base, ordY + base, ordZ + base, m,
+                                      box);
 
-            double lambdaVDW = 1.0;
-            double lambdaCoulomb = 1.0;
-            if (hasFraction) {
-              if (currMol == fracMol || nMol == fracMol) {
-                lambdaVDW = fracVDW;
-                lambdaCoulomb = fracCoul;
-              }
+        // ---- pass 2: the pairs that survive ----
+        for (int k = 0; k < m; k++) {
+          const int j = base + k;
+          const int nMol = ordMol[j];
+          if (currMol == nMol)
+            continue;
+          if (!(rCutSqBox > distSq[k]))
+            continue;
+
+          const int nParticle = cellVec[j];
+          const XYZ virComponents(dxs[k], dys[k], dzs[k]);
+          XYZ forceLJ, forceReal;
+
+          double lambdaVDW = 1.0;
+          double lambdaCoulomb = 1.0;
+          if (hasFraction) {
+            if (currMol == fracMol || nMol == fracMol) {
+              lambdaVDW = fracVDW;
+              lambdaCoulomb = fracCoul;
             }
-
-            if (electrostatic) {
-              double qi_qj_fact = particleCharge[currParticle] *
-                                  particleCharge[nParticle] * num::qqFact;
-              if (qi_qj_fact != 0.0) {
-                tempREn += ff.FFType::CalcCoulomb(
-                    distSq, particleKind[currParticle], particleKind[nParticle],
-                    qi_qj_fact, lambdaCoulomb, box);
-                // Calculating the force
-                forceReal =
-                    virComponents * ff.FFType::CalcCoulombVir(
-                                        distSq, particleKind[currParticle],
-                                        particleKind[nParticle], qi_qj_fact,
-                                        lambdaCoulomb, box);
-              }
-            }
-            tempLJEn += ff.FFType::CalcEn(
-                distSq, particleKind[currParticle], particleKind[nParticle],
-                lambdaVDW);
-            forceLJ = virComponents * ff.FFType::CalcVir(
-                                          distSq, particleKind[currParticle],
-                                          particleKind[nParticle], lambdaVDW);
-            aForcex[currParticle] += forceLJ.x + forceReal.x;
-            aForcey[currParticle] += forceLJ.y + forceReal.y;
-            aForcez[currParticle] += forceLJ.z + forceReal.z;
-            aForcex[nParticle] += -(forceLJ.x + forceReal.x);
-            aForcey[nParticle] += -(forceLJ.y + forceReal.y);
-            aForcez[nParticle] += -(forceLJ.z + forceReal.z);
-            mForcex[particleMol[currParticle]] += (forceLJ.x + forceReal.x);
-            mForcey[particleMol[currParticle]] += (forceLJ.y + forceReal.y);
-            mForcez[particleMol[currParticle]] += (forceLJ.z + forceReal.z);
-            mForcex[particleMol[nParticle]] += -(forceLJ.x + forceReal.x);
-            mForcey[particleMol[nParticle]] += -(forceLJ.y + forceReal.y);
-            mForcez[particleMol[nParticle]] += -(forceLJ.z + forceReal.z);
           }
+
+          if (electrostatic) {
+            const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
+            if (qi_qj_fact != 0.0) {
+              tempREn += ff.FFType::CalcCoulomb(distSq[k], currKind, ordKind[j],
+                                                qi_qj_fact, lambdaCoulomb, box);
+              forceReal = virComponents * ff.FFType::CalcCoulombVir(
+                                              distSq[k], currKind, ordKind[j],
+                                              qi_qj_fact, lambdaCoulomb, box);
+            }
+          }
+          tempLJEn +=
+              ff.FFType::CalcEn(distSq[k], currKind, ordKind[j], lambdaVDW);
+          forceLJ = virComponents * ff.FFType::CalcVir(distSq[k], currKind,
+                                                       ordKind[j], lambdaVDW);
+          const double fx = forceLJ.x + forceReal.x;
+          const double fy = forceLJ.y + forceReal.y;
+          const double fz = forceLJ.z + forceReal.z;
+          aForcex[currParticle] += fx;
+          aForcey[currParticle] += fy;
+          aForcez[currParticle] += fz;
+          aForcex[nParticle] -= fx;
+          aForcey[nParticle] -= fy;
+          aForcez[nParticle] -= fz;
+          mForcex[currMol] += fx;
+          mForcey[currMol] += fy;
+          mForcez[currMol] += fz;
+          mForcex[nMol] -= fx;
+          mForcey[nMol] -= fy;
+          mForcez[nMol] -= fz;
         }
       }
     }
@@ -2004,6 +2040,12 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
   cellList.GetCellListNeighbor(box, coords.Count(), cellVector, cellStartIndex,
                                mapParticleToCell);
   neighborList = cellList.GetNeighborList(box);
+#ifndef GOMC_CUDA
+  // Permute the per-atom data into cell order for the pair walk below. This
+  // call is why BoxForceTemplate may read cellOrder*: without it those arrays
+  // would still hold whatever the last BoxInter left there.
+  BuildCellOrdered(coords, cellVector, mapParticleToCell);
+#endif
 
 #ifdef GOMC_CUDA
   // update unitcell in GPU
