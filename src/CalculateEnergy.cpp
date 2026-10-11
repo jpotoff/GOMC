@@ -1513,12 +1513,21 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
     const int *const pMol = boxPackMol.data();
     const double rCutSqBox = boxAxes.rCutSq[box];
     const double rCutLowSq = forcefield.rCutLowSq;
+    // Per-kernel cutoffs and the table window, as in BoxInterTemplate: pass 2
+    // compacts against the cell-list cutoff, so each kernel's own cutoff and
+    // the table's range are applied as extra masks rather than as branches in
+    // pass 3.
+    const double rCutSqVdw = forcefield.rCutSq;
+    const double rCutSqCoul = forcefield.rCutCoulombSq[box];
+    double tabLo = 0.0, tabHi = 0.0;
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
     shared(overlap, trialPos, boxAxes, en, ff, real)                           \
     firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials,       \
                      hasFraction, fracMol, fracVDW, fracCoul, nPacked, pX, pY, \
-                     pZ, pQ, pKind, pMol, rCutSqBox, rCutLowSq)
+                     pZ, pQ, pKind, pMol, rCutSqBox, rCutLowSq, rCutSqVdw,     \
+                     rCutSqCoul, hasTab, tabLo, tabHi)
 #endif
     for (uint t = 0; t < trials; ++t) {
       double tempReal = 0.0;
@@ -1526,12 +1535,18 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
       bool over = false;
       const double xi = trialPos.x[t], yi = trialPos.y[t], zi = trialPos.z[t];
 
-      // Scratch, per thread, ~6 KiB and L1-resident.
+      // Scratch, per thread, L1-resident. Two survivor lists, one per
+      // kernel, as in BoxInterTemplate. The kind/mol arrays on the Coulomb
+      // list and the mol array on the vdW list are only read when a
+      // fractional molecule is present, which is a runtime condition here
+      // rather than a template parameter, so they are always allocated but
+      // only filled when hasFraction.
+      constexpr int SURV = GOMC_DISTSQ_CHUNK + 8;
       double distSq[GOMC_DISTSQ_CHUNK];
-      double sDistSq[GOMC_DISTSQ_CHUNK + 8];
-      double sQ[GOMC_DISTSQ_CHUNK + 8];
-      int sKind[GOMC_DISTSQ_CHUNK + 8];
-      int sMol[GOMC_DISTSQ_CHUNK + 8];
+      double cDistSq[SURV], cQ[SURV]; // Coulomb: distSq <= rCutCoulombSq
+      int cKind[SURV], cMol[SURV];
+      double vDistSq[SURV]; // van der Waals: distSq <= rCutSq
+      int vKind[SURV], vMol[SURV];
 
       for (int base = 0; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
         const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
@@ -1547,68 +1562,141 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
         // test to fold into the mask -- only the cutoff. Survival is ~20%,
         // which is the regime where this pays; see the note on the cell path
         // about why it does not at ~11%.
-        int ns = 0;
+        // The overlap test moves in here too. `dsq < rCutLowSq` was a branch
+        // on every surviving pair in pass 3; as a mask it costs one compare
+        // per eight candidates and an OR. rCutLowSq is far inside rCutSq, so
+        // any overlapping pair is on the vdW list and nothing is missed.
+        int nc = 0, nv = 0;
+        __mmask8 tabBad = 0;
         int k = 0;
 #ifdef GOMC_HAVE_COMPRESS
         {
           const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          const __m512d vRCutV = _mm512_set1_pd(rCutSqVdw);
+          const __m512d vRCutC = _mm512_set1_pd(rCutSqCoul);
+          const __m512d vRLow = _mm512_set1_pd(rCutLowSq);
+          const __m512d vTabLo = _mm512_set1_pd(tabLo);
+          const __m512d vTabHi = _mm512_set1_pd(tabHi);
+          __mmask8 overMask = 0;
           for (; k + 8 <= m; k += 8) {
             const int j = base + k;
             const __m512d d = _mm512_loadu_pd(distSq + k);
+            const __m256i kind =
+                _mm256_loadu_si256((const __m256i *)(pKind + j));
+            const __m256i mol =
+                _mm256_loadu_si256((const __m256i *)(pMol + j));
             const __mmask8 keep = _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ);
-            _mm512_mask_compressstoreu_pd(sDistSq + ns, keep, d);
-            _mm512_mask_compressstoreu_pd(sQ + ns, keep,
-                                          _mm512_loadu_pd(pQ + j));
-            _mm256_mask_compressstoreu_epi32(
-                sKind + ns, keep,
-                _mm256_loadu_si256((const __m256i *)(pKind + j)));
-            _mm256_mask_compressstoreu_epi32(
-                sMol + ns, keep,
-                _mm256_loadu_si256((const __m256i *)(pMol + j)));
-            ns += _mm_popcnt_u32((unsigned)keep);
+            overMask |= keep & _mm512_cmp_pd_mask(d, vRLow, _CMP_LT_OQ);
+            const __mmask8 keepV =
+                keep & _mm512_cmp_pd_mask(d, vRCutV, _CMP_LE_OQ);
+            _mm512_mask_compressstoreu_pd(vDistSq + nv, keepV, d);
+            _mm256_mask_compressstoreu_epi32(vKind + nv, keepV, kind);
+            if (hasFraction)
+              _mm256_mask_compressstoreu_epi32(vMol + nv, keepV, mol);
+            nv += _mm_popcnt_u32((unsigned)keepV);
+            if constexpr (HasCharge) {
+              const __mmask8 keepC =
+                  keep & _mm512_cmp_pd_mask(d, vRCutC, _CMP_LE_OQ);
+              _mm512_mask_compressstoreu_pd(cDistSq + nc, keepC, d);
+              _mm512_mask_compressstoreu_pd(cQ + nc, keepC,
+                                            _mm512_loadu_pd(pQ + j));
+              if (hasFraction) {
+                _mm256_mask_compressstoreu_epi32(cKind + nc, keepC, kind);
+                _mm256_mask_compressstoreu_epi32(cMol + nc, keepC, mol);
+              }
+              tabBad |= keepC & ~(_mm512_cmp_pd_mask(d, vTabLo, _CMP_GE_OQ) &
+                                  _mm512_cmp_pd_mask(d, vTabHi, _CMP_LT_OQ));
+              nc += _mm_popcnt_u32((unsigned)keepC);
+            }
           }
+          if (overMask)
+            over = true;
         }
 #endif
         for (; k < m; k++) {
-          if (!(rCutSqBox > distSq[k]))
+          const double d = distSq[k];
+          if (!(rCutSqBox > d))
             continue;
           const int j = base + k;
-          sDistSq[ns] = distSq[k];
-          sQ[ns] = pQ[j];
-          sKind[ns] = pKind[j];
-          sMol[ns] = pMol[j];
-          ++ns;
-        }
-
-        // ---- pass 3: kernels over a dense run, no cutoff test ----
-        for (int sIdx = 0; sIdx < ns; sIdx++) {
-          const double dsq = sDistSq[sIdx];
-
-          double lambdaVDW = 1.0;
-          double lambdaCoulomb = 1.0;
-          if (hasFraction) {
-            int nMol = sMol[sIdx];
-            if (molIndex == fracMol && nMol == fracMol) {
-              lambdaVDW = fracVDW * fracVDW;
-              lambdaCoulomb = fracCoul * fracCoul;
-            } else if (molIndex == fracMol || nMol == fracMol) {
-              lambdaVDW = fracVDW;
-              lambdaCoulomb = fracCoul;
+          if (d < rCutLowSq)
+            over = true;
+          if (!(rCutSqVdw < d)) {
+            vDistSq[nv] = d;
+            vKind[nv] = pKind[j];
+            if (hasFraction)
+              vMol[nv] = pMol[j];
+            ++nv;
+          }
+          if constexpr (HasCharge) {
+            if (!(rCutSqCoul < d)) {
+              cDistSq[nc] = d;
+              cQ[nc] = pQ[j];
+              if (hasFraction) {
+                cKind[nc] = pKind[j];
+                cMol[nc] = pMol[j];
+              }
+              if (!(d >= tabLo && d < tabHi))
+                tabBad = 1;
+              ++nc;
             }
           }
+        }
 
-          if (dsq < rCutLowSq) {
-            over = true;
-          }
-          tempLJ += ff.FFType::CalcEn(dsq, kindI, sKind[sIdx], lambdaVDW);
-          if constexpr (HasCharge) {
-            double qi_qj_fact = sQ[sIdx] * kindICharge * num::qqFact;
-
-            if (qi_qj_fact != 0.0) {
-              tempReal += ff.FFType::CalcCoulomb(dsq, kindI, sKind[sIdx],
+        // ---- pass 3: one dense run per kernel, no cutoff test ----
+        //
+        // Separate accumulators and order-preserving lists, so splitting the
+        // fused loop leaves both sums unchanged; the pairs dropped from each
+        // list are exactly the ones whose kernel returned 0.0.
+        //
+        if constexpr (HasCharge) {
+          if (!hasFraction && hasTab && !tabBad) {
+            // No range test, no null test, no erfc fallback -- and no
+            // qi_qj_fact == 0 test, since multiplying a finite table value by
+            // a zero charge product already gives zero.
+            // Accumulated straight into tempReal, not via a local: that
+            // keeps the addition order identical to the fused loop, so this
+            // whole change is bit-for-bit and validation is an exact-match
+            // check. A local accumulator here measured neutral-to-negative in
+            // BoxInter anyway.
+            for (int i = 0; i < nc; i++) {
+              const double qi_qj_fact = cQ[i] * kindICharge * num::qqFact;
+              tempReal +=
+                  ff.CalcCoulombTabUnchecked(cDistSq[i], qi_qj_fact, box);
+            }
+          } else {
+            for (int i = 0; i < nc; i++) {
+              const double qi_qj_fact = cQ[i] * kindICharge * num::qqFact;
+              if (qi_qj_fact == 0.0)
+                continue;
+              if (!hasFraction) {
+                tempReal +=
+                    ff.CalcCoulombFullInRange(cDistSq[i], qi_qj_fact, box);
+                continue;
+              }
+              double lambdaCoulomb = 1.0;
+              const int nMol = cMol[i];
+              if (molIndex == fracMol && nMol == fracMol)
+                lambdaCoulomb = fracCoul * fracCoul;
+              else if (molIndex == fracMol || nMol == fracMol)
+                lambdaCoulomb = fracCoul;
+              tempReal += ff.FFType::CalcCoulomb(cDistSq[i], kindI, cKind[i],
                                                  qi_qj_fact, lambdaCoulomb,
                                                  box);
             }
+          }
+        }
+        if (!hasFraction) {
+          for (int i = 0; i < nv; i++)
+            tempLJ += ff.CalcEnFullInRange(vDistSq[i], kindI, vKind[i]);
+        } else {
+          for (int i = 0; i < nv; i++) {
+            double lambdaVDW = 1.0;
+            const int nMol = vMol[i];
+            if (molIndex == fracMol && nMol == fracMol)
+              lambdaVDW = fracVDW * fracVDW;
+            else if (molIndex == fracMol || nMol == fracMol)
+              lambdaVDW = fracVDW;
+            tempLJ += ff.FFType::CalcEn(vDistSq[i], kindI, vKind[i], lambdaVDW);
           }
         }
       }
