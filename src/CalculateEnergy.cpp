@@ -994,8 +994,26 @@ void CalculateEnergy::BoxForceTemplate(
   for (long long z = 0; z < (long long)total; ++z)
     scratch[z] = 0.0;
 
+  //
+  // schedule(static, 1) because this loop is triangular.
+  //
+  // The slot filter has atom i pair only with slots above it, so the work per
+  // atom falls off linearly -- and when the stencil covers the whole box, as
+  // it does at 1,000 molecules on a 3x3x3 grid, it falls off across the entire
+  // atom range. The default blocked schedule then hands thread 0 about 44% of
+  // the pairs and thread 3 about 6%.
+  //
+  // That showed up as BoxForceTemplate having a worker/master ratio of 1.52
+  // against an ideal 3.0, and 24% of all samples parked in __kmpc_end_reduce.
+  // The reduction epilogue was where the barrier lives, not what caused the
+  // wait: replacing the array reduction by hand moved the barrier and bought
+  // 1%. Round-robin over a linearly decreasing profile balances to within one
+  // iteration and costs nothing at runtime, unlike dynamic. BoxInterTemplate's
+  // whole-box path has had this from the start.
+  //
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
-#pragma omp parallel for default(none) shared(boxAxes, ff, neighborList)       \
+#pragma omp parallel for schedule(static, 1) default(none)                     \
+    shared(boxAxes, ff, neighborList)                                          \
     firstprivate(box, atomCount, molCount, num::qqFact, fracMol,              \
                      fracVDW, fracCoul, ordX, ordY, ordZ, ordQ, ordMol,        \
                      ordKind, ordCell, cellVec, cellStart, nAtoms, rCutSqBox,  \
