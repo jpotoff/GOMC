@@ -360,6 +360,8 @@ private:
   // contribute. The ratio below is the measured version of that, and it is
   // what decides whether a variable stencil radius is worth building.
   //
+  mutable double statRanges = 0.0;    //!< contiguous cell runs walked
+  mutable double statTailElems = 0.0; //!< candidates left to the scalar tail
   mutable double statCandidates = 0.0;
   mutable double statSurvVdw = 0.0;
   mutable double statSurvCoul = 0.0;

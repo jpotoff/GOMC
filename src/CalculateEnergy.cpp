@@ -684,7 +684,6 @@ void CalculateEnergy::BoxInterTemplate(
 #endif
   // loop over all particles
   for (int i = 0; i < nAtoms; i++) {
-    const int currParticle = cellVec[i];
     const int currMol = ordMol[i];
     const int currKind = ordKind[i];
     const double currQ = ordQ[i];
@@ -713,13 +712,23 @@ void CalculateEnergy::BoxInterTemplate(
       const int neighborCell = neighborList[currCell][nCellIndex];
       // find the ending index in neighboring cell
       const int endIndex = cellStart[neighborCell + 1];
-      // `currParticle < nParticle` used to be tested once per candidate. The
-      // slots of a cell are sorted by atom index, so it is monotone here:
-      // everything from the first slot that passes onwards also passes.
-      const int firstIndex =
-          (int)(std::upper_bound(cellVec + cellStart[neighborCell],
-                                 cellVec + endIndex, currParticle) -
-                cellVec);
+      //
+      // Start at the first slot after i. Each unordered pair must be counted
+      // once, and ANY total order over the atoms does that -- it does not have
+      // to be the particle index. The slot index in the cell-ordered arrays is
+      // already such an order, and the stencil is symmetric, so pair (i, j) is
+      // seen exactly once, at slot min(i, j).
+      //
+      // This replaces a std::upper_bound per range, which searched the cell
+      // for the first particle index above currParticle. Measured at **~21% of
+      // this symbol** on the 9,000-molecule box -- more than the vectorised
+      // distance loop it guards, which is ~13%. It ran once per contiguous
+      // run, so it also scaled with the number of ranges, which is what made
+      // a finer cell grid so expensive.
+      //
+      // Order of accumulation changes, so this is not bit-for-bit.
+      //
+      const int firstIndex = std::max(cellStart[neighborCell], i + 1);
 
       for (int base = firstIndex; base < endIndex;
            base += GOMC_DISTSQ_CHUNK) {
@@ -820,6 +829,15 @@ void CalculateEnergy::BoxInterTemplate(
 #ifdef GOMC_PAIR_STATS
         // Atomics, not a reduction: this build is for counting, not timing,
         // and the pragma above cannot be varied by #ifdef.
+        //
+        // statTailElems is the point: every contiguous run of m candidates is
+        // processed 8 at a time with a scalar remainder of m % 8. Finer cells
+        // mean shorter runs, so the remainder is a larger share -- and scalar
+        // candidates cost several times what vectorised ones do.
+#pragma omp atomic
+        statRanges += 1.0;
+#pragma omp atomic
+        statTailElems += (double)(m % 8);
 #pragma omp atomic
         statCandidates += (double)m;
 #pragma omp atomic
@@ -904,6 +922,10 @@ void CalculateEnergy::BoxInterTemplate(
            box, nAtoms, cells, statCandidates, statCandidates / nAtoms,
            100.0 * statSurvVdw / statCandidates,
            100.0 * statSurvCoul / statCandidates);
+    printf("Info: BoxInter runs: %.3g ranges, mean length %.1f, "
+           "%.2f%% of candidates in the scalar tail\n",
+           statRanges, statCandidates / statRanges,
+           100.0 * statTailElems / statCandidates);
   }
 #endif
 }
@@ -1143,7 +1165,6 @@ void CalculateEnergy::VirialCalcTemplate(
                   rT23, rT33)
 #endif
   for (int i = 0; i < nAtoms; i++) {
-    const int currParticle = cellVec[i];
     const int currMol = ordMol[i];
     const int currKind = ordKind[i];
     const double currQ = ordQ[i];
@@ -1161,12 +1182,23 @@ void CalculateEnergy::VirialCalcTemplate(
     for (int nCellIndex = 0; nCellIndex < nStencil; nCellIndex++) {
       const int neighborCell = neighborList[currCell][nCellIndex];
       const int endIndex = cellStart[neighborCell + 1];
-      // `currParticle < nParticle` is monotone in the slot index because a
-      // cell's slots are sorted by atom index, so it becomes a starting bound.
-      const int firstIndex =
-          (int)(std::upper_bound(cellVec + cellStart[neighborCell],
-                                 cellVec + endIndex, currParticle) -
-                cellVec);
+      //
+      // Start at the first slot after i. Each unordered pair must be counted
+      // once, and ANY total order over the atoms does that -- it does not have
+      // to be the particle index. The slot index in the cell-ordered arrays is
+      // already such an order, and the stencil is symmetric, so pair (i, j) is
+      // seen exactly once, at slot min(i, j).
+      //
+      // This replaces a std::upper_bound per range, which searched the cell
+      // for the first particle index above currParticle. Measured at **~21% of
+      // this symbol** on the 9,000-molecule box -- more than the vectorised
+      // distance loop it guards, which is ~13%. It ran once per contiguous
+      // run, so it also scaled with the number of ranges, which is what made
+      // a finer cell grid so expensive.
+      //
+      // Order of accumulation changes, so this is not bit-for-bit.
+      //
+      const int firstIndex = std::max(cellStart[neighborCell], i + 1);
 
       for (int base = firstIndex; base < endIndex;
            base += GOMC_DISTSQ_CHUNK) {
