@@ -351,14 +351,17 @@ private:
   //! Permute the per-atom arrays into cell-list order, so the BoxInter pair
   //! walk reads contiguously instead of gathering through cellVector. Buffers
   //! are members and only ever grow, so this does not allocate per call.
+  //! const, with mutable storage, because ParticleInterTemplate is const and
+  //! needs the same permutation; the same arrangement BuildBoxPacked uses.
   void BuildCellOrdered(XYZArray const &coords,
                         const std::vector<int> &cellVector,
-                        const std::vector<int> &mapParticleToCell);
+                        const std::vector<int> &mapParticleToCell) const;
 
   // Per-atom data in cell-list order; filled by BuildCellOrdered and read by
-  // BoxInterTemplate. Slot k holds the atom cellVector[k].
-  std::vector<double> cellOrderX, cellOrderY, cellOrderZ, cellOrderCharge;
-  std::vector<int> cellOrderMol, cellOrderKind, cellOrderCell;
+  // BoxInterTemplate and ParticleInterTemplate. Slot k holds cellVector[k].
+  mutable std::vector<double> cellOrderX, cellOrderY, cellOrderZ,
+      cellOrderCharge;
+  mutable std::vector<int> cellOrderMol, cellOrderKind, cellOrderCell;
 
   //! Pack every atom the cell list currently holds for `box` into contiguous
   //! arrays, so a trial-position walk reads unit stride instead of gathering

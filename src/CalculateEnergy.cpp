@@ -243,7 +243,7 @@ SystemPotential CalculateEnergy::SystemInter(SystemPotential potential,
 //
 void CalculateEnergy::BuildCellOrdered(
     XYZArray const &coords, const std::vector<int> &cellVector,
-    const std::vector<int> &mapParticleToCell) {
+    const std::vector<int> &mapParticleToCell) const {
   const int n = (int)cellVector.size();
   if ((int)cellOrderX.size() < n) {
     cellOrderX.resize(n);
@@ -1708,61 +1708,228 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
     return;
   }
 
+  //
+  // Cell path: the same three passes as the whole-box path above, over the
+  // 27 neighbor cells of the trial position instead of the packed box.
+  //
+  // What it replaces walked the cell list into a std::vector<uint> per trial
+  // and then called InRcut per candidate, which fuses the distance and the
+  // cutoff test and so is a branch on every one. Here pass 1 runs over
+  // contiguous cell-ordered coordinates, pass 2 turns the cutoffs, the
+  // overlap test and the table range into masks, and pass 3 is two dense
+  // loops.
+  //
+  // NOT bit-for-bit, unlike the whole-box port. GetCellListNeighbor sorts
+  // each cell's particles by index "for better memory access", while the
+  // EnumerateLocal walk this replaces follows the linked list, i.e. reverse
+  // insertion order. Same pairs, different summation order.
+  //
+  std::vector<int> cellVector, cellStartIndex, mapParticleToCell;
+  std::vector<std::vector<int>> neighborList;
+  cellList.GetCellListNeighbor(box, currentCoords.Count(), cellVector,
+                               cellStartIndex, mapParticleToCell);
+  neighborList = cellList.GetNeighborList(box);
+  BuildCellOrdered(currentCoords, cellVector, mapParticleToCell);
+
+  const double *const ordX = cellOrderX.data();
+  const double *const ordY = cellOrderY.data();
+  const double *const ordZ = cellOrderZ.data();
+  const double *const ordQ = cellOrderCharge.data();
+  const int *const ordKind = cellOrderKind.data();
+  const int *const ordMol = cellOrderMol.data();
+  const int *const cellStart = cellStartIndex.data();
+  const double rCutSqBox = boxAxes.rCutSq[box];
+  const double rCutSqVdw = forcefield.rCutSq;
+  const double rCutSqCoul = forcefield.rCutCoulombSq[box];
+  const double rCutLowSq = forcefield.rCutLowSq;
+  double tabLo = 0.0, tabHi = 0.0;
+  const bool hasTab = ff.TableRange(box, tabLo, tabHi);
+
 // use OpenMP to distribute the workload over CBMC trials
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
-    shared(overlap, trialPos, boxAxes, en, ff, real)                           \
+    shared(overlap, trialPos, boxAxes, en, ff, real, neighborList)             \
     firstprivate(kindICharge, kindI, box, molIndex, num::qqFact, trials,       \
-                     hasFraction, fracMol, fracVDW, fracCoul)
+                     hasFraction, fracMol, fracVDW, fracCoul, ordX, ordY,      \
+                     ordZ, ordQ, ordKind, ordMol, cellStart, rCutSqBox,        \
+                     rCutSqVdw, rCutSqCoul, rCutLowSq, hasTab, tabLo, tabHi)
 #endif
   for (uint t = 0; t < trials; ++t) {
-    // Each thread gets it's own copy of nIndex, tempReal and tempLJ
-    std::vector<uint> nIndex;
     double tempReal = 0.0;
     double tempLJ = 0.0;
-    nIndex.clear();
-    tempReal = 0.0;
-    tempLJ = 0.0;
-    CellList::Neighbors n = cellList.EnumerateLocal(trialPos[t], box);
-    while (!n.Done()) {
-      nIndex.push_back(*n);
-      n.Next();
-    }
+    bool over = false;
+    const double xi = trialPos.x[t], yi = trialPos.y[t], zi = trialPos.z[t];
+    const int trialCell = cellList.PositionToCell(trialPos[t], box);
 
-    for (int i = 0; i < (int)nIndex.size(); i++) {
-      double distSq = 0.0;
-      if (boxAxes.InRcut(distSq, trialPos, t, currentCoords, nIndex[i], box)) {
+    // Scratch, per thread, L1-resident; see the whole-box path.
+    constexpr int SURV = GOMC_DISTSQ_CHUNK + 8;
+    double distSq[GOMC_DISTSQ_CHUNK];
+    double cDistSq[SURV], cQ[SURV];
+    int cKind[SURV], cMol[SURV];
+    double vDistSq[SURV];
+    int vKind[SURV], vMol[SURV];
 
-        double lambdaVDW = 1.0;
-        double lambdaCoulomb = 1.0;
-        if (hasFraction) {
-          int nMol = particleMol[nIndex[i]];
-          if (molIndex == fracMol && nMol == fracMol) {
-            lambdaVDW = fracVDW * fracVDW;
-            lambdaCoulomb = fracCoul * fracCoul;
-          } else if (molIndex == fracMol || nMol == fracMol) {
-            lambdaVDW = fracVDW;
-            lambdaCoulomb = fracCoul;
+    for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
+         nCellIndex++) {
+      const int neighborCell = neighborList[trialCell][nCellIndex];
+      const int startIndex = cellStart[neighborCell];
+      const int endIndex = cellStart[neighborCell + 1];
+
+      for (int base = startIndex; base < endIndex;
+           base += GOMC_DISTSQ_CHUNK) {
+        const int m = std::min(GOMC_DISTSQ_CHUNK, endIndex - base);
+
+        // ---- pass 1: contiguous, branch-free, vectorisable ----
+        boxAxes.BoxType::DistSqRange(distSq, xi, yi, zi, ordX + base,
+                                     ordY + base, ordZ + base, m, box);
+
+        // ---- pass 2: compact the survivors ----
+        //
+        // As in BoxInterTemplate. Simpler here: the moving molecule was taken
+        // out of the cell list before this call, so there is no same-molecule
+        // test to fold into the mask -- only the cutoff. Survival is ~20%,
+        // which is the regime where this pays; see the note on the cell path
+        // about why it does not at ~11%.
+        // The overlap test moves in here too. `dsq < rCutLowSq` was a branch
+        // on every surviving pair in pass 3; as a mask it costs one compare
+        // per eight candidates and an OR. rCutLowSq is far inside rCutSq, so
+        // any overlapping pair is on the vdW list and nothing is missed.
+        int nc = 0, nv = 0;
+        __mmask8 tabBad = 0;
+        int k = 0;
+#ifdef GOMC_HAVE_COMPRESS
+        {
+          const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          const __m512d vRCutV = _mm512_set1_pd(rCutSqVdw);
+          const __m512d vRCutC = _mm512_set1_pd(rCutSqCoul);
+          const __m512d vRLow = _mm512_set1_pd(rCutLowSq);
+          const __m512d vTabLo = _mm512_set1_pd(tabLo);
+          const __m512d vTabHi = _mm512_set1_pd(tabHi);
+          __mmask8 overMask = 0;
+          for (; k + 8 <= m; k += 8) {
+            const int j = base + k;
+            const __m512d d = _mm512_loadu_pd(distSq + k);
+            const __m256i kind =
+                _mm256_loadu_si256((const __m256i *)(ordKind + j));
+            const __m256i mol =
+                _mm256_loadu_si256((const __m256i *)(ordMol + j));
+            const __mmask8 keep = _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ);
+            overMask |= keep & _mm512_cmp_pd_mask(d, vRLow, _CMP_LT_OQ);
+            const __mmask8 keepV =
+                keep & _mm512_cmp_pd_mask(d, vRCutV, _CMP_LE_OQ);
+            _mm512_mask_compressstoreu_pd(vDistSq + nv, keepV, d);
+            _mm256_mask_compressstoreu_epi32(vKind + nv, keepV, kind);
+            if (hasFraction)
+              _mm256_mask_compressstoreu_epi32(vMol + nv, keepV, mol);
+            nv += _mm_popcnt_u32((unsigned)keepV);
+            if constexpr (HasCharge) {
+              const __mmask8 keepC =
+                  keep & _mm512_cmp_pd_mask(d, vRCutC, _CMP_LE_OQ);
+              _mm512_mask_compressstoreu_pd(cDistSq + nc, keepC, d);
+              _mm512_mask_compressstoreu_pd(cQ + nc, keepC,
+                                            _mm512_loadu_pd(ordQ + j));
+              if (hasFraction) {
+                _mm256_mask_compressstoreu_epi32(cKind + nc, keepC, kind);
+                _mm256_mask_compressstoreu_epi32(cMol + nc, keepC, mol);
+              }
+              tabBad |= keepC & ~(_mm512_cmp_pd_mask(d, vTabLo, _CMP_GE_OQ) &
+                                  _mm512_cmp_pd_mask(d, vTabHi, _CMP_LT_OQ));
+              nc += _mm_popcnt_u32((unsigned)keepC);
+            }
+          }
+          if (overMask)
+            over = true;
+        }
+#endif
+        for (; k < m; k++) {
+          const double d = distSq[k];
+          if (!(rCutSqBox > d))
+            continue;
+          const int j = base + k;
+          if (d < rCutLowSq)
+            over = true;
+          if (!(rCutSqVdw < d)) {
+            vDistSq[nv] = d;
+            vKind[nv] = ordKind[j];
+            if (hasFraction)
+              vMol[nv] = ordMol[j];
+            ++nv;
+          }
+          if constexpr (HasCharge) {
+            if (!(rCutSqCoul < d)) {
+              cDistSq[nc] = d;
+              cQ[nc] = ordQ[j];
+              if (hasFraction) {
+                cKind[nc] = ordKind[j];
+                cMol[nc] = ordMol[j];
+              }
+              if (!(d >= tabLo && d < tabHi))
+                tabBad = 1;
+              ++nc;
+            }
           }
         }
 
-        if (distSq < forcefield.rCutLowSq) {
-          overlap[t] |= true;
+        // ---- pass 3: one dense run per kernel, no cutoff test ----
+        //
+        // Separate accumulators and order-preserving lists, so splitting the
+        // fused loop leaves both sums unchanged; the pairs dropped from each
+        // list are exactly the ones whose kernel returned 0.0.
+        //
+        if constexpr (HasCharge) {
+          if (!hasFraction && hasTab && !tabBad) {
+            // No range test, no null test, no erfc fallback -- and no
+            // qi_qj_fact == 0 test, since multiplying a finite table value by
+            // a zero charge product already gives zero.
+            // Accumulated straight into tempReal, not via a local: that
+            // keeps the addition order identical to the fused loop, so this
+            // whole change is bit-for-bit and validation is an exact-match
+            // check. A local accumulator here measured neutral-to-negative in
+            // BoxInter anyway.
+            for (int i = 0; i < nc; i++) {
+              const double qi_qj_fact = cQ[i] * kindICharge * num::qqFact;
+              tempReal +=
+                  ff.CalcCoulombTabUnchecked(cDistSq[i], qi_qj_fact, box);
+            }
+          } else {
+            for (int i = 0; i < nc; i++) {
+              const double qi_qj_fact = cQ[i] * kindICharge * num::qqFact;
+              if (qi_qj_fact == 0.0)
+                continue;
+              if (!hasFraction) {
+                tempReal +=
+                    ff.CalcCoulombFullInRange(cDistSq[i], qi_qj_fact, box);
+                continue;
+              }
+              double lambdaCoulomb = 1.0;
+              const int nMol = cMol[i];
+              if (molIndex == fracMol && nMol == fracMol)
+                lambdaCoulomb = fracCoul * fracCoul;
+              else if (molIndex == fracMol || nMol == fracMol)
+                lambdaCoulomb = fracCoul;
+              tempReal += ff.FFType::CalcCoulomb(cDistSq[i], kindI, cKind[i],
+                                                 qi_qj_fact, lambdaCoulomb,
+                                                 box);
+            }
+          }
         }
-        tempLJ += ff.FFType::CalcEn(
-            distSq, kindI, particleKind[nIndex[i]], lambdaVDW);
-        if (electrostatic) {
-          double qi_qj_fact =
-              particleCharge[nIndex[i]] * kindICharge * num::qqFact;
-
-          if (qi_qj_fact != 0.0) {
-            tempReal += ff.FFType::CalcCoulomb(
-                distSq, kindI, particleKind[nIndex[i]], qi_qj_fact,
-                lambdaCoulomb, box);
+        if (!hasFraction) {
+          for (int i = 0; i < nv; i++)
+            tempLJ += ff.CalcEnFullInRange(vDistSq[i], kindI, vKind[i]);
+        } else {
+          for (int i = 0; i < nv; i++) {
+            double lambdaVDW = 1.0;
+            const int nMol = vMol[i];
+            if (molIndex == fracMol && nMol == fracMol)
+              lambdaVDW = fracVDW * fracVDW;
+            else if (molIndex == fracMol || nMol == fracMol)
+              lambdaVDW = fracVDW;
+            tempLJ += ff.FFType::CalcEn(vDistSq[i], kindI, vKind[i], lambdaVDW);
           }
         }
       }
     }
+    overlap[t] |= over;
     en[t] += tempLJ;
     real[t] += tempReal;
   }
