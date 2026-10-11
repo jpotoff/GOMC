@@ -976,17 +976,45 @@ void CalculateEnergy::BoxForceTemplate(
   const int nAtoms = (int)cellVector.size();
   const double rCutSqBox = boxAxes.rCutSq[box];
 
+  // Per-thread force slices; see CalculateEnergy::forceScratch.
+#ifdef _OPENMP
+  const int nThreads = omp_get_max_threads();
+#else
+  const int nThreads = 1;
+#endif
+  const size_t aSpan = (size_t)atomCount * 3;
+  const size_t stride = aSpan + (size_t)molCount * 3;
+  const size_t total = (size_t)nThreads * stride;
+  if (forceScratch.size() < total)
+    forceScratch.resize(total);
+  double *const scratch = forceScratch.data();
+#ifdef _OPENMP
+#pragma omp parallel for default(none) firstprivate(scratch, total)
+#endif
+  for (long long z = 0; z < (long long)total; ++z)
+    scratch[z] = 0.0;
+
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none) shared(boxAxes, ff, neighborList)       \
     firstprivate(box, atomCount, molCount, num::qqFact, fracMol,              \
                      fracVDW, fracCoul, ordX, ordY, ordZ, ordQ, ordMol,        \
-                     ordKind, ordCell, cellVec, cellStart, nAtoms, rCutSqBox)  \
-    reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
-                  aForcey[ : atomCount], aForcez[ : atomCount],                \
-                  mForcex[ : molCount], mForcey[ : molCount],                  \
-                  mForcez[ : molCount])
+                     ordKind, ordCell, cellVec, cellStart, nAtoms, rCutSqBox,  \
+                     scratch, stride, aSpan)                                   \
+    reduction(+ : tempREn, tempLJEn)
 #endif
   for (int i = 0; i < nAtoms; i++) {
+#ifdef _OPENMP
+    double *const myF = scratch + (size_t)omp_get_thread_num() * stride;
+#else
+    double *const myF = scratch;
+#endif
+    double *const tAx = myF;
+    double *const tAy = myF + atomCount;
+    double *const tAz = myF + 2 * (size_t)atomCount;
+    double *const tMx = myF + aSpan;
+    double *const tMy = myF + aSpan + molCount;
+    double *const tMz = myF + aSpan + 2 * (size_t)molCount;
+
     const int currParticle = cellVec[i];
     const int currMol = ordMol[i];
     const int currKind = ordKind[i];
@@ -1074,23 +1102,59 @@ void CalculateEnergy::BoxForceTemplate(
           fxi += fx;
           fyi += fy;
           fzi += fz;
-          aForcex[nParticle] -= fx;
-          aForcey[nParticle] -= fy;
-          aForcez[nParticle] -= fz;
-          mForcex[nMol] -= fx;
-          mForcey[nMol] -= fy;
-          mForcez[nMol] -= fz;
+          tAx[nParticle] -= fx;
+          tAy[nParticle] -= fy;
+          tAz[nParticle] -= fz;
+          tMx[nMol] -= fx;
+          tMy[nMol] -= fy;
+          tMz[nMol] -= fz;
         }
       }
     }
     // One write per atom instead of one per pair. currMol is fixed for the
     // whole neighbour loop too, so its share of the force lands here as well.
-    aForcex[currParticle] += fxi;
-    aForcey[currParticle] += fyi;
-    aForcez[currParticle] += fzi;
-    mForcex[currMol] += fxi;
-    mForcey[currMol] += fyi;
-    mForcez[currMol] += fzi;
+    tAx[currParticle] += fxi;
+    tAy[currParticle] += fyi;
+    tAz[currParticle] += fzi;
+    tMx[currMol] += fxi;
+    tMy[currMol] += fyi;
+    tMz[currMol] += fzi;
+  }
+
+  // Combine the per-thread slices in parallel, rather than at a barrier.
+#ifdef _OPENMP
+#pragma omp parallel for default(none)                                         \
+    firstprivate(scratch, stride, aSpan, atomCount, molCount, nThreads,        \
+                     aForcex, aForcey, aForcez, mForcex, mForcey, mForcez)
+#endif
+  for (int a = 0; a < atomCount; ++a) {
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    for (int t = 0; t < nThreads; ++t) {
+      const double *const p = scratch + (size_t)t * stride;
+      sx += p[a];
+      sy += p[atomCount + a];
+      sz += p[2 * (size_t)atomCount + a];
+    }
+    aForcex[a] += sx;
+    aForcey[a] += sy;
+    aForcez[a] += sz;
+  }
+#ifdef _OPENMP
+#pragma omp parallel for default(none)                                         \
+    firstprivate(scratch, stride, aSpan, molCount, nThreads, mForcex, mForcey, \
+                     mForcez)
+#endif
+  for (int mIdx = 0; mIdx < molCount; ++mIdx) {
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    for (int t = 0; t < nThreads; ++t) {
+      const double *const p = scratch + (size_t)t * stride + aSpan;
+      sx += p[mIdx];
+      sy += p[molCount + mIdx];
+      sz += p[2 * (size_t)molCount + mIdx];
+    }
+    mForcex[mIdx] += sx;
+    mForcey[mIdx] += sy;
+    mForcez[mIdx] += sz;
   }
 }
 
