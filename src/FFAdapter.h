@@ -120,29 +120,20 @@ struct FFAdapter : public FFParticle {
   }
 
   //
-  // Real-space electrostatics for a pair already known to be inside the
-  // tabulated range, with the table known to exist. Only meaningful when
-  // CoulEval is EwaldReal; callers gate on TableRange() below, which returns
-  // false for every other case.
+  // The distSq interval the real-space table covers for this box, plus a
+  // raw-pointer view of the table itself, if the tabulated kernel is the one
+  // in use. False means the caller must keep the general path --
+  // electrostatics off, Ewald off, a non-Ewald flavour, or a cutoff past
+  // EwaldRealTable::MaxCutoff().
   //
-  double CalcCoulombTabUnchecked(const double distSq, const double qi_qj_Fact,
-                                 const uint b) const {
-    return ff::EwaldReal::EnergyUnchecked(CoulView(b), distSq, qi_qj_Fact);
-  }
-
-  //
-  // The distSq interval the real-space table covers for this box, if the
-  // tabulated kernel is the one in use. False means the caller must keep the
-  // general path -- electrostatics off, Ewald off, a non-Ewald flavour, or a
-  // cutoff past EwaldRealTable::MaxCutoff().
-  //
-  bool TableRange(const uint b, double &lo, double &hi) const {
+  bool TableRange(const uint b, double &lo, double &hi,
+                  EwaldRealTable::Lookup &lk) const {
     if (!forcefield.ewald || !forcefield.electrostatic)
       return false;
-    const ff::CoulParams c = CoulView(b);
-    if (c.table == NULL)
+    if (!forcefield.realTable.Range(b, lo, hi))
       return false;
-    return c.table->Range(b, lo, hi);
+    lk = forcefield.realTable.EnergyLookup(b);
+    return true;
   }
 
   //! Whether the fixed-exponent path below exists for this forcefield.

@@ -434,7 +434,8 @@ void CalculateEnergy::BoxInterTemplate(
     // erfc fallback call, whose spill of zmm26-31 was costing the hot path
     // its registers.
     double tabLo = 0.0, tabHi = 0.0;
-    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
+    EwaldRealTable::Lookup tabLk;
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi, tabLk);
 
     // schedule(static, 1) because this loop is triangular: atom i does
     // nPacked-i-1 distances, so the default blocked schedule would hand the
@@ -446,7 +447,7 @@ void CalculateEnergy::BoxInterTemplate(
     shared(boxAxes, ff) reduction(+ : tempREn, tempLJEn)                       \
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul, nPacked, pX,    \
                      pY, pZ, pQ, pKind, pMol, rCutSqBox, rCutSqVdw,         \
-                     rCutSqCoul, hasTab, tabLo, tabHi)
+                     rCutSqCoul, hasTab, tabLo, tabHi, tabLk)
 #endif
     for (int i = 0; i < nPacked; i++) {
       const int currMol = pMol[i];
@@ -600,10 +601,12 @@ void CalculateEnergy::BoxInterTemplate(
           // a template constant, so this folds.
           if (!HasLambda && hasTab && !tabBad) {
             double realEn = 0.0;
-            for (int s = 0; s < nc; s++) {
-              const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
-              realEn += ff.CalcCoulombTabUnchecked(cDistSq[s], qi_qj_fact, box);
-            }
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : realEn)
+#endif
+            for (int s = 0; s < nc; s++)
+              realEn +=
+                  (currQ * cQ[s] * num::qqFact) * tabLk.Eval(cDistSq[s]);
             tempREn += realEn;
           } else {
             for (int s = 0; s < nc; s++) {
@@ -668,7 +671,8 @@ void CalculateEnergy::BoxInterTemplate(
     // erfc fallback call, whose spill of zmm26-31 was costing the hot path
     // its registers.
     double tabLo = 0.0, tabHi = 0.0;
-    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
+    EwaldRealTable::Lookup tabLk;
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi, tabLk);
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none)                                         \
@@ -677,7 +681,7 @@ void CalculateEnergy::BoxInterTemplate(
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul,                 \
                      ordX, ordY, ordZ, ordQ, ordMol, ordKind, ordCell,         \
                      cellVec, cellStart, nAtoms, rCutSqBox, rCutSqVdw,         \
-                     rCutSqCoul, hasTab, tabLo, tabHi)
+                     rCutSqCoul, hasTab, tabLo, tabHi, tabLk)
 #endif
   // loop over all particles
   for (int i = 0; i < nAtoms; i++) {
@@ -829,11 +833,12 @@ void CalculateEnergy::BoxInterTemplate(
           // a template constant, so this folds.
           if (!HasLambda && hasTab && !tabBad) {
             double realEn = 0.0;
-            for (int sIdx = 0; sIdx < nc; sIdx++) {
-              const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : realEn)
+#endif
+            for (int sIdx = 0; sIdx < nc; sIdx++)
               realEn +=
-                  ff.CalcCoulombTabUnchecked(cDistSq[sIdx], qi_qj_fact, box);
-            }
+                  (currQ * cQ[sIdx] * num::qqFact) * tabLk.Eval(cDistSq[sIdx]);
             tempREn += realEn;
           } else {
             for (int sIdx = 0; sIdx < nc; sIdx++) {

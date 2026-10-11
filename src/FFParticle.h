@@ -186,12 +186,17 @@ protected:
 
   //! Parameter view for the composable evaluators (see VdwEvaluators.h).
 inline ff::CoulParams FFParticle::CoulView(const uint b) const {
-  ff::CoulParams c = {};
+  // Explicit, not value-initialised; see the note on VdwView below.
+  ff::CoulParams c;
   c.table = forcefield.ewald ? &forcefield.realTable : nullptr;
   c.alpha = forcefield.alpha[b];
   c.rCut = forcefield.rCut;
   c.rCutSq = forcefield.rCutSq;
   c.box = b;
+  c.diElectric_1 = 0.0;
+  c.A1 = 0.0;
+  c.B1 = 0.0;
+  c.C1 = 0.0;
   return c;
 }
 

@@ -65,16 +65,6 @@ struct EwaldReal {
     return qi_qj_Fact * erfc(c.alpha * dist) / dist;
   }
 
-  //
-  // The same, for a pair the caller has already placed inside the table's
-  // range. No null test, no range test, no erfc fallback -- so no branch and
-  // no call in the loop body.
-  //
-  static double EnergyUnchecked(const CoulParams &c, const double distSq,
-                                const double qi_qj_Fact) {
-    return qi_qj_Fact * c.table->EnergyUnchecked(distSq, c.box);
-  }
-
   static double Virial(const CoulParams &c, const double distSq,
                        const double qi_qj) {
     double tab;
