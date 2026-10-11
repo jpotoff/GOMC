@@ -6,7 +6,18 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "Ewald.h"
 #include "FFParticle.h" // forcefield.particles-> ; Forcefield.h only forward-declares it
 
+#include <algorithm>
 #include <cassert>
+
+// Target working set for one atom block of the reciprocal contraction, in
+// bytes. The k-vector sweep touches six trig rows per k-vector; unblocked that
+// is 6 * numFlatAtoms * 8 bytes re-read for every one of ~36,000 k-vectors --
+// 51 GB per call at 10,000 molecules, at an arithmetic intensity of 0.33
+// flop/byte, i.e. hard bandwidth bound. Tiling the ATOM loop outside the k
+// loop keeps one block's rows resident while every k-vector sweeps them. L2 is
+// per-core, so this is sized well under it to leave room for the streamed
+// accumulators.
+#define GOMC_RECIP_BLOCK_BYTES (256 * 1024)
 
 #include "BasicTypes.h" //uint
 #include "BoxDimensions.h"
@@ -394,11 +405,20 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
     build_tiny_cache(flatCoords, kmax_val, numFlatAtoms, b1, b2, b3, cos_x,
                      sin_x, cos_y, sin_y, cos_z, sin_z);
 
+    // Tile the atom loop OUTSIDE the k loop; see GOMC_RECIP_BLOCK_BYTES.
+    // sumRnew/sumInew were memset to zero above, so blocks accumulate with +=.
+    const int recipRowBytes = 6 * (kmax_val + 1) * 8;
+    int atomBlock = numFlatAtoms;
+    if ((long)recipRowBytes * numFlatAtoms > GOMC_RECIP_BLOCK_BYTES)
+      atomBlock = std::max(64, GOMC_RECIP_BLOCK_BYTES / recipRowBytes);
+
+    for (int jBlock = 0; jBlock < numFlatAtoms; jBlock += atomBlock) {
+      const int jEnd = std::min(jBlock + atomBlock, numFlatAtoms);
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
     shared(box, flatCharges, numFlatAtoms, kmax_val, kx_ind, ky_ind, kz_ind,   \
                sumRnew, sumInew, imageSize, cos_x, sin_x, cos_y, sin_y, cos_z, \
-               sin_z, molLengths)
+               sin_z, molLengths, jBlock, jEnd)
 #endif
     for (int i = 0; i < (int)imageSize[box]; i++) {
       double totalReal = 0.0;
@@ -448,7 +468,7 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
 #ifdef _OPENMP
 #pragma omp simd reduction(+ : totalReal, totalImaginary)
 #endif
-      for (int j = 0; j < numFlatAtoms; j++) {
+      for (int j = jBlock; j < jEnd; j++) {
         const double cx = cxp[j];
         const double sx = sxp[j] * sign_x;
         const double cy = cyp[j];
@@ -462,8 +482,9 @@ void Ewald::BoxReciprocalSetup(uint box, XYZArray const &molCoords) {
         totalReal += qp[j] * (cxy * cz - sxy * sz);
         totalImaginary += qp[j] * (sxy * cz + cxy * sz);
       }
-      sumRnew[box][i] = totalReal;
-      sumInew[box][i] = totalImaginary;
+      sumRnew[box][i] += totalReal;
+      sumInew[box][i] += totalImaginary;
+    }
     }
 #endif
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_BOX_SETUP);
@@ -572,11 +593,20 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
     build_tiny_cache(flatCoords, kmax_val, numFlatAtoms, b1, b2, b3, cos_x,
                      sin_x, cos_y, sin_y, cos_z, sin_z);
 
+    // Tile the atom loop OUTSIDE the k loop; see GOMC_RECIP_BLOCK_BYTES.
+    // sumRnew/sumInew were memset to zero above, so blocks accumulate with +=.
+    const int recipRowBytes = 6 * (kmax_val + 1) * 8;
+    int atomBlock = numFlatAtoms;
+    if ((long)recipRowBytes * numFlatAtoms > GOMC_RECIP_BLOCK_BYTES)
+      atomBlock = std::max(64, GOMC_RECIP_BLOCK_BYTES / recipRowBytes);
+
+    for (int jBlock = 0; jBlock < numFlatAtoms; jBlock += atomBlock) {
+      const int jEnd = std::min(jBlock + atomBlock, numFlatAtoms);
 #ifdef _OPENMP
 #pragma omp parallel for default(none)                                         \
     shared(box, flatCharges, numFlatAtoms, kmax_val, kx_indRef, ky_indRef,     \
                kz_indRef, sumRnew, sumInew, imageSizeRef, cos_x, sin_x, cos_y, \
-               sin_y, cos_z, sin_z, molLengths)
+               sin_y, cos_z, sin_z, molLengths, jBlock, jEnd)
 #endif
     for (int i = 0; i < (int)imageSizeRef[box]; i++) {
       double totalReal = 0.0;
@@ -624,7 +654,7 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
 #ifdef _OPENMP
 #pragma omp simd reduction(+ : totalReal, totalImaginary)
 #endif
-      for (int j = 0; j < numFlatAtoms; j++) {
+      for (int j = jBlock; j < jEnd; j++) {
         const double cx = cxp[j];
         const double sx = sxp[j] * sign_x;
         const double cy = cyp[j];
@@ -638,8 +668,9 @@ void Ewald::BoxReciprocalSums(uint box, XYZArray const &molCoords) {
         totalReal += qp[j] * (cxy * cz - sxy * sz);
         totalImaginary += qp[j] * (sxy * cz + cxy * sz);
       }
-      sumRnew[box][i] = totalReal;
-      sumInew[box][i] = totalImaginary;
+      sumRnew[box][i] += totalReal;
+      sumInew[box][i] += totalImaginary;
+    }
     }
 #endif
     GOMC_EVENT_STOP(1, GomcProfileEvent::RECIP_BOX_SETUP);
