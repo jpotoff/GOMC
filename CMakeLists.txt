@@ -95,9 +95,19 @@ if(GOMC_OPT)
 
    # Older compilers may not know the chosen target; find out before we commit
    # to it rather than failing the whole build over an optional optimisation.
+   #
+   # The result variable has the target in its name on purpose.
+   # check_cxx_compiler_flag caches under whatever name it is given, and a
+   # cached answer is never re-tested. With a fixed name, probing a target the
+   # compiler rejects (say znver5 on GCC 11) caches a failure that then
+   # suppresses -march= for every later -DGOMC_ARCH= in the same build
+   # directory -- silently, since the warning only prints on the run that
+   # actually probed. The binary is then built for baseline x86-64 while the
+   # cache still says otherwise.
    include(CheckCXXCompilerFlag)
-   check_cxx_compiler_flag("${GOMC_ARCH_FLAG}" GOMC_ARCH_FLAG_SUPPORTED)
-   if(NOT GOMC_ARCH_FLAG_SUPPORTED)
+   string(MAKE_C_IDENTIFIER "GOMC_ARCH_FLAG_OK_${GOMC_ARCH_FLAG}" GOMC_ARCH_FLAG_VAR)
+   check_cxx_compiler_flag("${GOMC_ARCH_FLAG}" ${GOMC_ARCH_FLAG_VAR})
+   if(NOT ${GOMC_ARCH_FLAG_VAR})
       message(WARNING "Compiler does not accept ${GOMC_ARCH_FLAG}; "
                       "building without processor-specific optimizations. "
                       "Try -DGOMC_ARCH=native.")

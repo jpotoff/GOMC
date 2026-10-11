@@ -355,6 +355,12 @@ void CalculateEnergy::BoxInterTemplate(
     const int *const pKind = boxPackKind.data();
     const int *const pMol = boxPackMol.data();
     const double rCutSqBox = boxAxes.rCutSq[box];
+    // Pass 2 compacts against the cell list's cutoff, max(rCut, rCutCoulomb).
+    // Each kernel's own, smaller cutoff then has to be applied somewhere, and
+    // a second mask here is cheaper than a branch per pair in pass 3 -- see
+    // FFAdapter::CalcEnFullInRange.
+    const double rCutSqVdw = forcefield.rCutSq;
+    const double rCutSqCoul = forcefield.rCutCoulombSq[box];
 
     // schedule(static, 1) because this loop is triangular: atom i does
     // nPacked-i-1 distances, so the default blocked schedule would hand the
@@ -365,7 +371,7 @@ void CalculateEnergy::BoxInterTemplate(
 #pragma omp parallel for schedule(static, 1) default(none)                     \
     shared(boxAxes, ff) reduction(+ : tempREn, tempLJEn)                       \
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul, nPacked, pX,    \
-                     pY, pZ, pQ, pKind, pMol, rCutSqBox)
+                     pY, pZ, pQ, pKind, pMol, rCutSqBox, rCutSqVdw, rCutSqCoul)
 #endif
     for (int i = 0; i < nPacked; i++) {
       const int currMol = pMol[i];
@@ -377,11 +383,20 @@ void CalculateEnergy::BoxInterTemplate(
       // compressing store writes only the active lanes, so the survivor
       // buffers never need more than m slots; the 8 extra are slack against
       // an off-by-one, not a requirement.
+      //
+      // Two survivor lists, one per kernel, each already inside its own
+      // cutoff. The arrays a given instantiation never reads collapse to a
+      // single element rather than costing stack in every build.
+      //
+      constexpr int SURV = GOMC_DISTSQ_CHUNK + 8;
+      constexpr int CSZ = HasCharge ? SURV : 1;
+      constexpr int CLAM = (HasCharge && HasLambda) ? SURV : 1;
+      constexpr int VLAM = HasLambda ? SURV : 1;
       double distSq[GOMC_DISTSQ_CHUNK];
-      double sDistSq[GOMC_DISTSQ_CHUNK + 8];
-      double sQ[GOMC_DISTSQ_CHUNK + 8];
-      int sKind[GOMC_DISTSQ_CHUNK + 8];
-      int sMol[GOMC_DISTSQ_CHUNK + 8];
+      double cDistSq[CSZ], cQ[CSZ]; // Coulomb: distSq <= rCutCoulombSq
+      int cKind[CLAM], cMol[CLAM];
+      double vDistSq[SURV]; // van der Waals: distSq <= rCutSq
+      int vKind[SURV], vMol[VLAM];
 
       for (int base = i + 1; base < nPacked; base += GOMC_DISTSQ_CHUNK) {
         const int m = std::min(GOMC_DISTSQ_CHUNK, nPacked - base);
@@ -404,28 +419,47 @@ void CalculateEnergy::BoxInterTemplate(
         // Written with intrinsics because the branchless `ns += keep` form
         // was tried first and icpx 2025.1 did not recognise it: no vcompress
         // in the object and 17% MORE instructions than the branchy original.
-        int ns = 0;
+        // The per-kernel cutoffs are applied here as extra masks. `<=` rather
+        // than `<` so the boundary falls on the same side as the
+        // `rCut < distSq` tests in FFAdapter these replace; a pair exactly at
+        // the cutoff contributes there and must contribute here.
+        int nc = 0, nv = 0;
         int k = 0;
 #ifdef GOMC_HAVE_COMPRESS
         {
           const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          const __m512d vRCutV = _mm512_set1_pd(rCutSqVdw);
+          const __m512d vRCutC = _mm512_set1_pd(rCutSqCoul);
           const __m256i vCurrMol = _mm256_set1_epi32(currMol);
           for (; k + 8 <= m; k += 8) {
             const int j = base + k;
             const __m512d d = _mm512_loadu_pd(distSq + k);
             const __m256i mol =
                 _mm256_loadu_si256((const __m256i *)(pMol + j));
+            const __m256i kind =
+                _mm256_loadu_si256((const __m256i *)(pKind + j));
             const __mmask8 keep =
                 _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ) &
                 _mm256_cmpneq_epi32_mask(mol, vCurrMol);
-            _mm512_mask_compressstoreu_pd(sDistSq + ns, keep, d);
-            _mm512_mask_compressstoreu_pd(sQ + ns, keep,
-                                          _mm512_loadu_pd(pQ + j));
-            _mm256_mask_compressstoreu_epi32(
-                sKind + ns, keep,
-                _mm256_loadu_si256((const __m256i *)(pKind + j)));
-            _mm256_mask_compressstoreu_epi32(sMol + ns, keep, mol);
-            ns += _mm_popcnt_u32((unsigned)keep);
+            const __mmask8 keepV =
+                keep & _mm512_cmp_pd_mask(d, vRCutV, _CMP_LE_OQ);
+            _mm512_mask_compressstoreu_pd(vDistSq + nv, keepV, d);
+            _mm256_mask_compressstoreu_epi32(vKind + nv, keepV, kind);
+            if constexpr (HasLambda)
+              _mm256_mask_compressstoreu_epi32(vMol + nv, keepV, mol);
+            nv += _mm_popcnt_u32((unsigned)keepV);
+            if constexpr (HasCharge) {
+              const __mmask8 keepC =
+                  keep & _mm512_cmp_pd_mask(d, vRCutC, _CMP_LE_OQ);
+              _mm512_mask_compressstoreu_pd(cDistSq + nc, keepC, d);
+              _mm512_mask_compressstoreu_pd(cQ + nc, keepC,
+                                            _mm512_loadu_pd(pQ + j));
+              if constexpr (HasLambda) {
+                _mm256_mask_compressstoreu_epi32(cKind + nc, keepC, kind);
+                _mm256_mask_compressstoreu_epi32(cMol + nc, keepC, mol);
+              }
+              nc += _mm_popcnt_u32((unsigned)keepC);
+            }
           }
         }
 #endif
@@ -433,43 +467,59 @@ void CalculateEnergy::BoxInterTemplate(
           const int j = base + k;
           if (currMol == pMol[j])
             continue;
-          if (!(rCutSqBox > distSq[k]))
+          const double d = distSq[k];
+          if (!(rCutSqBox > d))
             continue;
-          sDistSq[ns] = distSq[k];
-          sQ[ns] = pQ[j];
-          sKind[ns] = pKind[j];
-          sMol[ns] = pMol[j];
-          ++ns;
+          if (!(rCutSqVdw < d)) {
+            vDistSq[nv] = d;
+            vKind[nv] = pKind[j];
+            if constexpr (HasLambda)
+              vMol[nv] = pMol[j];
+            ++nv;
+          }
+          if constexpr (HasCharge) {
+            if (!(rCutSqCoul < d)) {
+              cDistSq[nc] = d;
+              cQ[nc] = pQ[j];
+              if constexpr (HasLambda) {
+                cKind[nc] = pKind[j];
+                cMol[nc] = pMol[j];
+              }
+              ++nc;
+            }
+          }
         }
 
-        // ---- pass 3: kernels over a dense run, no cutoff test ----
-        for (int s = 0; s < ns; s++) {
+        // ---- pass 3: one dense run per kernel, no cutoff test ----
+        //
+        // The two sums are separate accumulators and each list keeps the pairs
+        // in their original relative order, so splitting the fused loop in two
+        // leaves both bit-for-bit unchanged. The pairs that are dropped are
+        // exactly the ones whose kernel returned 0.0.
+        //
+        if constexpr (HasCharge) {
+          for (int s = 0; s < nc; s++) {
+            const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
+            if (qi_qj_fact == 0.0)
+              continue;
+            if constexpr (HasLambda) {
+              const double lambdaCoulomb =
+                  (currMol == fracMol || cMol[s] == fracMol) ? fracCoul : 1.0;
+              tempREn += ff.FFType::CalcCoulomb(cDistSq[s], currKind, cKind[s],
+                                                qi_qj_fact, lambdaCoulomb, box);
+            } else {
+              tempREn += ff.CalcCoulombFullInRange(cDistSq[s], qi_qj_fact, box);
+            }
+          }
+        }
+        for (int s = 0; s < nv; s++) {
           if constexpr (HasLambda) {
-            double lambdaVDW = 1.0;
-            double lambdaCoulomb = 1.0;
-            if (currMol == fracMol || sMol[s] == fracMol) {
-              lambdaVDW = fracVDW;
-              lambdaCoulomb = fracCoul;
-            }
-
-            if constexpr (HasCharge) {
-              const double qi_qj_fact = currQ * sQ[s] * num::qqFact;
-              if (qi_qj_fact != 0.0) {
-                tempREn += ff.FFType::CalcCoulomb(sDistSq[s], currKind,
-                                                  sKind[s], qi_qj_fact,
-                                                  lambdaCoulomb, box);
-              }
-            }
+            const double lambdaVDW =
+                (currMol == fracMol || vMol[s] == fracMol) ? fracVDW : 1.0;
             tempLJEn +=
-                ff.FFType::CalcEn(sDistSq[s], currKind, sKind[s], lambdaVDW);
+                ff.FFType::CalcEn(vDistSq[s], currKind, vKind[s], lambdaVDW);
           } else {
-            if constexpr (HasCharge) {
-              const double qi_qj_fact = currQ * sQ[s] * num::qqFact;
-              if (qi_qj_fact != 0.0) {
-                tempREn += ff.CalcCoulombFull(sDistSq[s], qi_qj_fact, box);
-              }
-            }
-            tempLJEn += ff.CalcEnFull(sDistSq[s], currKind, sKind[s]);
+            tempLJEn += ff.CalcEnFullInRange(vDistSq[s], currKind, vKind[s]);
           }
         }
       }
@@ -489,6 +539,9 @@ void CalculateEnergy::BoxInterTemplate(
   const int *const cellStart = cellStartIndex.data();
   const int nAtoms = (int)cellVector.size();
   const double rCutSqBox = boxAxes.rCutSq[box];
+  // Per-kernel cutoffs; see the whole-box path above.
+  const double rCutSqVdw = forcefield.rCutSq;
+  const double rCutSqCoul = forcefield.rCutCoulombSq[box];
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none)                                         \
@@ -496,7 +549,8 @@ void CalculateEnergy::BoxInterTemplate(
     reduction(+ : tempREn, tempLJEn)                                           \
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul,                 \
                      ordX, ordY, ordZ, ordQ, ordMol, ordKind, ordCell,         \
-                     cellVec, cellStart, nAtoms, rCutSqBox)
+                     cellVec, cellStart, nAtoms, rCutSqBox, rCutSqVdw,         \
+                     rCutSqCoul)
 #endif
   // loop over all particles
   for (int i = 0; i < nAtoms; i++) {
@@ -508,12 +562,17 @@ void CalculateEnergy::BoxInterTemplate(
     // find the which cell currParticle belong to
     const int currCell = ordCell[i];
 
-    // Scratch, per thread, ~6 KiB and L1-resident; see the whole-box path.
+    // Scratch, per thread, L1-resident; two survivor lists as in the
+    // whole-box path, with the unread arrays collapsed to one element.
+    constexpr int SURV = GOMC_DISTSQ_CHUNK + 8;
+    constexpr int CSZ = HasCharge ? SURV : 1;
+    constexpr int CLAM = (HasCharge && HasLambda) ? SURV : 1;
+    constexpr int VLAM = HasLambda ? SURV : 1;
     double distSq[GOMC_DISTSQ_CHUNK];
-    double sDistSq[GOMC_DISTSQ_CHUNK + 8];
-    double sQ[GOMC_DISTSQ_CHUNK + 8];
-    int sKind[GOMC_DISTSQ_CHUNK + 8];
-    int sMol[GOMC_DISTSQ_CHUNK + 8];
+    double cDistSq[CSZ], cQ[CSZ];
+    int cKind[CLAM], cMol[CLAM];
+    double vDistSq[SURV];
+    int vKind[SURV], vMol[VLAM];
 
     // loop over currCell neighboring cells
     for (int nCellIndex = 0; nCellIndex < NUMBER_OF_NEIGHBOR_CELL;
@@ -547,28 +606,45 @@ void CalculateEnergy::BoxInterTemplate(
         // ~11% of candidates survive at a 5^3 grid against ~20% in the
         // degenerate case, so proportionally more of the branchy scan goes
         // away.
-        int ns = 0;
+        // The per-kernel cutoffs are applied as extra masks; `<=` matches the
+        // boundary of the `rCut < distSq` tests in FFAdapter they replace.
+        int nc = 0, nv = 0;
         int k = 0;
 #ifdef GOMC_HAVE_COMPRESS
         {
           const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
+          const __m512d vRCutV = _mm512_set1_pd(rCutSqVdw);
+          const __m512d vRCutC = _mm512_set1_pd(rCutSqCoul);
           const __m256i vCurrMol = _mm256_set1_epi32(currMol);
           for (; k + 8 <= m; k += 8) {
             const int j = base + k;
             const __m512d d = _mm512_loadu_pd(distSq + k);
             const __m256i mol =
                 _mm256_loadu_si256((const __m256i *)(ordMol + j));
+            const __m256i kind =
+                _mm256_loadu_si256((const __m256i *)(ordKind + j));
             const __mmask8 keep =
                 _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ) &
                 _mm256_cmpneq_epi32_mask(mol, vCurrMol);
-            _mm512_mask_compressstoreu_pd(sDistSq + ns, keep, d);
-            _mm512_mask_compressstoreu_pd(sQ + ns, keep,
-                                          _mm512_loadu_pd(ordQ + j));
-            _mm256_mask_compressstoreu_epi32(
-                sKind + ns, keep,
-                _mm256_loadu_si256((const __m256i *)(ordKind + j)));
-            _mm256_mask_compressstoreu_epi32(sMol + ns, keep, mol);
-            ns += _mm_popcnt_u32((unsigned)keep);
+            const __mmask8 keepV =
+                keep & _mm512_cmp_pd_mask(d, vRCutV, _CMP_LE_OQ);
+            _mm512_mask_compressstoreu_pd(vDistSq + nv, keepV, d);
+            _mm256_mask_compressstoreu_epi32(vKind + nv, keepV, kind);
+            if constexpr (HasLambda)
+              _mm256_mask_compressstoreu_epi32(vMol + nv, keepV, mol);
+            nv += _mm_popcnt_u32((unsigned)keepV);
+            if constexpr (HasCharge) {
+              const __mmask8 keepC =
+                  keep & _mm512_cmp_pd_mask(d, vRCutC, _CMP_LE_OQ);
+              _mm512_mask_compressstoreu_pd(cDistSq + nc, keepC, d);
+              _mm512_mask_compressstoreu_pd(cQ + nc, keepC,
+                                            _mm512_loadu_pd(ordQ + j));
+              if constexpr (HasLambda) {
+                _mm256_mask_compressstoreu_epi32(cKind + nc, keepC, kind);
+                _mm256_mask_compressstoreu_epi32(cMol + nc, keepC, mol);
+              }
+              nc += _mm_popcnt_u32((unsigned)keepC);
+            }
           }
         }
 #endif
@@ -576,45 +652,59 @@ void CalculateEnergy::BoxInterTemplate(
           const int j = base + k;
           if (currMol == ordMol[j])
             continue;
-          if (!(rCutSqBox > distSq[k]))
+          const double d = distSq[k];
+          if (!(rCutSqBox > d))
             continue;
-          sDistSq[ns] = distSq[k];
-          sQ[ns] = ordQ[j];
-          sKind[ns] = ordKind[j];
-          sMol[ns] = ordMol[j];
-          ++ns;
+          if (!(rCutSqVdw < d)) {
+            vDistSq[nv] = d;
+            vKind[nv] = ordKind[j];
+            if constexpr (HasLambda)
+              vMol[nv] = ordMol[j];
+            ++nv;
+          }
+          if constexpr (HasCharge) {
+            if (!(rCutSqCoul < d)) {
+              cDistSq[nc] = d;
+              cQ[nc] = ordQ[j];
+              if constexpr (HasLambda) {
+                cKind[nc] = ordKind[j];
+                cMol[nc] = ordMol[j];
+              }
+              ++nc;
+            }
+          }
         }
 
-        // ---- pass 3: kernels over a dense run, no cutoff test ----
-        for (int sIdx = 0; sIdx < ns; sIdx++) {
+        // ---- pass 3: one dense run per kernel, no cutoff test ----
+        // Separate accumulators and order-preserving lists, so splitting the
+        // fused loop leaves both sums bit-for-bit unchanged.
+        if constexpr (HasCharge) {
+          for (int sIdx = 0; sIdx < nc; sIdx++) {
+            const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
+            if (qi_qj_fact == 0.0)
+              continue;
+            if constexpr (HasLambda) {
+              const double lambdaCoulomb =
+                  (currMol == fracMol || cMol[sIdx] == fracMol) ? fracCoul
+                                                                : 1.0;
+              tempREn +=
+                  ff.FFType::CalcCoulomb(cDistSq[sIdx], currKind, cKind[sIdx],
+                                         qi_qj_fact, lambdaCoulomb, box);
+            } else {
+              tempREn +=
+                  ff.CalcCoulombFullInRange(cDistSq[sIdx], qi_qj_fact, box);
+            }
+          }
+        }
+        for (int sIdx = 0; sIdx < nv; sIdx++) {
           if constexpr (HasLambda) {
-            double lambdaVDW = 1.0;
-            double lambdaCoulomb = 1.0;
-            if (currMol == fracMol || sMol[sIdx] == fracMol) {
-              lambdaVDW = fracVDW;
-              lambdaCoulomb = fracCoul;
-            }
-
-            if constexpr (HasCharge) {
-              const double qi_qj_fact = currQ * sQ[sIdx] * num::qqFact;
-              if (qi_qj_fact != 0.0) {
-                tempREn += ff.FFType::CalcCoulomb(sDistSq[sIdx], currKind,
-                                                  sKind[sIdx], qi_qj_fact,
-                                                  lambdaCoulomb, box);
-              }
-            }
-            tempLJEn += ff.FFType::CalcEn(sDistSq[sIdx], currKind, sKind[sIdx],
+            const double lambdaVDW =
+                (currMol == fracMol || vMol[sIdx] == fracMol) ? fracVDW : 1.0;
+            tempLJEn += ff.FFType::CalcEn(vDistSq[sIdx], currKind, vKind[sIdx],
                                           lambdaVDW);
           } else {
-            // Same values, reached without the lambda tests; see
-            // FFAdapter::CalcEnFull.
-            if constexpr (HasCharge) {
-              const double qi_qj_fact = currQ * sQ[sIdx] * num::qqFact;
-              if (qi_qj_fact != 0.0) {
-                tempREn += ff.CalcCoulombFull(sDistSq[sIdx], qi_qj_fact, box);
-              }
-            }
-            tempLJEn += ff.CalcEnFull(sDistSq[sIdx], currKind, sKind[sIdx]);
+            tempLJEn +=
+                ff.CalcEnFullInRange(vDistSq[sIdx], currKind, vKind[sIdx]);
           }
         }
       }

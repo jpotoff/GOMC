@@ -94,6 +94,31 @@ struct FFAdapter : public FFParticle {
     return CoulKernel(distSq, qi_qj_Fact, b);
   }
 
+  //
+  // The same two kernels for callers that have already established the pair is
+  // inside the relevant cutoff, so the test does not belong in the loop.
+  //
+  // BoxInterTemplate's pass 2 compacts against max(rCut, rCutCoulomb) -- the
+  // cell list's cutoff -- so a survivor is inside the LARGER of the two and
+  // the smaller cutoff still has to be applied somewhere. Applying it as a
+  // second mask during compaction, rather than as a branch per pair, is what
+  // lets pass 3 run as a dense loop: an early return cannot be masked across a
+  // function boundary, and one of these tests is live for any input where the
+  // two cutoffs differ.
+  //
+  // Pairs the tests would have rejected contributed exactly 0.0, so dropping
+  // them from the sum rather than adding zero leaves results unchanged.
+  //
+  double CalcEnFullInRange(const double distSq, const uint kind1,
+                           const uint kind2) const {
+    return VdwEval::Energy(Self().VdwView(), distSq, FlatIndex(kind1, kind2));
+  }
+
+  double CalcCoulombFullInRange(const double distSq, const double qi_qj_Fact,
+                                const uint b) const {
+    return CoulKernel(distSq, qi_qj_Fact, b);
+  }
+
   void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
                    const uint kind2) const override {
     if (forcefield.rCutSq < distSq)
