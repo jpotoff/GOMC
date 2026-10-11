@@ -38,7 +38,12 @@ set(CMAKE_CLANG_COMP_FLAGS -O3)
 set(CMAKE_CLANG_CUDA_COMP_FLAGS "SHELL:-Xcompiler -O3")
 set(CMAKE_CLANG_LINK_FLAGS -O3)
 
-# The GOMC_OPT setting enables processor-specific optimizations.
+# GOMC_OPT enables processor-specific optimizations. It defaults to ON: with it
+# off the compiler targets baseline x86-64, which is SSE2 -- two doubles wide --
+# and every vectorized loop in the energy kernels runs at a quarter of the
+# width it was written for. There is no reason to want that, and the only thing
+# the setting controls is the -march= flag below, which is checked for compiler
+# support before being used.
 #
 # GOMC_ARCH picks the target. The default, x86-64-v3, is AVX2 + FMA: it runs on
 # anything Haswell or Zen 1 and newer, and gives the vector units 4 doubles at a
@@ -48,8 +53,14 @@ set(CMAKE_CLANG_LINK_FLAGS -O3)
 #
 # For benchmarking, prefer a target that enables AVX-512:
 #
-#   cmake .. -DGOMC_OPT=on -DGOMC_ARCH=znver5      # Zen 4/5, Ryzen 9000
-#   cmake .. -DGOMC_OPT=on -DGOMC_ARCH=x86-64-v4   # any AVX-512 part
+#   cmake .. -DGOMC_ARCH=znver5      # Zen 4/5, Ryzen 9000
+#   cmake .. -DGOMC_ARCH=x86-64-v4   # any AVX-512 part
+#   ./metamake.sh -A znver5          # the same, via the build script
+#
+# This matters more than it used to: the survivor-compaction kernels in
+# CalculateEnergy.cpp are guarded by __AVX512F__ and fall back to scalar
+# without it, silently. Check with:
+#   objdump -d bin/GOMC_CPU_GEMC | grep -c vcompress
 #
 # This matters more than it used to. The minimum-image/distance pass of
 # CalculateEnergy::BoxInterTemplate now vectorises (see DistSqRange in
@@ -69,6 +80,8 @@ set(CMAKE_CLANG_LINK_FLAGS -O3)
 # is built with target processor feature specified, it can only be run on
 # Intel(R) processors". -march= carries no such check. Classic icc predates
 # -march= and has no alternative, so it keeps -xHost and stays Intel-only.
+option(GOMC_OPT "Enable processor-specific optimization flags (-march=)" ON)
+
 if(GOMC_OPT)
    set(GOMC_ARCH "x86-64-v3" CACHE STRING
        "Target architecture for GOMC_OPT (-march=); e.g. x86-64-v3, x86-64-v4, znver5, native")

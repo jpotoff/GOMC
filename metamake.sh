@@ -69,8 +69,10 @@ if command -v nvcc &> /dev/null; then
 	fi
 fi
 
-while getopts 'acdglmOpt' opt; do
+while getopts 'A:acdglmOpt' opt; do
     case "$opt" in
+        A)
+            CMAKEARGS+="-DGOMC_ARCH=$OPTARG ";;
         a)
             use_asan=1;;
         c)
@@ -93,13 +95,16 @@ while getopts 'acdglmOpt' opt; do
             use_gcc=1;;
         *)  echo 'Error in command line options' >&2
             echo "Available options are: "
+            echo "-A <arch>, target architecture for -march= (default x86-64-v3)."
+            echo "           e.g. -A znver5, -A x86-64-v4, -A native."
+            echo "           AVX-512 kernels are only compiled in with a v4+ target."
             echo "-a, enables address sanitizer runtime checking"
             echo "-c, enables clang-tidy source code checks"
             echo "-d, enables Debug Mode compilation"
             echo "-g, use the GNU compiler"
 			echo "-l, use the Clang compiler"
             echo "-m, enables MPI support (Required for Parallel Tempering)"
-            echo "-O, enables architecture-specific compiler optimization flags"
+            echo "-O, enables -march= optimization flags (now on by default)"
             echo "-p enables GPU code profiling (NVTX tags)"
             echo "-t disables Intel compiler to allow GTests to compile"
             echo "For combined usage, concatenate flags, e.g.: -ptmg"
