@@ -83,6 +83,31 @@ public:
     return box[b].Eval(box[b].en, distSq, out);
   }
 
+  //
+  // The covered interval of distSq for a box, as a half-open [lo, hi).
+  // False means this box has no table and every lookup would miss.
+  //
+  // A caller that can establish up front that a whole run of pairs lies inside
+  // this interval can then use the Unchecked form below and have a loop body
+  // with no branch and no call in it. That is worth a lot more than the two
+  // compares it saves: the exact-erfc fallback contains calls to sqrt and
+  // erfc, and their mere presence forces zmm26-31 to be spilled around them,
+  // which squeezes register allocation hard enough that the energy accumulator
+  // itself ends up spilled and reloaded on every pair.
+  //
+  inline bool Range(const uint b, double &lo, double &hi) const {
+    if (!built || box[b].n == 0)
+      return false;
+    lo = box[b].lo;
+    hi = box[b].lo + (double)box[b].n / box[b].invDx;
+    return true;
+  }
+
+  //! erfc(alpha*r)/r for distSq KNOWN to lie in Range(b); no test, no fallback.
+  inline double EnergyUnchecked(const double distSq, const uint b) const {
+    return box[b].EvalUnchecked(box[b].en, distSq);
+  }
+
   // (erfc(alpha*r)/r + alpha*2/sqrt(pi)*exp(-alpha^2 r^2)) / r^2
   inline bool Virial(const double distSq, const uint b, double &out) const {
     return box[b].Eval(box[b].vir, distSq, out);
@@ -139,6 +164,16 @@ private:
         Hermite(&vir[4 * i], ExactVirial(x0, alpha), ExactVirial(x0 + dx, alpha),
                 dVirial(x0, alpha) * dx, dVirial(x0 + dx, alpha) * dx);
       }
+    }
+
+    //! Eval without the range test; the caller guarantees lo <= distSq < hi.
+    inline double EvalUnchecked(const std::vector<double> &c,
+                                const double distSq) const {
+      const double t = (distSq - lo) * invDx;
+      const int i = (int)t;
+      const double f = t - i;
+      const double *p = &c[4 * i];
+      return p[0] + f * (p[1] + f * (p[2] + f * p[3]));
     }
 
     inline bool Eval(const std::vector<double> &c, const double distSq,

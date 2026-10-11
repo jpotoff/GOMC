@@ -428,6 +428,13 @@ void CalculateEnergy::BoxInterTemplate(
     // FFAdapter::CalcEnFullInRange.
     const double rCutSqVdw = forcefield.rCutSq;
     const double rCutSqCoul = forcefield.rCutCoulombSq[box];
+    // The distSq window the real-space table covers. When every Coulomb
+    // survivor in a chunk lands inside it, pass 3 can use the unchecked
+    // lookup: no range test, no null test, and -- the part that matters -- no
+    // erfc fallback call, whose spill of zmm26-31 was costing the hot path
+    // its registers.
+    double tabLo = 0.0, tabHi = 0.0;
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
 
     // schedule(static, 1) because this loop is triangular: atom i does
     // nPacked-i-1 distances, so the default blocked schedule would hand the
@@ -438,7 +445,8 @@ void CalculateEnergy::BoxInterTemplate(
 #pragma omp parallel for schedule(static, 1) default(none)                     \
     shared(boxAxes, ff) reduction(+ : tempREn, tempLJEn)                       \
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul, nPacked, pX,    \
-                     pY, pZ, pQ, pKind, pMol, rCutSqBox, rCutSqVdw, rCutSqCoul)
+                     pY, pZ, pQ, pKind, pMol, rCutSqBox, rCutSqVdw,         \
+                     rCutSqCoul, hasTab, tabLo, tabHi)
 #endif
     for (int i = 0; i < nPacked; i++) {
       const int currMol = pMol[i];
@@ -490,13 +498,21 @@ void CalculateEnergy::BoxInterTemplate(
         // than `<` so the boundary falls on the same side as the
         // `rCut < distSq` tests in FFAdapter these replace; a pair exactly at
         // the cutoff contributes there and must contribute here.
+        // `tabBad` records whether any Coulomb survivor fell outside the
+        // table's window. It is a mask OR rather than a counter on purpose:
+        // the two survivor counters already form a serial
+        // kmovb -> popcnt -> add chain across iterations, and a third would
+        // cost more than the branch it removes.
         int nc = 0, nv = 0;
+        __mmask8 tabBad = 0;
         int k = 0;
 #ifdef GOMC_HAVE_COMPRESS
         {
           const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
           const __m512d vRCutV = _mm512_set1_pd(rCutSqVdw);
           const __m512d vRCutC = _mm512_set1_pd(rCutSqCoul);
+          const __m512d vTabLo = _mm512_set1_pd(tabLo);
+          const __m512d vTabHi = _mm512_set1_pd(tabHi);
           const __m256i vCurrMol = _mm256_set1_epi32(currMol);
           for (; k + 8 <= m; k += 8) {
             const int j = base + k;
@@ -525,6 +541,10 @@ void CalculateEnergy::BoxInterTemplate(
                 _mm256_mask_compressstoreu_epi32(cKind + nc, keepC, kind);
                 _mm256_mask_compressstoreu_epi32(cMol + nc, keepC, mol);
               }
+              tabBad |= keepC & ~(_mm512_cmp_pd_mask(d, vTabLo, _CMP_GE_OQ) &
+                                  _mm512_cmp_pd_mask(d, vTabHi, _CMP_LT_OQ));
+              tabBad |= keepC & ~(_mm512_cmp_pd_mask(d, vTabLo, _CMP_GE_OQ) &
+                                  _mm512_cmp_pd_mask(d, vTabHi, _CMP_LT_OQ));
               nc += _mm_popcnt_u32((unsigned)keepC);
             }
           }
@@ -546,6 +566,8 @@ void CalculateEnergy::BoxInterTemplate(
           }
           if constexpr (HasCharge) {
             if (!(rCutSqCoul < d)) {
+              if (!(d >= tabLo && d < tabHi))
+                tabBad = 1;
               cDistSq[nc] = d;
               cQ[nc] = pQ[j];
               if constexpr (HasLambda) {
@@ -564,34 +586,42 @@ void CalculateEnergy::BoxInterTemplate(
         // leaves both bit-for-bit unchanged. The pairs that are dropped are
         // exactly the ones whose kernel returned 0.0.
         //
-        //
-        // The Coulomb sum goes into a local first. tempREn is the OpenMP
-        // reduction variable and so lives on the stack: accumulating into it
-        // directly costs a load, an add and a store per pair, a dependent
-        // round trip through memory that showed up as 10.8% of the symbol --
-        // the store alone was the hottest instruction in the loop. It also
-        // clobbers memory, which is why the `c.table` null test below was
-        // being re-read every iteration instead of hoisted.
-        //
-        // Like the vdW accumulator in MieVdwRunFixed, this changes the
-        // addition order and so is not bit-for-bit.
-        //
         if constexpr (HasCharge) {
-          double realEn = 0.0;
-          for (int s = 0; s < nc; s++) {
-            const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
-            if (qi_qj_fact == 0.0)
-              continue;
-            if constexpr (HasLambda) {
-              const double lambdaCoulomb =
-                  (currMol == fracMol || cMol[s] == fracMol) ? fracCoul : 1.0;
-              realEn += ff.FFType::CalcCoulomb(cDistSq[s], currKind, cKind[s],
-                                               qi_qj_fact, lambdaCoulomb, box);
-            } else {
-              realEn += ff.CalcCoulombFullInRange(cDistSq[s], qi_qj_fact, box);
+          //
+          // Fast path: every survivor is inside the table, so the body is a
+          // straight line -- no range test, no null test, no erfc call. The
+          // qi_qj_fact == 0 test goes too: multiplying a finite table value
+          // by a zero charge product gives zero, which is what the test was
+          // short-circuiting to, and the `!=` form compiled to a compare plus
+          // a parity branch for the NaN case.
+          //
+          // !HasLambda guards the unchecked kernel, which has no soft-core
+          // form: a fractional molecule has to go through CalcCoulomb. It is
+          // a template constant, so this folds.
+          if (!HasLambda && hasTab && !tabBad) {
+            double realEn = 0.0;
+            for (int s = 0; s < nc; s++) {
+              const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
+              realEn += ff.CalcCoulombTabUnchecked(cDistSq[s], qi_qj_fact, box);
+            }
+            tempREn += realEn;
+          } else {
+            for (int s = 0; s < nc; s++) {
+              const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
+              if (qi_qj_fact == 0.0)
+                continue;
+              if constexpr (HasLambda) {
+                const double lambdaCoulomb =
+                    (currMol == fracMol || cMol[s] == fracMol) ? fracCoul : 1.0;
+                tempREn +=
+                    ff.FFType::CalcCoulomb(cDistSq[s], currKind, cKind[s],
+                                           qi_qj_fact, lambdaCoulomb, box);
+              } else {
+                tempREn +=
+                    ff.CalcCoulombFullInRange(cDistSq[s], qi_qj_fact, box);
+              }
             }
           }
-          tempREn += realEn;
         }
         if constexpr (HasLambda) {
           for (int s = 0; s < nv; s++) {
@@ -632,6 +662,13 @@ void CalculateEnergy::BoxInterTemplate(
   // Per-kernel cutoffs; see the whole-box path above.
   const double rCutSqVdw = forcefield.rCutSq;
   const double rCutSqCoul = forcefield.rCutCoulombSq[box];
+    // The distSq window the real-space table covers. When every Coulomb
+    // survivor in a chunk lands inside it, pass 3 can use the unchecked
+    // lookup: no range test, no null test, and -- the part that matters -- no
+    // erfc fallback call, whose spill of zmm26-31 was costing the hot path
+    // its registers.
+    double tabLo = 0.0, tabHi = 0.0;
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none)                                         \
@@ -640,7 +677,7 @@ void CalculateEnergy::BoxInterTemplate(
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul,                 \
                      ordX, ordY, ordZ, ordQ, ordMol, ordKind, ordCell,         \
                      cellVec, cellStart, nAtoms, rCutSqBox, rCutSqVdw,         \
-                     rCutSqCoul)
+                     rCutSqCoul, hasTab, tabLo, tabHi)
 #endif
   // loop over all particles
   for (int i = 0; i < nAtoms; i++) {
@@ -698,13 +735,21 @@ void CalculateEnergy::BoxInterTemplate(
         // away.
         // The per-kernel cutoffs are applied as extra masks; `<=` matches the
         // boundary of the `rCut < distSq` tests in FFAdapter they replace.
+        // `tabBad` records whether any Coulomb survivor fell outside the
+        // table's window. It is a mask OR rather than a counter on purpose:
+        // the two survivor counters already form a serial
+        // kmovb -> popcnt -> add chain across iterations, and a third would
+        // cost more than the branch it removes.
         int nc = 0, nv = 0;
+        __mmask8 tabBad = 0;
         int k = 0;
 #ifdef GOMC_HAVE_COMPRESS
         {
           const __m512d vRCut = _mm512_set1_pd(rCutSqBox);
           const __m512d vRCutV = _mm512_set1_pd(rCutSqVdw);
           const __m512d vRCutC = _mm512_set1_pd(rCutSqCoul);
+          const __m512d vTabLo = _mm512_set1_pd(tabLo);
+          const __m512d vTabHi = _mm512_set1_pd(tabHi);
           const __m256i vCurrMol = _mm256_set1_epi32(currMol);
           for (; k + 8 <= m; k += 8) {
             const int j = base + k;
@@ -754,6 +799,8 @@ void CalculateEnergy::BoxInterTemplate(
           }
           if constexpr (HasCharge) {
             if (!(rCutSqCoul < d)) {
+              if (!(d >= tabLo && d < tabHi))
+                tabBad = 1;
               cDistSq[nc] = d;
               cQ[nc] = ordQ[j];
               if constexpr (HasLambda) {
@@ -768,37 +815,44 @@ void CalculateEnergy::BoxInterTemplate(
         // ---- pass 3: one dense run per kernel, no cutoff test ----
         // Separate accumulators and order-preserving lists, so splitting the
         // fused loop leaves both sums bit-for-bit unchanged.
-        //
-        // The Coulomb sum goes into a local first. tempREn is the OpenMP
-        // reduction variable and so lives on the stack: accumulating into it
-        // directly costs a load, an add and a store per pair, a dependent
-        // round trip through memory that showed up as 10.8% of the symbol --
-        // the store alone was the hottest instruction in the loop. It also
-        // clobbers memory, which is why the `c.table` null test below was
-        // being re-read every iteration instead of hoisted.
-        //
-        // Like the vdW accumulator in MieVdwRunFixed, this changes the
-        // addition order and so is not bit-for-bit.
-        //
         if constexpr (HasCharge) {
-          double realEn = 0.0;
-          for (int sIdx = 0; sIdx < nc; sIdx++) {
-            const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
-            if (qi_qj_fact == 0.0)
-              continue;
-            if constexpr (HasLambda) {
-              const double lambdaCoulomb =
-                  (currMol == fracMol || cMol[sIdx] == fracMol) ? fracCoul
-                                                                : 1.0;
+          //
+          // Fast path: every survivor is inside the table, so the body is a
+          // straight line -- no range test, no null test, no erfc call. The
+          // qi_qj_fact == 0 test goes too: multiplying a finite table value
+          // by a zero charge product gives zero, which is what the test was
+          // short-circuiting to, and the `!=` form compiled to a compare plus
+          // a parity branch for the NaN case.
+          //
+          // !HasLambda guards the unchecked kernel, which has no soft-core
+          // form: a fractional molecule has to go through CalcCoulomb. It is
+          // a template constant, so this folds.
+          if (!HasLambda && hasTab && !tabBad) {
+            double realEn = 0.0;
+            for (int sIdx = 0; sIdx < nc; sIdx++) {
+              const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
               realEn +=
-                  ff.FFType::CalcCoulomb(cDistSq[sIdx], currKind, cKind[sIdx],
-                                         qi_qj_fact, lambdaCoulomb, box);
-            } else {
-              realEn +=
-                  ff.CalcCoulombFullInRange(cDistSq[sIdx], qi_qj_fact, box);
+                  ff.CalcCoulombTabUnchecked(cDistSq[sIdx], qi_qj_fact, box);
+            }
+            tempREn += realEn;
+          } else {
+            for (int sIdx = 0; sIdx < nc; sIdx++) {
+              const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
+              if (qi_qj_fact == 0.0)
+                continue;
+              if constexpr (HasLambda) {
+                const double lambdaCoulomb =
+                    (currMol == fracMol || cMol[sIdx] == fracMol) ? fracCoul
+                                                                  : 1.0;
+                tempREn +=
+                    ff.FFType::CalcCoulomb(cDistSq[sIdx], currKind, cKind[sIdx],
+                                           qi_qj_fact, lambdaCoulomb, box);
+              } else {
+                tempREn +=
+                    ff.CalcCoulombFullInRange(cDistSq[sIdx], qi_qj_fact, box);
+              }
             }
           }
-          tempREn += realEn;
         }
         if constexpr (HasLambda) {
           for (int sIdx = 0; sIdx < nv; sIdx++) {
