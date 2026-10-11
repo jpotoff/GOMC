@@ -4,6 +4,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 <https://opensource.org/licenses/MIT>.
 ******************************************************************************/
 #include "BoxDimensions.h"
+#include "CellList.h"
 
 #include "GeomLib.h"
 #include "MoveConst.h" //For cutoff-related fail condition
@@ -55,7 +56,7 @@ void BoxDimensions::Init(config_setup::RestartSettings const &restart,
     printf("%s %-d: %-25s %7.3f %7.3f %7.3f\n", "Info: Box ", b,
            " Periodic Cell Basis 2", cellBasis[b].Get(1).x,
            cellBasis[b].Get(1).y, cellBasis[b].Get(1).z);
-    printf("%s %-d: %-25s %7.3f %7.3f %7.3f\n\n", "Info: Box ", b,
+    printf("%s %-d: %-25s %7.3f %7.3f %7.3f\n", "Info: Box ", b,
            " Periodic Cell Basis 3", cellBasis[b].Get(2).x,
            cellBasis[b].Get(2).y, cellBasis[b].Get(2).z);
 
@@ -68,6 +69,35 @@ void BoxDimensions::Init(config_setup::RestartSettings const &restart,
           b);
       exit(EXIT_FAILURE);
     }
+    //
+    // Report the cell grid with the rest of the box geometry.
+    //
+    // It belongs here rather than with the cell list: it is decided by the
+    // box edges and this box's cutoff and by nothing else, and both are known
+    // at this point -- including on a restart, where the cell basis comes
+    // from the XSC and the one in the control file is ignored. The cell list
+    // is not built until System::Init, long after the setup header has been
+    // printed.
+    //
+    // Which pair-search path the energy kernels take follows directly from
+    // this, so it is worth stating rather than leaving to be inferred from
+    // the box size and the cutoff. See CellList::EdgeCellsFor.
+    //
+    {
+      const XYZ side = axis.Get(b);
+      const int ex = CellList::EdgeCellsFor(side.x, rCut[b]);
+      const int ey = CellList::EdgeCellsFor(side.y, rCut[b]);
+      const int ez = CellList::EdgeCellsFor(side.z, rCut[b]);
+      printf("%s %-d: %-25s %d x %d x %d, spacing %.3f x %.3f x %.3f A "
+             "(cutoff %.3f A)\n",
+             "Info: Box ", b, " Cell grid", ex, ey, ez, side.x / ex,
+             side.y / ey, side.z / ez, rCut[b]);
+      printf("%s %-d: %-25s %s\n\n", "Info: Box ", b, " Pair search",
+             (ex == 3 && ey == 3 && ez == 3)
+                 ? "whole box -- cell list not used"
+                 : "cell list");
+    }
+
     // Find Cosine Angle of alpha, beta and gamma
     cosAngle[b][0] = Dot(cellBasis[b].Get(1), cellBasis[b].Get(2)) /
                      (axis.Get(b).y * axis.Get(b).z);

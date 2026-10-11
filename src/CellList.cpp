@@ -143,17 +143,17 @@ void CellList::ResizeGrid(const BoxDimensions &dims) {
     bool rebuild = false;
     int *eCells = edgeCells[b];
     int oldCells = eCells[0];
-    eCells[0] = std::max((int)floor(sides.x / cutoff[b]), 3);
+    eCells[0] = EdgeCellsFor(sides.x, cutoff[b]);
     cellSize[b].x = sides.x / eCells[0];
     rebuild |= (!isBuilt || (oldCells != eCells[0]));
 
     oldCells = eCells[1];
-    eCells[1] = std::max((int)floor(sides.y / cutoff[b]), 3);
+    eCells[1] = EdgeCellsFor(sides.y, cutoff[b]);
     cellSize[b].y = sides.y / eCells[1];
     rebuild |= (!isBuilt || (oldCells != eCells[1]));
 
     oldCells = eCells[2];
-    eCells[2] = std::max((int)floor(sides.z / cutoff[b]), 3);
+    eCells[2] = EdgeCellsFor(sides.z, cutoff[b]);
     cellSize[b].z = sides.z / eCells[2];
     rebuild |= (!isBuilt || (oldCells != eCells[2]));
 
@@ -170,17 +170,17 @@ void CellList::ResizeGridBox(const BoxDimensions &dims, const uint b) {
   bool rebuild = false;
   int *eCells = edgeCells[b];
   int oldCells = eCells[0];
-  eCells[0] = std::max((int)floor(sides.x / cutoff[b]), 3);
+  eCells[0] = EdgeCellsFor(sides.x, cutoff[b]);
   cellSize[b].x = sides.x / eCells[0];
   rebuild |= (!isBuilt || (oldCells != eCells[0]));
 
   oldCells = eCells[1];
-  eCells[1] = std::max((int)floor(sides.y / cutoff[b]), 3);
+  eCells[1] = EdgeCellsFor(sides.y, cutoff[b]);
   cellSize[b].y = sides.y / eCells[1];
   rebuild |= (!isBuilt || (oldCells != eCells[1]));
 
   oldCells = eCells[2];
-  eCells[2] = std::max((int)floor(sides.z / cutoff[b]), 3);
+  eCells[2] = EdgeCellsFor(sides.z, cutoff[b]);
   cellSize[b].z = sides.z / eCells[2];
   rebuild |= (!isBuilt || (oldCells != eCells[2]));
 
@@ -189,6 +189,7 @@ void CellList::ResizeGridBox(const BoxDimensions &dims, const uint b) {
   }
   isBuilt = true;
 }
+
 
 void CellList::RebuildNeighbors(int b) {
   int *eCells = edgeCells[b];

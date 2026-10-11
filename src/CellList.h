@@ -5,7 +5,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #ifndef CELLLIST_H
 #define CELLLIST_H
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -21,6 +23,23 @@ class MoleculeLookup;
 
 class CellList {
 public:
+  //
+  // Cells along one box edge, for a given cutoff. The single definition of
+  // the rule -- ResizeGrid applies it, and BoxDimensions::Init uses it to
+  // report the resulting grid in the setup header.
+  //
+  // The clamp to three is load bearing. At three cells per edge the +-1
+  // stencil RebuildNeighbors builds reaches all 27 cells, i.e. the whole box,
+  // so the cell list prunes nothing while still paying its build and
+  // traversal cost. CalculateEnergy detects that case (StencilCoversBox) and
+  // runs a separate whole-box path instead. It holds whenever
+  // side < 4 * cutoff, and the cutoff here is max(Rcut, RcutCoulomb) for the
+  // box, not Rcut.
+  //
+  static int EdgeCellsFor(const double side, const double cutoff) {
+    return std::max((int)std::floor(side / cutoff), 3);
+  }
+
   explicit CellList(const Molecules &mols, BoxDimensions &dims);
   CellList(const CellList &other);
   void SetCutoff();
