@@ -434,8 +434,7 @@ void CalculateEnergy::BoxInterTemplate(
     // erfc fallback call, whose spill of zmm26-31 was costing the hot path
     // its registers.
     double tabLo = 0.0, tabHi = 0.0;
-    EwaldRealTable::Lookup tabLk;
-    const bool hasTab = ff.TableRange(box, tabLo, tabHi, tabLk);
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
 
     // schedule(static, 1) because this loop is triangular: atom i does
     // nPacked-i-1 distances, so the default blocked schedule would hand the
@@ -447,7 +446,7 @@ void CalculateEnergy::BoxInterTemplate(
     shared(boxAxes, ff) reduction(+ : tempREn, tempLJEn)                       \
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul, nPacked, pX,    \
                      pY, pZ, pQ, pKind, pMol, rCutSqBox, rCutSqVdw,         \
-                     rCutSqCoul, hasTab, tabLo, tabHi, tabLk)
+                     rCutSqCoul, hasTab, tabLo, tabHi)
 #endif
     for (int i = 0; i < nPacked; i++) {
       const int currMol = pMol[i];
@@ -600,24 +599,11 @@ void CalculateEnergy::BoxInterTemplate(
           // form: a fractional molecule has to go through CalcCoulomb. It is
           // a template constant, so this folds.
           if (!HasLambda && hasTab && !tabBad) {
-            //
-            // Deliberately NOT `omp simd`. Vectorising this measured 3.5%
-            // SLOWER on a 9950X: instructions fell 8.8% but cycles rose 4.1%
-            // and IPC went 2.32 -> 2.03. The four cubic coefficients are
-            // CONTIGUOUS -- p[0..3] is one 32-byte span, usually a single
-            // cache line -- so the scalar form does four cheap loads, while
-            // the vector form issues four gathers of eight scattered elements
-            // each, touching up to 8 lines per 8 pairs. Vectorising destroys
-            // the only locality this layout has.
-            //
-            // The erfc harness could not have caught this: every kernel in it
-            // was vectorised, so it ranked kernels against each other and
-            // never asked whether vectorising the table beats not doing so.
-            //
             double realEn = 0.0;
-            for (int s = 0; s < nc; s++)
-              realEn +=
-                  (currQ * cQ[s] * num::qqFact) * tabLk.Eval(cDistSq[s]);
+            for (int s = 0; s < nc; s++) {
+              const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
+              realEn += ff.CalcCoulombTabUnchecked(cDistSq[s], qi_qj_fact, box);
+            }
             tempREn += realEn;
           } else {
             for (int s = 0; s < nc; s++) {
@@ -682,8 +668,7 @@ void CalculateEnergy::BoxInterTemplate(
     // erfc fallback call, whose spill of zmm26-31 was costing the hot path
     // its registers.
     double tabLo = 0.0, tabHi = 0.0;
-    EwaldRealTable::Lookup tabLk;
-    const bool hasTab = ff.TableRange(box, tabLo, tabHi, tabLk);
+    const bool hasTab = ff.TableRange(box, tabLo, tabHi);
 
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for default(none)                                         \
@@ -692,7 +677,7 @@ void CalculateEnergy::BoxInterTemplate(
     firstprivate(box, num::qqFact, fracMol, fracVDW, fracCoul,                 \
                      ordX, ordY, ordZ, ordQ, ordMol, ordKind, ordCell,         \
                      cellVec, cellStart, nAtoms, rCutSqBox, rCutSqVdw,         \
-                     rCutSqCoul, hasTab, tabLo, tabHi, tabLk)
+                     rCutSqCoul, hasTab, tabLo, tabHi)
 #endif
   // loop over all particles
   for (int i = 0; i < nAtoms; i++) {
@@ -843,24 +828,12 @@ void CalculateEnergy::BoxInterTemplate(
           // form: a fractional molecule has to go through CalcCoulomb. It is
           // a template constant, so this folds.
           if (!HasLambda && hasTab && !tabBad) {
-            //
-            // Deliberately NOT `omp simd`. Vectorising this measured 3.5%
-            // SLOWER on a 9950X: instructions fell 8.8% but cycles rose 4.1%
-            // and IPC went 2.32 -> 2.03. The four cubic coefficients are
-            // CONTIGUOUS -- p[0..3] is one 32-byte span, usually a single
-            // cache line -- so the scalar form does four cheap loads, while
-            // the vector form issues four gathers of eight scattered elements
-            // each, touching up to 8 lines per 8 pairs. Vectorising destroys
-            // the only locality this layout has.
-            //
-            // The erfc harness could not have caught this: every kernel in it
-            // was vectorised, so it ranked kernels against each other and
-            // never asked whether vectorising the table beats not doing so.
-            //
             double realEn = 0.0;
-            for (int sIdx = 0; sIdx < nc; sIdx++)
+            for (int sIdx = 0; sIdx < nc; sIdx++) {
+              const double qi_qj_fact = currQ * cQ[sIdx] * num::qqFact;
               realEn +=
-                  (currQ * cQ[sIdx] * num::qqFact) * tabLk.Eval(cDistSq[sIdx]);
+                  ff.CalcCoulombTabUnchecked(cDistSq[sIdx], qi_qj_fact, box);
+            }
             tempREn += realEn;
           } else {
             for (int sIdx = 0; sIdx < nc; sIdx++) {

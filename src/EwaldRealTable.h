@@ -103,37 +103,10 @@ public:
     return true;
   }
 
-  //
-  // A raw-pointer view of one box's energy table.
-  //
-  // Everything the inner loop needs, as plain data: no std::vector indexing
-  // (which defeats the vectoriser -- it cannot prove the data pointer is loop
-  // invariant), no range test, no fallback. The caller establishes the range
-  // once per chunk with Range() above and then evaluates with no branch at
-  // all, which is what lets `#pragma omp simd` take.
-  //
-  struct Lookup {
-    const double *c = NULL;
-    double lo = 0.0;
-    double invDx = 0.0;
-    inline double Eval(const double distSq) const {
-      const double t = (distSq - lo) * invDx;
-      const int i = (int)t;
-      const double f = t - i;
-      const double *p = c + 4 * i;
-      return p[0] + f * (p[1] + f * (p[2] + f * p[3]));
-    }
-  };
-
-  inline Lookup EnergyLookup(const uint b) const {
-    Lookup l;
-    l.c = box[b].en.data();
-    l.lo = box[b].lo;
-    l.invDx = box[b].invDx;
-    return l;
+  //! erfc(alpha*r)/r for distSq KNOWN to lie in Range(b); no test, no fallback.
+  inline double EnergyUnchecked(const double distSq, const uint b) const {
+    return box[b].EvalUnchecked(box[b].en, distSq);
   }
-
-
 
   // (erfc(alpha*r)/r + alpha*2/sqrt(pi)*exp(-alpha^2 r^2)) / r^2
   inline bool Virial(const double distSq, const uint b, double &out) const {
@@ -191,6 +164,16 @@ private:
         Hermite(&vir[4 * i], ExactVirial(x0, alpha), ExactVirial(x0 + dx, alpha),
                 dVirial(x0, alpha) * dx, dVirial(x0 + dx, alpha) * dx);
       }
+    }
+
+    //! Eval without the range test; the caller guarantees lo <= distSq < hi.
+    inline double EvalUnchecked(const std::vector<double> &c,
+                                const double distSq) const {
+      const double t = (distSq - lo) * invDx;
+      const int i = (int)t;
+      const double f = t - i;
+      const double *p = &c[4 * i];
+      return p[0] + f * (p[1] + f * (p[2] + f * p[3]));
     }
 
     inline bool Eval(const std::vector<double> &c, const double distSq,
