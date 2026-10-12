@@ -946,7 +946,6 @@ void CalculateEnergy::BoxForceTemplate(
   double *mForcey = molForce.y;
   double *mForcez = molForce.z;
   int atomCount = atomForce.Count();
-  int molCount = molForce.Count();
 
   const int fracMol = HasLambda ? lambdaRef.GetMolIndex(box) : -1;
   const double fracVDW =
@@ -1012,15 +1011,13 @@ void CalculateEnergy::BoxForceTemplate(
 #if defined _OPENMP && _OPENMP >= 201511 // check if OpenMP version is 4.5
 #pragma omp parallel for schedule(static, 1) default(none)                     \
     shared(boxAxes, ff, neighborList)                                          \
-    firstprivate(box, atomCount, molCount, num::qqFact, fracMol,              \
+    firstprivate(box, atomCount, num::qqFact, fracMol,                        \
                      fracVDW, fracCoul, ordX, ordY, ordZ, ordQ, ordMol,        \
                      ordKind, ordCell, cellVec, cellStart, nAtoms,            \
                      rCutSqBox, rCutSqVdw, rCutSqCoul, hasTab, tabLo, tabHi,  \
                      tabView)                                                  \
     reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
-                  aForcey[ : atomCount], aForcez[ : atomCount],                \
-                  mForcex[ : molCount], mForcey[ : molCount],                  \
-                  mForcez[ : molCount])
+                  aForcey[ : atomCount], aForcez[ : atomCount])
 #endif
   for (int i = 0; i < nAtoms; i++) {
     const int currParticle = cellVec[i];
@@ -1181,13 +1178,9 @@ void CalculateEnergy::BoxForceTemplate(
             fyi += fy;
             fzi += fz;
             const int nParticle = cellVec[j];
-            const int nMol = ordMol[j];
             aForcex[nParticle] -= fx;
             aForcey[nParticle] -= fy;
             aForcez[nParticle] -= fz;
-            mForcex[nMol] -= fx;
-            mForcey[nMol] -= fy;
-            mForcez[nMol] -= fz;
           }
         }
         for (int t = 0; t < nv; t++) {
@@ -1212,24 +1205,52 @@ void CalculateEnergy::BoxForceTemplate(
           fyi += fy;
           fzi += fz;
           const int nParticle = cellVec[j];
-          const int nMol = ordMol[j];
           aForcex[nParticle] -= fx;
           aForcey[nParticle] -= fy;
           aForcez[nParticle] -= fz;
-          mForcex[nMol] -= fx;
-          mForcey[nMol] -= fy;
-          mForcez[nMol] -= fz;
         }
       }
     }
-    // One write per atom instead of one per pair. currMol is fixed for the
-    // whole neighbour loop too, so its share of the force lands here as well.
+    // One write per atom instead of one per pair.
     aForcex[currParticle] += fxi;
     aForcey[currParticle] += fyi;
     aForcez[currParticle] += fzi;
-    mForcex[currMol] += fxi;
-    mForcey[currMol] += fyi;
-    mForcez[currMol] += fzi;
+  }
+
+  //
+  // molForce, derived rather than scattered.
+  //
+  // The force on a molecule is by definition the sum of the forces on its
+  // atoms, and atomForce now holds all of them: ResetForce zeroes both and
+  // this function is the only writer of either. So the three scattered
+  // read-modify-writes this used to cost on EVERY surviving pair -- writing
+  // the same value aForce had just taken, only indexed by molecule -- collapse
+  // into one contiguous pass over atoms, run once.
+  //
+  // It also takes mForce out of the `reduction` clause above, which was three
+  // private molCount-sized buffers per thread, zeroed at every region entry
+  // and summed at every exit.
+  //
+  // NOT bit-for-bit with the scattered form: that accumulated in pair-visit
+  // order interleaved with OpenMP's reduction tree, this accumulates in atom
+  // order. Same value to within rounding, different last bits.
+  //
+  MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
+  MoleculeLookup::box_iterator endMol = molLookup.BoxEnd(box);
+  for (; thisMol != endMol; ++thisMol) {
+    const uint start = mols.MolStart(*thisMol);
+    const uint length = mols.GetKind(*thisMol).NumAtoms();
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    for (uint pa = start; pa < start + length; ++pa) {
+      sx += aForcex[pa];
+      sy += aForcey[pa];
+      sz += aForcez[pa];
+    }
+    // Assigned, not accumulated: this is the whole of the molecule's
+    // real-space force, so it does not depend on ResetForce having run.
+    mForcex[*thisMol] = sx;
+    mForcey[*thisMol] = sy;
+    mForcez[*thisMol] = sz;
   }
 }
 
