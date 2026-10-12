@@ -11,6 +11,7 @@ along with this program, also can be found at
 #include "BasicTypes.h"
 #include "EnsemblePreprocessor.h"
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <vector>
 
@@ -119,6 +120,53 @@ public:
     return box[b].Eval(box[b].vir, distSq, out);
   }
 
+  //
+  // A resolved handle to one box's table: the coefficient pointer and the two
+  // scalars that map distSq to an interval, by value.
+  //
+  // BoxForce's inner loop reaches the table through CoulParams::table and a
+  // box index, so every pair reloads the table pointer, the box descriptor
+  // base, `lo` and `invDx` -- four loop-invariant loads that the compiler
+  // cannot hoist, because the loop also stores through `double*` force arrays
+  // and those stores might alias the table. Passing a by-value View breaks the
+  // aliasing argument and leaves three values live in registers instead.
+  //
+  struct View {
+    const double *c; //!< 8 per interval: [0..3] energy, [4..7] virial
+    double lo;
+    double invDx;
+  };
+
+  //! Resolve one box's table once, to hoist out of a pair loop. False means
+  //! this box has no table and the caller must keep its general path.
+  bool GetView(const uint b, View &v) const {
+    if (!built || box[b].n == 0)
+      return false;
+    v.c = box[b].enVirPtr;
+    v.lo = box[b].lo;
+    v.invDx = box[b].invDx;
+    return true;
+  }
+
+  //
+  // Both kernels for a distSq KNOWN to lie inside the view's range.
+  //
+  // The two polynomials sit in one 64-byte line, so a pair that needs both --
+  // which is every pair in BoxForce -- touches one cache line instead of the
+  // two that separate `en` and `vir` arrays cost. Coefficients and Horner
+  // order are unchanged, so results are bit-for-bit identical to calling
+  // EnergyUnchecked and VirialUnchecked separately.
+  //
+  static void EvalBothUnchecked(const View &v, const double distSq, double &en,
+                                double &vir) {
+    const double t = (distSq - v.lo) * v.invDx;
+    const int i = (int)t;
+    const double f = t - i;
+    const double *p = v.c + 8 * i;
+    en = p[0] + f * (p[1] + f * (p[2] + f * p[3]));
+    vir = p[4] + f * (p[5] + f * (p[6] + f * p[7]));
+  }
+
   // Exact forms, used below the table floor and by the unit tests.
   static double ExactEnergy(const double distSq, const double alpha) {
     const double r = std::sqrt(distSq);
@@ -136,15 +184,30 @@ private:
   struct Grid {
     std::vector<double> en;  // 4 cubic coefficients per interval
     std::vector<double> vir;
+    // The same coefficients interleaved 8 to an interval, for callers that
+    // need both kernels per pair. `en` and `vir` are kept because BoxInter
+    // needs only the energy, and reading it from a stride-8 array would halve
+    // its line density. The duplicate costs one table's worth of memory and
+    // is never touched by a caller that wants one kernel.
+    std::vector<double> enVir;
+    const double *enVirPtr; //!< 64-byte aligned cursor into enVir
     double lo, invDx;
     int n;
 
-    Grid() : lo(0.0), invDx(0.0), n(0) {}
+    Grid() : enVirPtr(NULL), lo(0.0), invDx(0.0), n(0) {}
 
     void Clear() {
       n = 0;
       en.clear();
       vir.clear();
+      enVir.clear();
+      enVirPtr = NULL;
+    }
+
+    //! Round up to a 64-byte boundary, so one interval is one cache line.
+    static const double *Align64(const double *p) {
+      const uintptr_t a = reinterpret_cast<uintptr_t>(p);
+      return reinterpret_cast<const double *>((a + 63) & ~(uintptr_t)63);
     }
 
     void Build(double alpha, double r2Hi, double r2Lo, double intervalWidth) {
@@ -169,6 +232,18 @@ private:
                 dEnergy(x0, alpha) * dx, dEnergy(x0 + dx, alpha) * dx);
         Hermite(&vir[4 * i], ExactVirial(x0, alpha), ExactVirial(x0 + dx, alpha),
                 dVirial(x0, alpha) * dx, dVirial(x0 + dx, alpha) * dx);
+      }
+      // Interleave. Eight spare doubles let the cursor be rounded up to a
+      // 64-byte boundary; std::vector only promises 16. enVir is never
+      // resized again, so the cursor stays valid for the table's lifetime.
+      enVir.assign(8 * n + 8, 0.0);
+      enVirPtr = Align64(enVir.data());
+      double *ev = const_cast<double *>(enVirPtr);
+      for (int i = 0; i < n; ++i) {
+        for (int k = 0; k < 4; ++k) {
+          ev[8 * i + k] = en[4 * i + k];
+          ev[8 * i + 4 + k] = vir[4 * i + k];
+        }
       }
     }
 

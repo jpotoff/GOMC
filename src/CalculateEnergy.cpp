@@ -982,7 +982,15 @@ void CalculateEnergy::BoxForceTemplate(
   const double rCutSqVdw = forcefield.rCutSq;
   const double rCutSqCoul = forcefield.rCutCoulombSq[box];
   double tabLo = 0.0, tabHi = 0.0;
-  const bool hasTab = ff.TableRange(box, tabLo, tabHi);
+  // Resolved once here rather than per pair. Reaching the table through
+  // CoulParams::table and a box index costs four loop-invariant loads on every
+  // pair -- the table pointer, the box descriptor base, `lo` and `invDx` --
+  // which the compiler cannot hoist, because this loop also stores through the
+  // `double*` force arrays and those stores might alias the table. A by-value
+  // View has no such ambiguity, and frees the registers the reloads occupied.
+  EwaldRealTable::View tabView = {NULL, 0.0, 0.0};
+  const bool hasTab =
+      ff.TableRange(box, tabLo, tabHi) && ff.CoulTableView(box, tabView);
 
   //
   // schedule(static, 1) because this loop is triangular.
@@ -1007,7 +1015,8 @@ void CalculateEnergy::BoxForceTemplate(
     firstprivate(box, atomCount, molCount, num::qqFact, fracMol,              \
                      fracVDW, fracCoul, ordX, ordY, ordZ, ordQ, ordMol,        \
                      ordKind, ordCell, cellVec, cellStart, nAtoms,            \
-                     rCutSqBox, rCutSqVdw, rCutSqCoul, hasTab, tabLo, tabHi)   \
+                     rCutSqBox, rCutSqVdw, rCutSqCoul, hasTab, tabLo, tabHi,  \
+                     tabView)                                                  \
     reduction(+ : tempREn, tempLJEn, aForcex[ : atomCount],                    \
                   aForcey[ : atomCount], aForcez[ : atomCount],                \
                   mForcex[ : molCount], mForcey[ : molCount],                  \
@@ -1151,9 +1160,9 @@ void CalculateEnergy::BoxForceTemplate(
             const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
             double en, vir;
             if (!HasLambda && hasTab && !tabBad) {
-              // No range test, no null test, no erfc fallback.
-              en = ff.CalcCoulombTabUnchecked(d, qi_qj_fact, box);
-              vir = ff.CalcCoulombVirTabUnchecked(d, qi_qj_fact, box);
+              // No range test, no null test, no erfc fallback, and both
+              // kernels out of a single 64-byte line.
+              ff.CalcCoulombEnVirTabUnchecked(tabView, d, qi_qj_fact, en, vir);
             } else {
               double lambdaCoulomb = 1.0;
               if constexpr (HasLambda) {

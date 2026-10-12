@@ -145,6 +145,28 @@ struct FFAdapter : public FFParticle {
   }
 
   //
+  // Resolve this box's real-space table once, so a pair loop needing both
+  // kernels can hoist it. False means the caller must keep its general path:
+  // electrostatics off, Ewald off, a non-Ewald flavour, or a cutoff past
+  // EwaldRealTable::MaxCutoff(). The same conditions TableRange() reports.
+  //
+  bool CoulTableView(const uint b, EwaldRealTable::View &v) const {
+    if (!forcefield.ewald || !forcefield.electrostatic)
+      return false;
+    const ff::CoulParams c = CoulView(b);
+    if (c.table == NULL)
+      return false;
+    return c.table->GetView(b, v);
+  }
+
+  //! Energy and virial from a hoisted view, for a pair inside TableRange().
+  void CalcCoulombEnVirTabUnchecked(const EwaldRealTable::View &v,
+                                    const double distSq, const double qi_qj,
+                                    double &en, double &vir) const {
+    ff::EwaldReal::EnergyAndVirialUnchecked(v, distSq, qi_qj, en, vir);
+  }
+
+  //
   // The distSq interval the real-space table covers for this box, if the
   // tabulated kernel is the one in use. False means the caller must keep the
   // general path -- electrostatics off, Ewald off, a non-Ewald flavour, or a

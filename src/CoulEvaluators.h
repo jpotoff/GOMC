@@ -82,6 +82,22 @@ struct EwaldReal {
     return qi_qj * c.table->VirialUnchecked(distSq, c.box);
   }
 
+  //
+  // Both kernels at once, from a view the caller hoisted out of its loop.
+  //
+  // Preferred over calling EnergyUnchecked and VirialUnchecked separately
+  // wherever a pair needs both: the coefficients come from one cache line
+  // rather than two, and the view carries no pointer to chase per pair.
+  // Arithmetic is unchanged, so results are bit-for-bit identical.
+  //
+  static void EnergyAndVirialUnchecked(const EwaldRealTable::View &v,
+                                       const double distSq, const double qi_qj,
+                                       double &en, double &vir) {
+    EwaldRealTable::EvalBothUnchecked(v, distSq, en, vir);
+    en *= qi_qj;
+    vir *= qi_qj;
+  }
+
   static double Virial(const CoulParams &c, const double distSq,
                        const double qi_qj) {
     double tab;
