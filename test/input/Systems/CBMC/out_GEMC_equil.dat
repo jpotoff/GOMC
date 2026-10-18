@@ -1,0 +1,75 @@
+Info: GOMC Version 2.80
+Info: Start Time: Sun Oct 18 13:46:08 2026
+Info: Host Name: reslab44ai8111
+CPU information:
+Info: Total number of CPU cores: 32
+Info: Total number of CPU cores available: 32
+Info: Model name: AMD Ryzen 9 9950X 16-Core Processor
+Info: System name: Linux
+Info: Release: 6.8.0-146-generic
+Info: Version: #146-Ubuntu SMP PREEMPT_DYNAMIC Thu Sep  3 16:12:30 UTC 2026
+Info: Kernel Architecture: x86_64
+Info: Total Ram: 31159.9MB
+Info: Used Ram: 12977.4MB
+Info: Working in the current directory: /home6/ai8111/GOMC/OpenFF/C6A/swap_test/OpenFF/1000_50_angles/workspace/0c9f29ba2e2e00a68fe94e1d8dad5ac9
+Info: GOMC COMPILED TO RUN GIBBS ENSEMBLE.
+Info: Number of OpenMP threads:          4 
+Info: Compiled with OpenMP Version:      5.1
+
+Reading Input File:                      GEMC_equil.conf
+Info: Restart simulation                 Active 
+Info: Expert Mode                        Inactive 
+Info: Integer seed                       Active 
+Info: Constant seed                      Active 
+Info: Parameter file                     MIE format 
+Info: Running NVT_GEMC
+Info: Input Temperature                  400.0000 K
+Info: Non-truncated potential            Active 
+Info: Long Range Correction              Active 
+Info: Impulse Pressure Correction        Inactive 
+Info: Cutoff                             9.0000 A
+Info: Short Range Cutoff                 1.0000 A
+Info: Exclude                            ONE-FOUR 
+Info: Ewald Summation                    Active 
+Info: Cache Ewald Fourier                Inactive 
+Info: Ewald Summation Tolerance          1.000E-05 
+Info: Box  0  CutoffCoulomb              12.0000 A
+Info: Box  1  CutoffCoulomb              12.0000 A
+Info: Pressure calculation frequency     1000 
+Info: Total number of steps              25000000 
+Info: Number of equilibration steps      10000 
+Info: Move adjustment frequency          1000 
+Info: Displacement move frequency        0.3500 
+Info: Rotation move frequency            0.3400 
+Info: Molecule swap move frequency       0.2000 
+Info: Regrowth move frequency            0.1000 
+Info: Volume move frequency              0.0100 
+Info: CBMC First atom trials             12   
+Info: CBMC Secondary atom trials         10   
+Info: CBMC Angle trials                  50   
+Info: CBMC Dihedral trials               50   
+Info: Output name                        C4A_equil 
+Info: Restart frequency                  5000000 
+Info: Checkpoint frequency               5000000 
+Info: Printing coordinate                Inactive 
+Info: DCD frequency                      5000000 
+Info: Console output frequency           10000 
+Info: Average output frequency           500000 
+Warning: Unknown input HistogramFreq!
+Default: Intra-Swap move frequency       0.0000 
+Default: Multi-Particle move frequency   0.0000 
+Default: Multi-Particle Brownian move frequency 0.0000 
+Default: Intra-MEMC move frequency       0.0000 
+Default: Crank-Shaft move frequency      0.0000 
+Default: Targeted-Swap move frequency    0.0000 
+Default: MEMC move frequency             0.0000 
+Default: nonEq Mol-Transfer move frequency 0.0000 
+Default: Targeted-Swap move frequency    0.0000 
+Warning: Cell dimension set, but will be ignored in restart mode.
+Finished Reading Input File:             GEMC_equil.conf
+
+Reading from Mie-Style parameter file:  	OPENFF_FF.inp
+Reading BONDS parameters.
+Reading ANGLES parameters.
+Reading DIHEDRALS parameters.
+Reading NONBONDED_MIE parameters.

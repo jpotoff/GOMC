@@ -1,0 +1,456 @@
+Info: GOMC Version 2.80
+Info: Start Time: Sun Oct 18 13:44:30 2026
+Info: Host Name: reslab44ai8111
+CPU information:
+Info: Total number of CPU cores: 32
+Info: Total number of CPU cores available: 32
+Info: Model name: AMD Ryzen 9 9950X 16-Core Processor
+Info: System name: Linux
+Info: Release: 6.8.0-146-generic
+Info: Version: #146-Ubuntu SMP PREEMPT_DYNAMIC Thu Sep  3 16:12:30 UTC 2026
+Info: Kernel Architecture: x86_64
+Info: Total Ram: 31159.9MB
+Info: Used Ram: 12718.0MB
+Info: Working in the current directory: /home6/ai8111/GOMC/OpenFF/C6A/swap_test/OpenFF/1000_50_angles/workspace/0c9f29ba2e2e00a68fe94e1d8dad5ac9
+Info: GOMC COMPILED TO RUN GIBBS ENSEMBLE.
+Info: Number of OpenMP threads:          4 
+Info: Compiled with OpenMP Version:      5.1
+
+Reading Input File:                      GEMC_nvt.conf
+Info: Expert Mode                        Active 
+Info: Integer seed                       Active 
+Info: Constant seed                      Active 
+Info: Parameter file                     MIE format 
+Info: Running NVT_GEMC
+Info: Input Temperature                  400.0000 K
+Info: Non-truncated potential            Active 
+Info: Long Range Correction              Active 
+Info: Impulse Pressure Correction        Inactive 
+Info: Cutoff                             9.0000 A
+Info: Short Range Cutoff                 1.0000 A
+Info: Exclude                            ONE-FOUR 
+Info: Ewald Summation                    Active 
+Info: Cache Ewald Fourier                Inactive 
+Info: Ewald Summation Tolerance          1.000E-05 
+Info: Box  0  CutoffCoulomb              12.0000 A
+Info: Box  1  CutoffCoulomb              12.0000 A
+Info: Pressure calculation frequency     1000 
+Info: Total number of steps              100000 
+Info: Number of equilibration steps      10000 
+Info: Move adjustment frequency          1000 
+Info: Molecule swap move frequency       1.0000 
+Info: CBMC First atom trials             12   
+Info: CBMC Secondary atom trials         10   
+Info: CBMC Angle trials                  1000 
+Info: CBMC Dihedral trials               50   
+Info: Output name                        C4A_nvt 
+Info: Restart frequency                  1000000 
+Info: Checkpoint frequency               1000000 
+Info: Printing coordinate                Inactive 
+Info: DCD frequency                      5000000 
+Info: Console output frequency           10000 
+Info: Average output frequency           500000 
+Warning: Unknown input HistogramFreq!
+Default: Rotation move frequency         0.0000 
+Default: Intra-Swap move frequency       0.0000 
+Default: Multi-Particle move frequency   0.0000 
+Default: Multi-Particle Brownian move frequency 0.0000 
+Default: Intra-MEMC move frequency       0.0000 
+Default: Regrowth move frequency         0.0000 
+Default: Crank-Shaft move frequency      0.0000 
+Default: Targeted-Swap move frequency    0.0000 
+Default: MEMC move frequency             0.0000 
+Default: nonEq Mol-Transfer move frequency 0.0000 
+Default: Targeted-Swap move frequency    0.0000 
+ADV USER: Displacement move frequency    0.0000 
+ADV USER: Volume move frequency          0.0000 
+Finished Reading Input File:             GEMC_nvt.conf
+
+Reading from Mie-Style parameter file:  	OPENFF_FF.inp
+Reading BONDS parameters.
+Reading ANGLES parameters.
+Reading DIHEDRALS parameters.
+Reading NONBONDED_MIE parameters.
+Reading from box 0 PDB coordinate file:  	initial_box_0.pdb
+Finished reading:                       	initial_box_0.pdb
+Reading from box 1 PDB coordinate file:  	initial_box_1.pdb
+Finished reading:                       	initial_box_1.pdb
+Random number seed: 0
+
+Molecules in PSF:
+Molecule Kind: C6A
+Idx	name	type	charge	mass
+0	C1	C1	-0.0944	12.0108
+1	C2	C0	-0.0807	12.0108
+2	C3	C0	-0.0807	12.0108
+3	C4	C0	-0.0807	12.0108
+4	C5	C0	-0.0807	12.0108
+5	C6	C1	-0.0944	12.0108
+6	H1	H1	0.0314	1.0079
+7	H2	H1	0.0314	1.0079
+8	H3	H1	0.0314	1.0079
+9	H4	H0	0.0384	1.0079
+10	H5	H0	0.0384	1.0079
+11	H6	H0	0.0384	1.0079
+12	H7	H0	0.0384	1.0079
+13	H8	H0	0.0384	1.0079
+14	H9	H0	0.0384	1.0079
+15	HA	H0	0.0384	1.0079
+16	HB	H0	0.0384	1.0079
+17	HC	H1	0.0314	1.0079
+18	HD	H1	0.0314	1.0079
+19	HE	H1	0.0314	1.0079
+
+Bonds:
+[5 17] [5 18] [5 19] [4 5] [4 15] [4 16] [3 4] [3 13] [3 14] [2 3] 
+[2 11] [2 12] [1 2] [1 9] [1 10] [0 1] [0 6] [0 7] [0 8] 
+
+Angles:
+[1 0 6] [1 0 7] [1 0 8] [6 0 7] [6 0 8] [7 0 8] [0 1 2] 
+[0 1 9] [0 1 10] [2 1 9] [2 1 10] [9 1 10] [1 2 3] [1 2 11] 
+[1 2 12] [3 2 11] [3 2 12] [11 2 12] [2 3 4] [2 3 13] [2 3 14] 
+[4 3 13] [4 3 14] [13 3 14] [3 4 5] [3 4 15] [3 4 16] [5 4 15] 
+[5 4 16] [15 4 16] [4 5 17] [4 5 18] [4 5 19] [17 5 18] [17 5 19] 
+[18 5 19] 
+
+Dihedrals:
+[6 0 1 9] [6 0 1 10] [7 0 1 9] [7 0 1 10] [8 0 1 9] 
+[8 0 1 10] [2 1 0 6] [2 1 0 7] [2 1 0 8] [0 1 2 3] 
+[0 1 2 11] [0 1 2 12] [9 1 2 11] [9 1 2 12] [10 1 2 11] 
+[10 1 2 12] [3 2 1 9] [3 2 1 10] [1 2 3 4] [1 2 3 13] 
+[1 2 3 14] [11 2 3 13] [11 2 3 14] [12 2 3 13] [12 2 3 14] 
+[4 3 2 11] [4 3 2 12] [2 3 4 5] [2 3 4 15] [2 3 4 16] 
+[13 3 4 15] [13 3 4 16] [14 3 4 15] [14 3 4 16] [5 4 3 13] 
+[5 4 3 14] [3 4 5 17] [3 4 5 18] [3 4 5 19] [15 4 5 17] 
+[15 4 5 18] [15 4 5 19] [16 4 5 17] [16 4 5 18] [16 4 5 19] 
+
+Impropers:
+
+Bonds parameter:
+Atom Types                             Kb(K)           b0(A) 
+C1	H1	                 360123.1894           1.0942 
+C0	C1	                 216687.7429           1.5336 
+C0	H0	                 360123.1894           1.0942 
+C0	C0	                 216687.7429           1.5336 
+C1	C0	                 216687.7429           1.5336 
+
+Angles parameter:
+Atom Types                         Ktheta(K)         theta0(degree) 
+C0	C1	H1	          33593.0854         109.9381 
+H1	C1	H1	          18506.7237         108.3543 
+C1	C0	C0	          33593.0854         109.9381 
+C1	C0	H0	          33593.0854         109.9381 
+C0	C0	H0	          33593.0854         109.9381 
+H0	C0	H0	          18506.7237         108.3543 
+C0	C0	C0	          33593.0854         109.9381 
+C0	C0	C1	          33593.0854         109.9381 
+
+Dihedrals parameter:
+Atom Types                           Kchi(K)    n    delta(degree) 
+H1	C1	C0	H0	    114.7315    3      0.0000 
+C0	C0	C1	H1	     49.5862    3      0.0000 
+C1	C0	C0	C0	    460.7529    1    180.0000 
+C1	C0	C0	C0	    120.7380    2    180.0000 
+C1	C0	C0	C0	    178.6263    3      0.0000 
+C1	C0	C0	H0	     49.5862    3      0.0000 
+H0	C0	C0	H0	    114.7315    3      0.0000 
+C0	C0	C0	H0	     49.5862    3      0.0000 
+C0	C0	C0	C0	    460.7529    1    180.0000 
+C0	C0	C0	C0	    120.7380    2    180.0000 
+C0	C0	C0	C0	    178.6263    3      0.0000 
+C0	C0	C0	C1	    460.7529    1    180.0000 
+C0	C0	C0	C1	    120.7380    2    180.0000 
+C0	C0	C0	C1	    178.6263    3      0.0000 
+H0	C0	C1	H1	    114.7315    3      0.0000 
+
+Info: Mie exponent is 12 for every pair kind; using the fixed-exponent vdW kernel
+================================================
+
+Warning: Sum of the charge in the system is: -0.0309
+
+================================================
+NonBonded 1-4 parameters:
+Type1  Type2             Epsilon(K)    Sigma(A)       N 
+C1     C1                   27.3855      3.3795   12.00 
+C1     C0                   27.3855      3.3795   12.00 
+C1     H1                   10.4271      3.0120   12.00 
+C1     H0                   10.4271      3.0120   12.00 
+C0     C0                   27.3855      3.3795   12.00 
+C0     H1                   10.4271      3.0120   12.00 
+C0     H0                   10.4271      3.0120   12.00 
+H1     H1                    3.9702      2.6445   12.00 
+H1     H0                    3.9702      2.6445   12.00 
+H0     H0                    3.9702      2.6445   12.00 
+
+NonBonded parameters:
+Type1  Type2             Epsilon(K)    Sigma(A)       N 
+C1     C1                   54.7709      3.3795   12.00 
+C1     C0                   54.7709      3.3795   12.00 
+C1     H1                   20.8542      3.0120   12.00 
+C1     H0                   20.8542      3.0120   12.00 
+C0     C0                   54.7709      3.3795   12.00 
+C0     H1                   20.8542      3.0120   12.00 
+C0     H0                   20.8542      3.0120   12.00 
+H1     H1                    7.9403      2.6445   12.00 
+H1     H0                    7.9403      2.6445   12.00 
+H0     H0                    7.9403      2.6445   12.00 
+
+Info: Box  0:  Periodic Cell Basis 1     46.000   0.000   0.000
+Info: Box  0:  Periodic Cell Basis 2      0.000  46.000   0.000
+Info: Box  0:  Periodic Cell Basis 3      0.000   0.000  46.000
+Info: Box  0:  Cell grid                3 x 3 x 3, spacing 15.333 x 15.333 x 15.333 A (cutoff 12.000 A)
+Info: Box  0:  Stencil                  radius 1, 27 cells
+Info: Box  0:  Pair search              whole box -- cell list not used
+
+Info: Box  1:  Periodic Cell Basis 1     46.000   0.000   0.000
+Info: Box  1:  Periodic Cell Basis 2      0.000  46.000   0.000
+Info: Box  1:  Periodic Cell Basis 3      0.000   0.000  46.000
+Info: Box  1:  Cell grid                3 x 3 x 3, spacing 15.333 x 15.333 x 15.333 A (cutoff 12.000 A)
+Info: Box  1:  Stencil                  radius 1, 27 cells
+Info: Box  1:  Pair search              whole box -- cell list not used
+
+Minimum coordinates in box 0: x =    1.933, y =   20.256, z =   25.467
+Maximum coordinates in box 0: x =    4.224, y =   27.907, z =   29.256
+Wrapping molecules inside the simulation box 0:
+Minimum coordinates in box 1: x =    1.933, y =   20.256, z =   25.467
+Maximum coordinates in box 1: x =    4.224, y =   27.907, z =   29.256
+Wrapping molecules inside the simulation box 1:
+Box: 0, RecipVectors:   5816, kmax: 15
+Box: 1, RecipVectors:   5816, kmax: 15
+
+################################################################################
+########################## INITIAL SIMULATION ENERGY ###########################
+
+ETITLE:          STEP                TOTAL             INTRA(B)            INTRA(NB)            INTER(LJ)                  LRC          TOTAL_ELECT                 REAL                RECIP                 SELF                 CORR
+
+ENER_0:             0       4.81376471e+03       4.44738031e+03       3.68388647e+02       0.00000000e+00      -7.18068253e-01      -1.28618239e+00       0.00000000e+00       5.59876456e+01      -1.64169558e+03       1.58442175e+03
+
+ENER_1:             0       4.81376471e+03       4.44738031e+03       3.68388647e+02       0.00000000e+00      -7.18068253e-01      -1.28618239e+00       0.00000000e+00       5.59876456e+01      -1.64169558e+03       1.58442175e+03
+
+STITLE:          STEP               VOLUME             PRESSURE      COMPRESSIBILITY             ENTHALPY             HEAT_VAP             TOTALMOL          TOT_DENSITY
+
+STAT_0:             0       9.73360000e+04       5.64700107e-01       9.95286449e-01       4.33339723e+01       0.00000000e+00                    1       1.47014092e+00
+
+STAT_1:             0       9.73360000e+04       5.64700107e-01       9.95286449e-01       4.33339723e+01       0.00000000e+00                    1       1.47014092e+00
+
+################################################################################
+############################# STARTING SIMULATION ##############################
+
+MTITLE:          STEP             TRANSFER           TRANACCEPT          TRANACCEPT%
+
+ETITLE:          STEP                TOTAL             INTRA(B)            INTRA(NB)            INTER(LJ)                  LRC          TOTAL_ELECT                 REAL                RECIP                 SELF                 CORR
+
+STITLE:          STEP               VOLUME             PRESSURE      COMPRESSIBILITY             ENTHALPY             HEAT_VAP             TOTALMOL          TOT_DENSITY
+
+Opening DCD coordinate file: C4A_nvt_BOX_0.dcd 
+Opening DCD coordinate file: C4A_nvt_BOX_1.dcd 
+Writing DCD coordinate to file C4A_nvt_BOX_0.dcd at step 1 
+Finished writing DCD coordinate to file C4A_nvt_BOX_0.dcd at step 1 
+Writing DCD coordinate to file C4A_nvt_BOX_1.dcd at step 1 
+Finished writing DCD coordinate to file C4A_nvt_BOX_1.dcd at step 1 
+Printed combined psf to file C4A_nvt_merged.psf
+MOVE_0:         10000                 4921                   89       1.80857549e+00
+
+ENER_0:         10000       7.26432651e+03       7.24434331e+03       2.19897822e+01       0.00000000e+00      -7.18068253e-01      -1.28851973e+00       0.00000000e+00       6.35573977e+01      -1.64169558e+03       1.57684966e+03
+
+STAT_0:         10000       9.73360000e+04       5.64695549e-01       9.95278415e-01       6.37090485e+01       8.53048821e+00                    1       1.47014092e+00
+
+PRES_0:         10000      -6.57038116e-04      -6.20960914e-04      -6.51621354e-04
+
+MOVE_1:         10000                 5079                   89       1.75231345e+00
+
+ENER_1:         10000       6.23834452e+03       5.83684719e+03       4.03504651e+02       0.00000000e+00      -7.18068253e-01      -1.28924718e+00       0.00000000e+00       6.31519817e+01      -1.64169558e+03       1.57725435e+03
+
+STAT_1:         10000       9.73360000e+04       5.64695108e-01       9.95277638e-01       5.51785577e+01       8.53048821e+00                    1       1.47014092e+00
+
+PRES_1:         10000      -6.47540448e-04      -6.54132200e-04      -6.29270763e-04
+
+Steps/sec: 961.890, Simulation ends in:   0 d:   0 h:   2 m
+
+MOVE_0:         20000                 9933                  179       1.80207390e+00
+
+ENER_0:         20000       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STAT_0:         20000       9.73360000e+04      -2.30076732e-30       0.00000000e+00       0.00000000e+00      -9.84725530e+01                    0       0.00000000e+00
+
+PRES_0:         20000      -1.58508266e-30      -2.68161245e-30      -2.63560686e-30
+
+MOVE_1:         20000                10067                  180       1.78802026e+00
+
+ENER_1:         20000       2.36870535e+04       2.25480365e+04       1.87656750e+03      -7.33064616e+02      -2.87227301e+00      -1.61367816e+00       3.38172867e+00       1.28035274e+02      -3.28339116e+03       3.15036048e+03
+
+STAT_1:         20000       9.73360000e+04       2.47433690e+00       2.18051489e+00       1.05724476e+02      -9.84725530e+01                    2       2.94028184e+00
+
+PRES_1:         20000       2.71592320e+00       2.25494537e+00      -9.27676208e-01
+
+Steps/sec: 1046.177, Simulation ends in:   0 d:   0 h:   2 m
+
+MOVE_0:         30000                14941                  285       1.90750284e+00
+
+ENER_0:         30000       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STAT_0:         30000       9.73360000e+04      -3.72520918e-30       0.00000000e+00       0.00000000e+00      -1.02357677e+02                    0       0.00000000e+00
+
+PRES_0:         30000      -1.72682281e-30      -4.21603562e-30      -5.23276911e-30
+
+MOVE_1:         30000                15059                  286       1.89919649e+00
+
+ENER_1:         30000       2.46215995e+04       2.36574044e+04       9.69833070e+02       0.00000000e+00      -2.87227301e+00      -2.76578134e+00       0.00000000e+00       1.14107457e+02      -3.28339116e+03       3.16651792e+03
+
+STAT_1:         30000       9.73360000e+04       1.12515545e+00       9.91545737e-01       1.05655344e+02      -1.02357677e+02                    2       2.94028184e+00
+
+PRES_1:         30000      -1.84589962e-03       2.45211706e-04      -2.75131023e-03
+
+Steps/sec: 1015.304, Simulation ends in:   0 d:   0 h:   2 m
+
+MOVE_0:         40000                19857                  390       1.96404291e+00
+
+ENER_0:         40000       2.22626290e+04       2.09887304e+04       1.27972338e+03       0.00000000e+00      -2.87227301e+00      -2.95244862e+00       0.00000000e+00       1.10185291e+02      -3.28339116e+03       3.17025342e+03
+
+STAT_0:         40000       9.73360000e+04       1.12504894e+00       9.91451877e-01       9.58482470e+01      -9.25508914e+01                    2       2.94028184e+00
+
+PRES_0:         40000      -2.75244630e-03      -2.56350122e-04      -1.66272482e-03
+
+MOVE_1:         40000                20143                  389       1.93119198e+00
+
+ENER_1:         40000       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STAT_1:         40000       9.73360000e+04      -5.33898298e-30       0.00000000e+00       0.00000000e+00      -9.25508914e+01                    0       0.00000000e+00
+
+PRES_1:         40000      -1.84160163e-30      -7.72383994e-30      -6.45150738e-30
+
+Steps/sec: 1009.816, Simulation ends in:   0 d:   0 h:   1 m
+
+MOVE_0:         50000                24851                  480       1.93151181e+00
+
+ENER_0:         50000       1.27366605e+04       1.03145558e+04       2.42411063e+03       0.00000000e+00      -7.18068253e-01      -1.28791525e+00       0.00000000e+00       6.00046776e+01      -1.64169558e+03       1.58040299e+03
+
+STAT_0:         50000       9.73360000e+04       5.64696934e-01       9.95280857e-01       1.09208570e+02       2.29766432e+01                    1       1.47014092e+00
+
+PRES_0:         50000      -6.36252363e-04      -6.60314398e-04      -6.28897590e-04
+
+MOVE_1:         50000                25149                  480       1.90862460e+00
+
+ENER_1:         50000       9.97320530e+03       9.36638792e+03       6.08823743e+02       0.00000000e+00      -7.18068253e-01      -1.28829899e+00       0.00000000e+00       6.14233600e+01      -1.64169558e+03       1.57898392e+03
+
+STAT_1:         50000       9.73360000e+04       5.64696098e-01       9.95279384e-01       8.62319215e+01       2.29766432e+01                    1       1.47014092e+00
+
+PRES_1:         50000      -6.37267009e-04      -6.46283762e-04      -6.44420869e-04
+
+Steps/sec: 1054.773, Simulation ends in:   0 d:   0 h:   1 m
+
+MOVE_0:         60000                29890                  574       1.92037471e+00
+
+ENER_0:         60000       9.81499559e+03       9.14457321e+03       6.72428482e+02       0.00000000e+00      -7.18068253e-01      -1.28803675e+00       0.00000000e+00       6.01583792e+01      -1.64169558e+03       1.58024916e+03
+
+STAT_0:         60000       9.73360000e+04       5.64696679e-01       9.95280408e-01       8.49164963e+01       6.95860466e-01                    1       1.47014092e+00
+
+PRES_0:         60000      -6.65197838e-04      -6.39707637e-04      -6.21323482e-04
+
+MOVE_1:         60000                30110                  574       1.90634341e+00
+
+ENER_1:         60000       9.73130280e+03       9.21196911e+03       5.21342333e+02       0.00000000e+00      -7.18068253e-01      -1.29056991e+00       0.00000000e+00       6.06150420e+01      -1.64169558e+03       1.57978997e+03
+
+STAT_1:         60000       9.73360000e+04       5.64693206e-01       9.95274286e-01       8.42206155e+01       6.95860466e-01                    1       1.47014092e+00
+
+PRES_1:         60000      -6.66814267e-04      -6.35033031e-04      -6.34801054e-04
+
+Steps/sec: 998.059, Simulation ends in:   0 d:   0 h:   1 m
+
+MOVE_0:         70000                34848                  683       1.95994031e+00
+
+ENER_0:         70000       2.03032254e+04       1.88253950e+04       1.48379197e+03       0.00000000e+00      -2.87227301e+00      -3.08927604e+00       0.00000000e+00       1.23441855e+02      -3.28339116e+03       3.15686003e+03
+
+STAT_0:         70000       9.73360000e+04       1.12498458e+00       9.91395162e-01       8.77023650e+01      -8.44051980e+01                    2       2.94028184e+00
+
+PRES_0:         70000      -1.62617421e-03      -1.16367098e-03      -2.07474709e-03
+
+MOVE_1:         70000                35152                  682       1.94014565e+00
+
+ENER_1:         70000       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STAT_1:         70000       9.73360000e+04      -7.90939961e-30       0.00000000e+00       0.00000000e+00      -8.44051980e+01                    0       0.00000000e+00
+
+PRES_1:         70000      -3.87351072e-30      -9.35622373e-30      -1.04984644e-29
+
+Steps/sec: 1013.334, Simulation ends in:   0 d:   0 h:   1 m
+
+MOVE_0:         80000                39937                  829       2.07576934e+00
+
+ENER_0:         80000       2.25524410e+04       2.08155137e+04       1.74285722e+03       0.00000000e+00      -2.87227301e+00      -3.05763750e+00       0.00000000e+00       1.24844029e+02      -3.28339116e+03       3.15548949e+03
+
+STAT_0:         80000       9.73360000e+04       1.12497297e+00       9.91384934e-01       9.70528397e+01      -9.37557067e+01                    2       2.94028184e+00
+
+PRES_0:         80000      -8.88223049e-04      -1.25528854e-03      -2.75590174e-03
+
+MOVE_1:         80000                40063                  828       2.06674488e+00
+
+ENER_1:         80000       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STAT_1:         80000       9.73360000e+04      -9.83488696e-30       0.00000000e+00       0.00000000e+00      -9.37557067e+01                    0       0.00000000e+00
+
+PRES_1:         80000      -3.99149257e-30      -1.16106059e-29      -1.39025624e-29
+
+Steps/sec: 1042.416, Simulation ends in:   0 d:   0 h:   1 m
+
+MOVE_0:         90000                44864                  933       2.07961840e+00
+
+ENER_0:         90000       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STAT_0:         90000       9.73360000e+04      -1.28038807e-29       0.00000000e+00       0.00000000e+00      -7.45697624e+01                    0       0.00000000e+00
+
+PRES_0:         90000      -1.94072245e-29      -1.08811034e-29      -8.12331416e-30
+
+MOVE_1:         90000                45136                  934       2.06930167e+00
+
+ENER_1:         90000       1.79373632e+04       1.67044378e+04       1.23874483e+03       0.00000000e+00      -2.87227301e+00      -2.94718446e+00       0.00000000e+00       1.19912665e+02      -3.28339116e+03       3.16053131e+03
+
+STAT_1:         90000       9.73360000e+04       1.12502243e+00       9.91428513e-01       7.78670403e+01      -7.45697624e+01                    2       2.94028184e+00
+
+PRES_1:         90000      -2.74710776e-03      -3.09387061e-04      -1.69456226e-03
+
+Steps/sec: 1088.270, Simulation ends in:   0 d:   0 h:   1 m
+
+MOVE_0:        100000                49838                 1070       2.14695614e+00
+
+ENER_0:        100000       8.75147839e+03       8.52757486e+03       2.25908420e+02       0.00000000e+00      -7.18068253e-01      -1.28682571e+00       0.00000000e+00       6.01542118e+01      -1.64169558e+03       1.58025454e+03
+
+STAT_0:        100000       9.73360000e+04       5.64698633e-01       9.95283851e-01       7.60739344e+01      -1.17607360e+01                    1       1.47014092e+00
+
+PRES_0:        100000      -6.27775512e-04      -6.37764085e-04      -6.54827846e-04
+
+MOVE_1:        100000                50162                 1070       2.13308879e+00
+
+ENER_1:        100000       1.01659699e+04       9.93506931e+03       2.32909919e+02       0.00000000e+00      -7.18068253e-01      -1.29124972e+00       0.00000000e+00       6.35896544e+01      -1.64169558e+03       1.57681467e+03
+
+STAT_1:        100000       9.73360000e+04       5.64691765e-01       9.95271746e-01       8.78346302e+01      -1.17607360e+01                    1       1.47014092e+00
+
+PRES_1:        100000      -6.30410205e-04      -6.54288097e-04      -6.56274052e-04
+
+Writing DCD coordinate to file C4A_nvt_BOX_0.dcd at step 100000 
+Finished writing DCD coordinate to file C4A_nvt_BOX_0.dcd at step 100000 
+Writing DCD coordinate to file C4A_nvt_BOX_1.dcd at step 100000 
+Finished writing DCD coordinate to file C4A_nvt_BOX_1.dcd at step 100000 
+Simulation Time (total): 9.71673648e+01 sec.
+
+Move Type                Mol. Kind      BOX_0      BOX_1      
+% Accepted Mol-Transfer        C6A      2.14696    2.13309 
+
+Displacement:                            0.0000    sec.
+Rotation:                                0.0000    sec.
+MultiParticle:                           0.0000    sec.
+Brownian-like MultiParticle:             0.0000    sec.
+Intra Molecule Transfer:                 0.0000    sec.
+Regrowth:                                0.0000    sec.
+Intra Molecule Exchange:                 0.0000    sec.
+Crankshaft:                              0.0000    sec.
+Intra Targeted Transfer:                 0.0000    sec.
+Molecule Exchange:                       0.0000    sec.
+Molecule Transfer:                      97.1073    sec.
+Nonequilibrium Molecule Transfer:        0.0000    sec.
+Targeted Transfer:                       0.0000    sec.
+Volume Transfer:                         0.0000    sec.
+
+Info: GOMC Version 2.80
+Info: Completed at: Sun Oct 18 13:46:08 2026
+Info: On hostname: reslab44ai8111

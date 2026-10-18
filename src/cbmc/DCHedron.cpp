@@ -5,8 +5,8 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #include "DCHedron.h"
 
+#include <algorithm>
 #include <cassert>
-#include <numeric>
 
 #include "DCData.h"
 #include "Forcefield.h"
@@ -65,7 +65,8 @@ DCHedron::DCHedron(DCData *data, const mol_setup::MolKind &kind, uint focus,
   }
 
   phi[0] = 0.0;
-  phiWeight[0] = 1.0;
+  weight = 1.0;
+  bendEnergy = oneThree = 0.0;
 
   if (data->nAngleTrials < 1) {
     std::cout << "Error: CBMC angle trials must be greater than 0.\n";
@@ -87,297 +88,220 @@ void DCHedron::SetBondOld(double const *bondLen, double const &anchBond) {
   anchorBondOld = anchBond;
 }
 
-double DCHedron::GetWeight() const {
-  double result = 1;
-  for (uint i = 0; i < nBonds; ++i) {
-    result *= thetaWeight[i];
-    result *= phiWeight[i];
+namespace {
+const uint kBendBins = 1024;
+const uint kBendSub = 8;               // sub-samples per bin for the bound
+const double kBendSafety = 1.001;      // margin on the per-bin bound
+const unsigned long kMaxBranchTries = 1000000;
+
+// Angle between bonded atoms b and c from their spherical coordinates
+// about the focus (polar axis along focus->prev).
+inline double AngleBetween(double tb, double pb, double tc, double pc) {
+  double x = sin(tb) * sin(tc) * cos(pb - pc) + cos(tb) * cos(tc);
+  return acos(std::max(-1.0, std::min(1.0, x)));
+}
+} // namespace
+
+// Build (or rebuild if beta changed) the sampling table for an angle kind.
+const BendTable &DCHedron::GetTable(uint kind) {
+  if (data->bendTables.size() <= kind)
+    data->bendTables.resize(kind + 1);
+  BendTable &t = data->bendTables[kind];
+  const double beta = data->ff.beta;
+  if (t.beta == beta)
+    return t;
+
+  const FFAngles &ang = *data->ff.angles;
+  t.width = M_PI / kBendBins;
+  // minimum of U on [0, pi], including theta0 where harmonic forms vanish
+  t.uMin = ang.Calc(kind, ang.Angle(kind));
+  for (uint i = 0; i <= kBendBins * kBendSub; ++i)
+    t.uMin = std::min(t.uMin, ang.Calc(kind, i * t.width / kBendSub));
+
+  t.pMax.assign(kBendBins, 0.0);
+  t.cumMax.assign(kBendBins, 0.0);
+  double sum = 0.0;
+  for (uint i = 0; i < kBendBins; ++i) {
+    double pm = 0.0;
+    for (uint s = 0; s <= kBendSub; ++s) {
+      double th = (i + double(s) / kBendSub) * t.width;
+      pm = std::max(pm, sin(th) * exp(-beta * (ang.Calc(kind, th) - t.uMin)));
+    }
+    t.pMax[i] = pm * kBendSafety;
+    sum += t.pMax[i];
+    t.cumMax[i] = sum;
   }
-  return result;
+  t.beta = beta;
+  return t;
 }
 
-// Randomly generate nTrials angles and save energy and weight
-void DCHedron::GenerateAnglesNew(TrialMol &newMol, uint molIndex, uint kind,
-                                 uint nTrials, uint bType) {
-  double *nonbonded_1_3 = data->nonbonded_1_3;
-  double thetaFix;
-  bool angleFix = false;
-  std::fill_n(nonbonded_1_3, nTrials, 0.0);
-
-  if (data->ff.angles->AngleFixed(kind)) {
-    angleFix = true;
-    thetaFix = data->ff.angles->Angle(kind);
-  }
-
-  for (int i = 0; i < (int)nTrials; ++i) {
-    if (angleFix)
-      data->angles[i] = thetaFix;
-    else
-      data->angles[i] = data->prng.rand(M_PI);
-  }
-
-#ifdef _OPENMP
-#pragma omp parallel for default(none)                                         \
-    shared(bType, kind, molIndex, newMol, nonbonded_1_3, nTrials)
-#endif
-  for (int i = 0; i < (int)nTrials; ++i) {
-    data->angleEnergy[i] = data->ff.angles->Calc(kind, data->angles[i]);
-
-    double distSq =
-        newMol.AngleDist(anchorBond, bondLength[bType], data->angles[i]);
-    nonbonded_1_3[i] =
-        data->calc.IntraEnergy_1_3(distSq, prev, bonded[bType], molIndex);
-
-    data->angleWeights[i] =
-        exp((data->angleEnergy[i] + nonbonded_1_3[i]) * -data->ff.beta);
-  }
-}
-
-void DCHedron::GenerateAnglesOld(TrialMol &oldMol, uint molIndex, uint kind,
-                                 uint nTrials, uint bType) {
-  double *nonbonded_1_3 = data->nonbonded_1_3;
-  double thetaFix;
-  bool angleFix = false;
-  std::fill_n(nonbonded_1_3, nTrials, 0.0);
-
-  if (data->ff.angles->AngleFixed(kind)) {
-    angleFix = true;
-    thetaFix = data->ff.angles->Angle(kind);
-  }
-
-  for (int i = 0; i < (int)nTrials; ++i) {
-    if (angleFix)
-      data->angles[i] = thetaFix;
-    else
-      data->angles[i] = data->prng.rand(M_PI);
-  }
-
-#ifdef _OPENMP
-#pragma omp parallel for default(none)                                         \
-    shared(bType, kind, molIndex, nonbonded_1_3, nTrials, oldMol)
-#endif
-  for (int i = 0; i < (int)nTrials; ++i) {
-    data->angleEnergy[i] = data->ff.angles->Calc(kind, data->angles[i]);
-
-    double distSq =
-        oldMol.AngleDist(anchorBondOld, bondLengthOld[bType], data->angles[i]);
-    nonbonded_1_3[i] =
-        data->calc.IntraEnergy_1_3(distSq, prev, bonded[bType], molIndex);
-
-    data->angleWeights[i] =
-        exp((data->angleEnergy[i] + nonbonded_1_3[i]) * -data->ff.beta);
+// Exact sample of theta from p(theta) ~ sin(theta) exp(-beta U(theta))
+double DCHedron::SampleTheta(uint kind) {
+  const FFAngles &ang = *data->ff.angles;
+  if (ang.AngleFixed(kind))
+    return ang.Angle(kind);
+  const BendTable &t = GetTable(kind);
+  const double beta = data->ff.beta;
+  while (true) {
+    double r = data->prng() * t.cumMax.back();
+    uint bin = std::upper_bound(t.cumMax.begin(), t.cumMax.end(), r) -
+               t.cumMax.begin();
+    bin = std::min(bin, kBendBins - 1);
+    double th = (bin + data->prng()) * t.width;
+    double p = sin(th) * exp(-beta * (ang.Calc(kind, th) - t.uMin));
+    if (data->prng() * t.pMax[bin] < p)
+      return th;
   }
 }
 
-void DCHedron::FreeAnglesNew(TrialMol &newMol, uint molIndex, uint nTrials) {
-  for (uint i = 0; i < nBonds; ++i) {
-    GenerateAnglesNew(newMol, molIndex, angleKinds[i][i], nTrials, i);
-    double stepWeight =
-        std::accumulate(data->angleWeights, data->angleWeights + nTrials, 0.0);
-    uint winner =
-        data->prng.PickWeighted(data->angleWeights, nTrials, stepWeight);
-    theta[i] = data->angles[winner];
-    bendEnergy += data->angleEnergy[winner];
-    oneThree += data->nonbonded_1_3[winner];
-    thetaWeight[i] = stepWeight;
+// Exact joint sample of all branch directions (see DCHedron.h). Proposes
+// theta_b from its marginal and phi_b uniformly, and accepts with
+// exp(-beta sum_{c<b} (U(c,focus,b) - uMin)). The test is applied atom by
+// atom and any rejection restarts the whole branch, which keeps it exact.
+// Twist angles constrained by a fixed bond angle are solved for as before.
+void DCHedron::SampleBranch(TrialMol &mol, double *th, double *ph) {
+  const FFAngles &ang = *data->ff.angles;
+  const double beta = data->ff.beta;
+  for (unsigned long tries = 0; tries < kMaxBranchTries; ++tries) {
+    bool accepted = true;
+    for (uint b = 0; b < nBonds && accepted; ++b) {
+      th[b] = SampleTheta(angleKinds[b][b]);
+      if (b == 0) {
+        ph[0] = 0.0;
+        continue;
+      }
+      ph[b] = data->prng.rand(2.0 * M_PI);
+
+      // modify the twist angle if it was fixed
+      for (uint c = 0; c < b; ++c) {
+        if (ang.AngleFixed(angleKinds[b][c])) {
+          double cosTerm = cos(th[b]) * cos(th[c]);
+          double sinTerm = sin(th[b]) * sin(th[c]);
+          double bfcTheta = ang.Angle(angleKinds[b][c]);
+          double var = (cos(bfcTheta) - cosTerm) / sinTerm;
+          // To fix the numerical problem for flat molecule
+          var = (var > 1.0 && var < 1.1 ? 1.0 : var);
+          var = (var < -1.0 && var > -1.1 ? -1.0 : var);
+          ph[b] = acos(var) + ph[c];
+          if (std::isnan(ph[b])) {
+            std::cout << "Error: Cannot constrain fix angle for "
+                      << mol.GetKind().atomTypeNames[bonded[b]] << " "
+                      << mol.GetKind().atomTypeNames[focus] << " "
+                      << mol.GetKind().atomTypeNames[bonded[c]] << " !\n";
+            exit(EXIT_FAILURE);
+          }
+        }
+      }
+
+      double en = 0.0;
+      for (uint c = 0; c < b; ++c) {
+        uint k = angleKinds[b][c];
+        if (!ang.AngleFixed(k))
+          en += ang.Calc(k, AngleBetween(th[b], ph[b], th[c], ph[c])) -
+                GetTable(k).uMin;
+      }
+      accepted = data->prng() < exp(-beta * en);
+    }
+    if (accepted)
+      return;
   }
+  std::cout << "Error: CBMC could not generate bond angles around atom "
+            << mol.GetKind().atomTypeNames[focus] << " after "
+            << kMaxBranchTries << " attempts. The bond angle parameters "
+            << "around this atom may be inconsistent.\n";
+  exit(EXIT_FAILURE);
 }
 
-void DCHedron::FreeAnglesOld(TrialMol &oldMol, uint molIndex, uint nTrials) {
-  for (uint i = 0; i < nBonds; ++i) {
-    GenerateAnglesOld(oldMol, molIndex, angleKinds[i][i], nTrials, i);
-    double stepWeight =
-        std::accumulate(data->angleWeights, data->angleWeights + nTrials, 0.0);
-    thetaWeight[i] = stepWeight;
+// Bending energy and 1-3 nonbonded energy of a branch geometry
+void DCHedron::BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
+                            const double *ph, bool useOld, double &bend,
+                            double &nb13) {
+  const FFAngles &ang = *data->ff.angles;
+  const double *bLen = useOld ? bondLengthOld : bondLength;
+  const double aLen = useOld ? anchorBondOld : anchorBond;
+  bend = 0.0;
+  nb13 = 0.0;
+  for (uint b = 0; b < nBonds; ++b) {
+    bend += ang.Calc(angleKinds[b][b], th[b]);
+    double distSq = mol.AngleDist(aLen, bLen[b], th[b]);
+    nb13 += data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
+    for (uint c = 0; c < b; ++c) {
+      double bfcTheta = AngleBetween(th[b], ph[b], th[c], ph[c]);
+      bend += ang.Calc(angleKinds[b][c], bfcTheta);
+      distSq = mol.AngleDist(bLen[b], bLen[c], bfcTheta);
+      nb13 += data->calc.IntraEnergy_1_3(distSq, bonded[b], bonded[c], molIndex);
+    }
   }
 }
 
 void DCHedron::PrepareNew(TrialMol &newMol, uint molIndex) {
-  bendEnergy = 0.0;
-  oneThree = 0.0;
-  FreeAnglesNew(newMol, molIndex, data->nAngleTrials);
-  ConstrainedAngles(newMol, molIndex, data->nAngleTrials);
+  SampleBranch(newMol, theta, phi);
+  BranchEnergy(newMol, molIndex, theta, phi, false, bendEnergy, oneThree);
+  weight = 1.0;
+  if (!data->ff.OneThree)
+    return;
+
+  // Rosenbluth weight the 1-3 interactions over nAngleTrials exact branches
+  const double beta = data->ff.beta;
+  weight = exp(-beta * oneThree);
+  double th[MAX_BONDS], ph[MAX_BONDS], bend, nb13;
+  for (uint i = 1; i < data->nAngleTrials; ++i) {
+    SampleBranch(newMol, th, ph);
+    BranchEnergy(newMol, molIndex, th, ph, false, bend, nb13);
+    double w = exp(-beta * nb13);
+    weight += w;
+    // keep each trial with probability proportional to its weight
+    if (data->prng() * weight < w) {
+      std::copy(th, th + nBonds, theta);
+      std::copy(ph, ph + nBonds, phi);
+      bendEnergy = bend;
+      oneThree = nb13;
+    }
+  }
 }
 
 void DCHedron::PrepareOld(TrialMol &oldMol, uint molIndex) {
   oneThree = 0.0;
   bendEnergy = 0.0;
-  FreeAnglesOld(oldMol, molIndex, data->nAngleTrials - 1);
+  weight = 1.0;
 }
 
+// Actual angles and energies of the old branch
 void DCHedron::IncorporateOld(TrialMol &oldMol, uint molIndex) {
   bendEnergy = 0.0;
   oneThree = 0.0;
   const Forcefield &ff = data->ff;
   for (uint b = 0; b < nBonds; ++b) {
     oldMol.OldThetaAndPhi(bonded[b], focus, theta[b], phi[b]);
-    double thetaEnergy = data->ff.angles->Calc(angleKinds[b][b], theta[b]);
+    bendEnergy += ff.angles->Calc(angleKinds[b][b], theta[b]);
     double distSq = oldMol.OldDistSq(prev, bonded[b]);
-    double nonbondedEn =
-        data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
-
-    thetaWeight[b] += exp(-1 * data->ff.beta * (thetaEnergy + nonbondedEn));
-    bendEnergy += thetaEnergy;
-    oneThree += nonbondedEn;
-
-    if (b != 0) {
-      double phiEnergy = 0.0;
-      nonbondedEn = 0.0;
-      phiWeight[b] = 0.0;
-      for (uint c = 0; c < b; ++c) {
-        double cosTerm = cos(theta[b]) * cos(theta[c]);
-        double sinTerm = sin(theta[b]) * sin(theta[c]);
-        double bfcTheta = acos(sinTerm * cos(phi[b] - phi[c]) + cosTerm);
-
-        double distSq = oldMol.OldDistSq(bonded[c], bonded[b]);
-        nonbondedEn +=
-            data->calc.IntraEnergy_1_3(distSq, bonded[c], bonded[b], molIndex);
-
-        phiEnergy += ff.angles->Calc(angleKinds[b][c], bfcTheta);
-      }
-      phiWeight[b] = exp(-ff.beta * (phiEnergy + nonbondedEn));
-      bendEnergy += phiEnergy;
-      oneThree += nonbondedEn;
+    oneThree += data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
+    for (uint c = 0; c < b; ++c) {
+      double bfcTheta = AngleBetween(theta[b], phi[b], theta[c], phi[c]);
+      bendEnergy += ff.angles->Calc(angleKinds[b][c], bfcTheta);
+      distSq = oldMol.OldDistSq(bonded[c], bonded[b]);
+      oneThree +=
+          data->calc.IntraEnergy_1_3(distSq, bonded[c], bonded[b], molIndex);
     }
   }
 }
 
-void DCHedron::ConstrainedAngles(TrialMol &newMol, uint molIndex,
-                                 uint nTrials) {
-  double *angles = data->angles;
-  double *energies = data->angleEnergy;
-  double *weights = data->angleWeights;
-  double *nonbonded_1_3 = data->nonbonded_1_3;
-  phi[0] = 0.0;
-
-  for (uint b = 1; b < nBonds; ++b) {
-    std::fill_n(energies, nTrials, 0.0);
-    std::fill_n(nonbonded_1_3, nTrials, 0.0);
-    // pick "twist" angles
-    for (uint i = 0; i < nTrials; ++i) {
-      angles[i] = data->prng.rand(2.0 * M_PI);
-    }
-
-    // modify the twist angle if it was fixed
-    for (uint c = 0; c < b; ++c) {
-      double cosTerm = cos(theta[b]) * cos(theta[c]);
-      double sinTerm = sin(theta[b]) * sin(theta[c]);
-
-      if (data->ff.angles->AngleFixed(angleKinds[b][c])) {
-        double bfcTheta = data->ff.angles->Angle(angleKinds[b][c]);
-        double var = (cos(bfcTheta) - cosTerm) / sinTerm;
-        // To fix the numerical problem for flat molecule
-        var = (var > 1.0 && var < 1.1 ? 1.0 : var);
-        var = (var < -1.0 && var > -1.1 ? -1.0 : var);
-        double ang = acos(var) + phi[c];
-        std::fill_n(angles, nTrials, ang);
-        if (std::isnan(ang)) {
-          // printf("Val: %2.10f, angle: %2.5f \n", var, ang);
-          std::cout << "Error: Cannot constrain fix angle for "
-                    << newMol.GetKind().atomTypeNames[bonded[b]] << " "
-                    << newMol.GetKind().atomTypeNames[focus] << " "
-                    << newMol.GetKind().atomTypeNames[bonded[c]] << " !\n";
-          exit(EXIT_FAILURE);
-        }
-      }
-    }
-
-    // compare to angles determined in previous iterations
-    for (uint c = 0; c < b; ++c) {
-      double cosTerm = cos(theta[b]) * cos(theta[c]);
-      double sinTerm = sin(theta[b]) * sin(theta[c]);
-
-      for (uint i = 0; i < nTrials; ++i) {
-        double bfcTheta = acos(sinTerm * cos(angles[i] - phi[c]) + cosTerm);
-        double distSq =
-            newMol.AngleDist(bondLength[b], bondLength[c], bfcTheta);
-        double tempEn =
-            data->calc.IntraEnergy_1_3(distSq, bonded[b], bonded[c], molIndex);
-        nonbonded_1_3[i] += tempEn;
-        energies[i] += data->ff.angles->Calc(angleKinds[b][c], bfcTheta);
-      }
-    }
-
-    // calculate weights from combined energy
-    double stepWeight = 0.0;
-#ifdef _OPENMP
-#pragma omp parallel for default(none)                                         \
-    shared(energies, nonbonded_1_3, nTrials, weights)                          \
-    reduction(+ : stepWeight)
-#endif
-    for (int i = 0; i < (int)nTrials; ++i) {
-      weights[i] = exp(-1 * data->ff.beta * (energies[i] + nonbonded_1_3[i]));
-      stepWeight += weights[i];
-    }
-
-    uint winner = data->prng.PickWeighted(weights, nTrials, stepWeight);
-    phi[b] = angles[winner];
-    bendEnergy += energies[winner];
-    oneThree += nonbonded_1_3[winner];
-    phiWeight[b] = stepWeight;
-  }
-}
-
-// Calculate OldMol Bond Energy &
-// Calculate phi weight for nTrials using actual theta of OldMol
+// Calculate OldMol bend energy and, if 1-3 interactions are enabled, the
+// old Rosenbluth weight from the actual branch plus nTrials exact branches
 void DCHedron::ConstrainedAnglesOld(uint nTrials, TrialMol &oldMol,
                                     uint molIndex) {
-  double *angles = data->angles;
   IncorporateOld(oldMol, molIndex);
+  weight = 1.0;
+  if (!data->ff.OneThree)
+    return;
 
-  for (uint b = 1; b < nBonds; ++b) {
-    double stepWeight = 0.0;
-
-    // pick "twist" angles
-    for (uint i = 0; i < nTrials; ++i) {
-      angles[i] = data->prng.rand(2.0 * M_PI);
-    }
-
-    // modify the twist angle if it was fixed
-    for (uint c = 0; c < b; ++c) {
-      double cosTerm = cos(theta[b]) * cos(theta[c]);
-      double sinTerm = sin(theta[b]) * sin(theta[c]);
-
-      if (data->ff.angles->AngleFixed(angleKinds[b][c])) {
-        double bfcTheta = data->ff.angles->Angle(angleKinds[b][c]);
-        double var = (cos(bfcTheta) - cosTerm) / sinTerm;
-        // To fix the numerical problem for flat molecule
-        var = (var > 1.0 && var < 1.1 ? 1.0 : var);
-        var = (var < -1.0 && var > -1.1 ? -1.0 : var);
-        double ang = acos(var) + phi[c];
-        std::fill_n(angles, nTrials, ang);
-        if (std::isnan(ang)) {
-          // printf("Val: %2.10f, angle: %2.5f \n", var, ang);
-          std::cout << "Error: Cannot constrain fix angle for "
-                    << oldMol.GetKind().atomTypeNames[bonded[b]] << " "
-                    << oldMol.GetKind().atomTypeNames[focus] << " "
-                    << oldMol.GetKind().atomTypeNames[bonded[c]] << " !\n";
-          exit(EXIT_FAILURE);
-        }
-      }
-    }
-
-    for (uint i = 0; i < nTrials; ++i) {
-      double energies = 0.0;
-      double nonbondedEng = 0.0;
-      // compare to angles determined in previous iterations
-      for (uint c = 0; c < b; ++c) {
-        double cosTerm = cos(theta[b]) * cos(theta[c]);
-        double sinTerm = sin(theta[b]) * sin(theta[c]);
-
-        double bfcTheta = acos(sinTerm * cos(angles[i] - phi[c]) + cosTerm);
-        double distSq =
-            oldMol.AngleDist(bondLengthOld[b], bondLengthOld[c], bfcTheta);
-        nonbondedEng +=
-            data->calc.IntraEnergy_1_3(distSq, bonded[b], bonded[c], molIndex);
-        energies += data->ff.angles->Calc(angleKinds[b][c], bfcTheta);
-      }
-
-      // calculate weights from combined energy
-      double weights = exp(-1 * data->ff.beta * (energies + nonbondedEng));
-      stepWeight += weights;
-    }
-    phiWeight[b] += stepWeight;
+  const double beta = data->ff.beta;
+  weight = exp(-beta * oneThree);
+  double th[MAX_BONDS], ph[MAX_BONDS], bend, nb13;
+  for (uint i = 0; i < nTrials; ++i) {
+    SampleBranch(oldMol, th, ph);
+    BranchEnergy(oldMol, molIndex, th, ph, true, bend, nb13);
+    weight += exp(-beta * nb13);
   }
 }
 } // namespace cbmc

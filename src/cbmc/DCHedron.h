@@ -14,7 +14,16 @@ class MolKind;
 
 namespace cbmc {
 class DCData;
+struct BendTable;
 
+// Places the atoms bonded to a focus atom (the "branch"), given the
+// previously placed atom prev. All branch directions are sampled jointly and
+// exactly from the bending Boltzmann distribution
+//   p ~ prod_b sin(theta_b) exp(-beta U(prev,focus,b))
+//       * prod_{c<b} exp(-beta U(c,focus,b)),
+// so the bending contribution to the Rosenbluth weight is a constant that
+// cancels between new and old configurations. If 1-3 nonbonded interactions
+// are enabled they are Rosenbluth weighted over nAngleTrials exact samples.
 class DCHedron {
 public:
   DCHedron(DCData *data, const mol_setup::MolKind &kind, uint focus, uint prev);
@@ -27,7 +36,7 @@ public:
   uint Bonded(uint i) const { return bonded[i]; }
   double Theta(uint i) const { return theta[i]; }
   double Phi(uint i) const { return phi[i]; }
-  double GetWeight() const;
+  double GetWeight() const { return weight; }
   double GetEnergy() const { return bendEnergy; }
   double GetNonBondedEn() const { return oneThree; }
   uint NumBond() const { return nBonds; }
@@ -38,13 +47,12 @@ public:
   uint bonded[MAX_BONDS];
 
 private:
-  void GenerateAnglesNew(TrialMol &newMol, uint molIndex, uint kind,
-                         uint nTrials, uint bType);
-  void GenerateAnglesOld(TrialMol &oldMol, uint molIndex, uint kind,
-                         uint nTrials, uint bType);
-  void FreeAnglesNew(TrialMol &newMol, uint molIndex, uint nTrials);
-  void FreeAnglesOld(TrialMol &oldMol, uint molIndex, uint nTrials);
-  void ConstrainedAngles(TrialMol &newMol, uint molIndex, uint nTrials);
+  const BendTable &GetTable(uint kind);
+  double SampleTheta(uint kind);
+  void SampleBranch(TrialMol &mol, double *th, double *ph);
+  void BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
+                    const double *ph, bool useOld, double &bend,
+                    double &nb13);
 
   DCData *data;
   uint focus, prev;
@@ -59,9 +67,8 @@ private:
   // except angleKinds[i][i] = kind between bonded[i] and prev
   uint angleKinds[MAX_BONDS][MAX_BONDS];
   double theta[MAX_BONDS];
-  double thetaWeight[MAX_BONDS];
   double phi[MAX_BONDS];
-  double phiWeight[MAX_BONDS];
+  double weight;
   double bendEnergy, oneThree;
   double anchorBond, anchorBondOld;
 };
