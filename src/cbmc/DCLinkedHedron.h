@@ -5,6 +5,8 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #ifndef DCLINKEDHEDRON_H
 #define DCLINKEDHEDRON_H
+#include <vector>
+
 #include "CBMC.h"
 #include "DCComponent.h"
 #include "DCHedron.h"
@@ -33,6 +35,8 @@ private:
   void ChooseTorsion(TrialMol &mol, uint molIndex, double prevPhi[],
                      RotationMatrix &cross, RotationMatrix &tensor);
   double EvalLJ(TrialMol &mol, uint molIndex);
+  void SaveBranch(uint lj);
+  void RestoreBranch(uint lj);
   DCData *data;
   DCHedron hed;
   uint nPrevBonds;
@@ -49,6 +53,9 @@ private:
   double bondLengthOld[MAX_BONDS];
   // bondKind between bonded[i] and focus
   uint bondKinds[MAX_BONDS];
+  // branch geometry, energies and weight of each LJ trial
+  std::vector<double> trialTheta, trialPhi; // [trial * MAX_BONDS + bond]
+  std::vector<double> trialBend, trialNB13, trialWeight;
 };
 } // namespace cbmc
 #endif /*DCLINKEDHEDRON_H*/

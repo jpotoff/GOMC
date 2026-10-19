@@ -126,17 +126,18 @@ void DCHedron::BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
   }
 }
 
-// Draw nTrials branch geometries; select one with probability proportional
-// to its weight and accumulate the Rosenbluth weight. Each trial's weight is
-// its importance weight from the sampler times the 1-3 Boltzmann factor.
-void DCHedron::PrepareNew(TrialMol &newMol, uint molIndex) {
+// Draw nAngleTrials branch geometries; select one with probability
+// proportional to its weight and accumulate the Rosenbluth weight. Each
+// trial's weight is its importance weight from the sampler times the 1-3
+// Boltzmann factor. useOld selects the old configuration's bond lengths.
+void DCHedron::SampleTrials(TrialMol &mol, uint molIndex, bool useOld) {
   const double beta = data->ff.beta;
   double th[MAX_BONDS], ph[MAX_BONDS], bend, nb13;
   weight = 0.0;
   for (uint i = 0; i < data->nAngleTrials; ++i) {
     if (!sampler.Sample(data->prng, beta, th, ph))
-      BranchFailure(newMol);
-    BranchEnergy(newMol, molIndex, th, ph, false, bend, nb13);
+      BranchFailure(mol);
+    BranchEnergy(mol, molIndex, th, ph, useOld, bend, nb13);
     double w = sampler.Weight(beta, th, ph) * exp(-beta * nb13);
     weight += w;
     // keep each trial with probability proportional to its weight
@@ -147,6 +148,23 @@ void DCHedron::PrepareNew(TrialMol &newMol, uint molIndex) {
       oneThree = nb13;
     }
   }
+}
+
+void DCHedron::PrepareNew(TrialMol &newMol, uint molIndex) {
+  SampleTrials(newMol, molIndex, false);
+}
+
+void DCHedron::PrepareTrialOld(TrialMol &oldMol, uint molIndex) {
+  SampleTrials(oldMol, molIndex, true);
+}
+
+void DCHedron::SetBranch(const double *th, const double *ph, double bend,
+                         double nb13, double w) {
+  std::copy(th, th + nBonds, theta);
+  std::copy(ph, ph + nBonds, phi);
+  bendEnergy = bend;
+  oneThree = nb13;
+  weight = w;
 }
 
 void DCHedron::PrepareOld(TrialMol &oldMol, uint molIndex) {

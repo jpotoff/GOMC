@@ -79,7 +79,6 @@ void DCLinkedHedron::PrepareNew(TrialMol &newMol, uint molIndex) {
   // Get new bond information
   SetBondLengthNew(newMol);
   hed.SetBondNew(bondLength, anchorBond);
-  hed.PrepareNew(newMol, molIndex);
   bondEnergy = 0.0;
   for (uint i = 0; i < hed.NumBond(); ++i) {
     bondEnergy += data->ff.bonds.Calc(bondKinds[i], bondLength[i]);
@@ -140,11 +139,6 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
   const XYZ center = newMol.AtomPosition(hed.Focus());
   XYZArray *positions = data->multiPositions;
   double prevPhi[MAX_BONDS];
-  for (uint i = 0; i < hed.NumBond(); ++i) {
-    // get position and shift to origin
-    positions[i].Set(
-        0, newMol.RawRectCoords(bondLength[i], hed.Theta(i), hed.Phi(i)));
-  }
   for (uint i = 0; i < nPrevBonds; ++i) {
     double th;
     // not using theta, so this is a wasted cos and sqrt
@@ -159,9 +153,21 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
 
   // counting backward to preserve prototype
   for (uint lj = nLJTrials; lj-- > 0;) {
+    // Each LJ trial gets its own branch geometry, so the bend angles and
+    // hydrogen positions are selected together with the torsion and the
+    // nonbonded energy. The branch's Rosenbluth weight is part of the trial
+    // weight.
+    hed.PrepareNew(newMol, molIndex);
+    SaveBranch(lj);
+    for (uint b = 0; b < hed.NumBond(); ++b) {
+      // get position and shift to origin
+      positions[b].Set(
+          0, newMol.RawRectCoords(bondLength[b], hed.Theta(b), hed.Phi(b)));
+    }
     ChooseTorsion(newMol, molIndex, prevPhi, cross, tensor);
-    ljWeights[lj] = std::accumulate(torWeights, torWeights + nDihTrials, 0.0);
-    uint winner = prng.PickWeighted(torWeights, nDihTrials, ljWeights[lj]);
+    double torSum = std::accumulate(torWeights, torWeights + nDihTrials, 0.0);
+    ljWeights[lj] = hed.GetWeight() * torSum;
+    uint winner = prng.PickWeighted(torWeights, nDihTrials, torSum);
     bondedEn[lj] = torEnergy[winner];
     oneFour[lj] = nonbonded_1_4[winner];
     // convert chosen torsion to 3D positions
@@ -180,6 +186,7 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
 
   double stepWeight = EvalLJ(newMol, molIndex);
   uint winner = prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
+  RestoreBranch(winner);
   for (uint b = 0; b < hed.NumBond(); ++b) {
     newMol.AddAtom(hed.Bonded(b), positions[b][winner]);
     newMol.AddBonds(hed.Bonded(b), hed.Focus());
@@ -189,7 +196,6 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
       Energy(bondedEn[winner] + hed.GetEnergy() + bondEnergy,
              nonbonded[winner] + hed.GetNonBondedEn() + oneFour[winner],
              inter[winner], real[winner], 0.0, 0.0, 0.0));
-  newMol.MultWeight(hed.GetWeight());
   newMol.MultWeight(stepWeight / nLJTrials);
 }
 
@@ -219,8 +225,8 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
 
   // get info about existing geometry
   oldMol.SetBasis(hed.Focus(), hed.Prev());
-  // Calculate OldMol Bond Energy &
-  // Calculate phi weight for nTrials using actual theta of OldMol
+  // Actual branch angles and energies, and the branch Rosenbluth weight of
+  // trial 0 (actual branch plus nAngleTrials - 1 generated ones)
   hed.ConstrainedAnglesOld(data->nAngleTrials - 1, oldMol, molIndex);
   const XYZ center = oldMol.AtomPosition(hed.Focus());
   XYZArray *positions = data->multiPositions;
@@ -243,11 +249,24 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
   RotationMatrix cross = RotationMatrix::CrossProduct(rotationAxis);
   RotationMatrix tensor = RotationMatrix::TensorProduct(rotationAxis);
 
+  // keep the actual branch (trial 0) while generating the other trials
+  SaveBranch(0);
+  XYZ actualBase[MAX_BONDS];
+  for (uint b = 0; b < hed.NumBond(); ++b)
+    actualBase[b] = positions[b][0];
+
   // counting backward to preserve prototype
   for (uint lj = nLJTrials; lj-- > 1;) {
+    // fresh branch geometry for each trial, as in BuildNew
+    hed.PrepareTrialOld(oldMol, molIndex);
+    for (uint b = 0; b < hed.NumBond(); ++b) {
+      positions[b].Set(0, oldMol.RawRectCoords(bondLengthOld[b], hed.Theta(b),
+                                               hed.Phi(b)));
+    }
     ChooseTorsion(oldMol, molIndex, prevPhi, cross, tensor);
-    ljWeights[lj] = std::accumulate(torWeights, torWeights + nDihTrials, 0.0);
-    uint winner = prng.PickWeighted(torWeights, nDihTrials, ljWeights[lj]);
+    double torSum = std::accumulate(torWeights, torWeights + nDihTrials, 0.0);
+    ljWeights[lj] = hed.GetWeight() * torSum;
+    uint winner = prng.PickWeighted(torWeights, nDihTrials, torSum);
     bondedEn[lj] = torEnergy[winner];
     oneFour[lj] = nonbonded_1_4[winner];
     // convert chosen torsion to 3D positions
@@ -259,6 +278,10 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
       positions[b].Add(lj, center);
     }
   }
+  RestoreBranch(0);
+  for (uint b = 0; b < hed.NumBond(); ++b)
+    positions[b].Set(0, actualBase[b]);
+
   ljWeights[0] = 0.0;
   for (uint tor = 0; tor < nDihTrials; ++tor) {
     torsion[tor] = (tor == 0) ? 0.0 : data->prng.rand(2.0 * M_PI);
@@ -289,6 +312,7 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
     }
     ljWeights[0] += exp(-ff.beta * (torEnergy[tor] + nonbonded_1_4[tor]));
   }
+  ljWeights[0] *= hed.GetWeight();
   bondedEn[0] = torEnergy[0];
   oneFour[0] = nonbonded_1_4[0];
 
@@ -306,8 +330,32 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
                           nonbonded[0] + hed.GetNonBondedEn() + oneFour[0],
                           inter[0], real[0], 0.0, 0.0, 0.0));
 
-  oldMol.MultWeight(hed.GetWeight());
   oldMol.MultWeight(stepWeight / nLJTrials);
+}
+
+// Store the hedron's current branch as LJ trial lj
+void DCLinkedHedron::SaveBranch(uint lj) {
+  const uint n = hed.NumBond();
+  if (trialTheta.size() < (lj + 1) * MAX_BONDS) {
+    trialTheta.resize((lj + 1) * MAX_BONDS);
+    trialPhi.resize((lj + 1) * MAX_BONDS);
+    trialBend.resize(lj + 1);
+    trialNB13.resize(lj + 1);
+    trialWeight.resize(lj + 1);
+  }
+  for (uint b = 0; b < n; ++b) {
+    trialTheta[lj * MAX_BONDS + b] = hed.Theta(b);
+    trialPhi[lj * MAX_BONDS + b] = hed.Phi(b);
+  }
+  trialBend[lj] = hed.GetEnergy();
+  trialNB13[lj] = hed.GetNonBondedEn();
+  trialWeight[lj] = hed.GetWeight();
+}
+
+// Make LJ trial lj's branch the hedron's current branch
+void DCLinkedHedron::RestoreBranch(uint lj) {
+  hed.SetBranch(&trialTheta[lj * MAX_BONDS], &trialPhi[lj * MAX_BONDS],
+                trialBend[lj], trialNB13[lj], trialWeight[lj]);
 }
 
 double DCLinkedHedron::EvalLJ(TrialMol &mol, uint molIndex) {

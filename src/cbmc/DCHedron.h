@@ -28,6 +28,11 @@ public:
   DCHedron(DCData *data, const mol_setup::MolKind &kind, uint focus, uint prev);
   void PrepareNew(TrialMol &newMol, uint molIndex);
   void PrepareOld(TrialMol &oldMol, uint molIndex);
+  // Generate a branch for an old-configuration trial (old bond lengths)
+  void PrepareTrialOld(TrialMol &oldMol, uint molIndex);
+  // Restore a previously generated branch and its energies and weight
+  void SetBranch(const double *th, const double *ph, double bend, double nb13,
+                 double w);
   void IncorporateOld(TrialMol &oldMol, uint molIndex);
   void ConstrainedAnglesOld(uint nTrials, TrialMol &oldMol, uint molIndex);
   void SetBondNew(double const *bondLen, double const &anchBond);
@@ -47,6 +52,7 @@ public:
 
 private:
   void BranchFailure(TrialMol &mol) const;
+  void SampleTrials(TrialMol &mol, uint molIndex, bool useOld);
   void BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
                     const double *ph, bool useOld, double &bend,
                     double &nb13);
