@@ -9,6 +9,7 @@ set(TestSources
     test/src/MieExponentTest.cpp
     test/src/EwaldRealTableTest.cpp
     test/src/ForcefieldAnalyticTest.cpp
+    test/src/BranchSamplerTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )

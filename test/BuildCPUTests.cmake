@@ -36,6 +36,8 @@ function(add_ensemble_test name ENSEMBLE_ID ENSEMBLE_LABEL)
              COMMAND ${name} --gtest_filter=EwaldRealTableTest.*)
     add_test(NAME ForcefieldAnalyticTest_${ENSEMBLE_LABEL}
              COMMAND ${name} --gtest_filter=ForcefieldAnalyticTest.*)
+    add_test(NAME BranchSamplerTest_${ENSEMBLE_LABEL}
+             COMMAND ${name} --gtest_filter=BranchSamplerTest.*)
 
     if(${ENSEMBLE_ID} EQUAL 2 OR ${ENSEMBLE_ID} EQUAL 3)
         add_test(NAME ConsistentTrajectoryTest_${ENSEMBLE_LABEL}

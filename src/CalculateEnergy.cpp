@@ -2778,7 +2778,7 @@ void CalculateEnergy::MolNonbond(double &energy, cbmc::TrialMol const &mol,
                                                molKind.AtomKind(p2), 1.0);
         if (electrostatic) {
           qi_qj_fact =
-              num::qqFact * molKind.AtomCharge(1) * molKind.AtomCharge(p2);
+              num::qqFact * molKind.AtomCharge(p1) * molKind.AtomCharge(p2);
 
           if (qi_qj_fact != 0.0) {
             forcefield.particles->CalcCoulombAdd_1_4(energy, distSq, qi_qj_fact,

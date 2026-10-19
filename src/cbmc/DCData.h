@@ -9,6 +9,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <vector>
 
 #include "BasicTypes.h"
+#include "BranchSampler.h"
 #include "CBMC.h"
 #include "Setup.h"
 #include "System.h"
@@ -17,17 +18,6 @@ A copy of the MIT License can be found in License.txt with this program or at
 class Forcefield;
 
 namespace cbmc {
-// Tabulated envelope for sampling a bond angle theta from
-// p(theta) ~ sin(theta) exp(-beta (U(theta) - uMin)) by bin rejection.
-// pMax[i] bounds p over bin i; cumMax is its running sum.
-struct BendTable {
-  double beta = 0.0; // beta the table was built for (0 = not built)
-  double uMin = 0.0; // minimum of U(theta) on [0, pi]
-  double width = 0.0;
-  std::vector<double> pMax;
-  std::vector<double> cumMax;
-};
-
 
 // Class to avoid reallocating arrays for CBMC
 // Could be refactored into an object pool. This would be easier if I had
