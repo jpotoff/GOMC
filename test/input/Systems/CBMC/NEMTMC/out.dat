@@ -1,0 +1,221 @@
+Info: GOMC Version 2.80
+Info: Start Time: Mon Oct 19 12:26:31 2026
+Info: Host Name: reslab44ai8111
+CPU information:
+Info: Total number of CPU cores: 32
+Info: Total number of CPU cores available: 32
+Info: Model name: AMD Ryzen 9 9950X 16-Core Processor
+Info: System name: Linux
+Info: Release: 6.8.0-146-generic
+Info: Version: #146-Ubuntu SMP PREEMPT_DYNAMIC Thu Sep  3 16:12:30 UTC 2026
+Info: Kernel Architecture: x86_64
+Info: Total Ram: 31159.9MB
+Info: Used Ram: 15117.3MB
+Info: Working in the current directory: /home6/ai8111/GOMC/trappe/C6A/GEMC/workspace/1786be85c529ab88428c48d8cbfc88b3/NEMTC
+Info: GOMC COMPILED TO RUN GIBBS ENSEMBLE.
+Info: Number of OpenMP threads:          4 
+Info: Compiled with OpenMP Version:      5.1
+
+Reading Input File:                      GEMC_nemc.conf
+Info: Restart simulation                 Active 
+Info: Expert Mode                        Inactive 
+Info: Integer seed                       Active 
+Info: Constant seed                      Active 
+Info: Parameter file                     MIE format 
+Info: Running NVT_GEMC
+Info: Input Temperature                  300.0000 K
+Info: Non-truncated potential            Active 
+Info: Long Range Correction              Active 
+Info: Impulse Pressure Correction        Inactive 
+Info: Cutoff                             10.0000 A
+Info: Short Range Cutoff                 1.0000 A
+Info: Exclude                            ONE-FOUR 
+Info: Cache Ewald Fourier                Inactive 
+Info: Ewald Summation Tolerance          1.000E-05 
+Info: Box  0  CutoffCoulomb              12.0000 A
+Info: Box  1  CutoffCoulomb              50.0000 A
+Info: Pressure calculation frequency     1000 
+Info: Total number of steps              100000 
+Info: Number of equilibration steps      10000 
+Info: Move adjustment frequency          1000 
+Info: Displacement move frequency        0.3200 
+Info: Rotation move frequency            0.3100 
+Info: Molecule swap move frequency       0.1000 
+Info: Regrowth move frequency            0.1000 
+Info: Crank-Shaft move frequency         0.0500 
+Info: Volume move frequency              0.0100 
+Info: Multi-Particle move frequency      0.0100 
+Info: nonEq Mol-Transfer move frequency  0.1000 
+Info: Lambda VDW                         0.000 0.040 0.080 0.120 0.160 0.200 0.240 0.280 0.320 0.360 0.400 0.440 0.480 0.520 0.560 0.600 0.640 0.680 0.720 0.760 0.800 0.840 0.880 0.920 0.960 1.000 
+Info: NeMTMC Relaxing Steps              25   
+Info: NeMTMC Relaxing Using MultiParticle Active 
+Info: NeMTMC Relaxing Using MultiParticleBrownian Inactive 
+Info: Intra-Swap/Regrowth Frequency in NeMTMC Relaxing Steps 0.1500 
+Info: Lambda VDW limit for Intra-Swap move in NeMTMC Relaxing Steps 0.1000 
+Info: Soft-core softness(alpha)          0.5000 
+Info: Soft-core minimum sigma            3.0000 A 
+Info: Soft-core for Coulombic interaction Inactive 
+Info: CBMC First atom trials             12   
+Info: CBMC Secondary atom trials         10   
+Info: CBMC Angle trials                  50   
+Info: CBMC Dihedral trials               50   
+Info: Output name                        C6A_prod 
+Info: Restart frequency                  10000000 
+Info: Checkpoint frequency               10000000 
+Info: Printing coordinate                Inactive 
+Info: DCD frequency                      10000000 
+Info: Console output frequency           10000 
+Info: Average output frequency           10000000 
+Warning: Unknown input HistogramFreq!
+Warning: Unknown input DistName!
+Warning: Unknown input HistName!
+Warning: Unknown input RunNumber!
+Warning: Unknown input RunLetter!
+Warning: Unknown input SampleFreq!
+Default: Intra-Swap move frequency       0.0000 
+Default: Multi-Particle Brownian move frequency 0.0000 
+Default: Intra-MEMC move frequency       0.0000 
+Default: Targeted-Swap move frequency    0.0000 
+Default: MEMC move frequency             0.0000 
+Default: Targeted-Swap move frequency    0.0000 
+Default: Lambda Coulomb                  0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 0.000 
+Default: Soft-core scale power(p)        2    
+Warning: 1-4 Electrostatic scaling set, but will be ignored.
+Warning: Cell dimension set, but will be ignored in restart mode.
+Finished Reading Input File:             GEMC_nemc.conf
+
+Reading from Mie-Style parameter file:  	TraPPE_FF.inp
+Reading BONDS parameters.
+Reading ANGLES parameters.
+Reading DIHEDRALS parameters.
+Reading NONBONDED_MIE parameters.
+Reading from box 0 PDB coordinate file:  	C6A_equil_BOX_0_restart.pdb
+Finished reading:                       	C6A_equil_BOX_0_restart.pdb
+Reading from box 1 PDB coordinate file:  	C6A_equil_BOX_1_restart.pdb
+Finished reading:                       	C6A_equil_BOX_1_restart.pdb
+Random number seed: 0
+
+Molecules in PSF:
+Molecule Kind: C6A
+Idx	name	type	charge	mass
+0	C1	CH30	0.0000	15.0344
+1	C2	CH20	0.0000	14.0266
+2	C3	CH20	0.0000	14.0266
+3	C4	CH20	0.0000	14.0266
+4	C5	CH20	0.0000	14.0266
+5	C6	CH30	0.0000	15.0344
+
+Bonds:
+[4 5] [3 4] [2 3] [1 2] [0 1] 
+
+Angles:
+[0 1 2] [1 2 3] [2 3 4] [3 4 5] 
+
+Dihedrals:
+[0 1 2 3] [1 2 3 4] [2 3 4 5] 
+
+Impropers:
+
+Bonds parameter:
+Atom Types                             Kb(K)           b0(A) 
+CH20	CH30	                         FIX           1.5400 
+CH20	CH20	                         FIX           1.5400 
+CH30	CH20	                         FIX           1.5400 
+
+Angles parameter:
+Atom Types                         Ktheta(K)         theta0(degree) 
+CH30	CH20	CH20	                 FIX         114.0000 
+CH20	CH20	CH20	                 FIX         114.0000 
+CH20	CH20	CH30	                 FIX         114.0000 
+
+Dihedrals parameter:
+Atom Types                           Kchi(K)    n    delta(degree) 
+CH30	CH20	CH20	CH20	    355.0300    1      0.0000 
+CH30	CH20	CH20	CH20	    -68.1900    2    180.0000 
+CH30	CH20	CH20	CH20	    791.3200    3      0.0000 
+CH20	CH20	CH20	CH20	    355.0300    1      0.0000 
+CH20	CH20	CH20	CH20	    -68.1900    2    180.0000 
+CH20	CH20	CH20	CH20	    791.3200    3      0.0000 
+CH20	CH20	CH20	CH30	    355.0300    1      0.0000 
+CH20	CH20	CH20	CH30	    -68.1900    2    180.0000 
+CH20	CH20	CH20	CH30	    791.3200    3      0.0000 
+
+Info: Mie exponent is 12 for every pair kind; using the fixed-exponent vdW kernel
+NonBonded 1-4 parameters:
+Type1  Type2             Epsilon(K)    Sigma(A)       N 
+CH30   CH30                  0.0000      3.7500   12.00 
+CH30   CH20                  0.0000      3.8500   12.00 
+CH20   CH20                  0.0000      3.9500   12.00 
+
+NonBonded parameters:
+Type1  Type2             Epsilon(K)    Sigma(A)       N 
+CH30   CH30                 98.0000      3.7500   12.00 
+CH30   CH20                 67.1416      3.8500   12.00 
+CH20   CH20                 46.0000      3.9500   12.00 
+
+Info: Reading extended system file C6A_equil_BOX_0_restart.xsc 
+
+Info: Finished reading extended system file C6A_equil_BOX_0_restart.xsc 
+
+Info: Reading extended system file C6A_equil_BOX_1_restart.xsc 
+
+Info: Finished reading extended system file C6A_equil_BOX_1_restart.xsc 
+
+Info: Reading from binary file C6A_equil_BOX_0_restart.coor
+
+Info: Finished reading from binary file C6A_equil_BOX_0_restart.coor
+
+Info: Reading from binary file C6A_equil_BOX_1_restart.coor
+
+Info: Finished reading from binary file C6A_equil_BOX_1_restart.coor
+
+Info: Box  0:  Periodic Cell Basis 1     46.565   0.000   0.000
+Info: Box  0:  Periodic Cell Basis 2      0.000  46.565   0.000
+Info: Box  0:  Periodic Cell Basis 3      0.000   0.000  46.565
+Info: Box  0:  Cell grid                3 x 3 x 3, spacing 15.522 x 15.522 x 15.522 A (cutoff 12.000 A)
+Info: Box  0:  Stencil                  radius 1, 27 cells
+Info: Box  0:  Pair search              whole box -- cell list not used
+
+Info: Box  1:  Periodic Cell Basis 1    180.099   0.000   0.000
+Info: Box  1:  Periodic Cell Basis 2      0.000 180.099   0.000
+Info: Box  1:  Periodic Cell Basis 3      0.000   0.000 180.099
+Info: Box  1:  Cell grid                3 x 3 x 3, spacing 60.033 x 60.033 x 60.033 A (cutoff 50.000 A)
+Info: Box  1:  Stencil                  radius 1, 27 cells
+Info: Box  1:  Pair search              whole box -- cell list not used
+
+Minimum coordinates in box 0: x =   -2.344, y =   -2.029, z =   -2.170
+Maximum coordinates in box 0: x =   49.178, y =   49.542, z =   48.982
+Wrapping molecules inside the simulation box 0:
+Minimum coordinates in box 1: x =   -0.314, y =    6.660, z =   18.520
+Maximum coordinates in box 1: x =  182.033, y =  176.767, z =  179.580
+Wrapping molecules inside the simulation box 1:
+
+################################################################################
+########################## INITIAL SIMULATION ENERGY ###########################
+
+ETITLE:          STEP                TOTAL             INTRA(B)            INTRA(NB)            INTER(LJ)                  LRC          TOTAL_ELECT                 REAL                RECIP                 SELF                 CORR
+
+ENER_0:             0      -1.10451474e+06       4.04596165e+05      -5.46892352e+04      -1.32492849e+06      -1.29493186e+05       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+ENER_1:             0       3.06264078e+04       3.57600067e+04      -5.11667461e+03       0.00000000e+00      -1.69242820e+01       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00       0.00000000e+00
+
+STITLE:          STEP               VOLUME             PRESSURE      COMPRESSIBILITY             ENTHALPY             HEAT_VAP             TOTALMOL          TOT_DENSITY
+
+STAT_0:             0       1.00970026e+05      -1.93402851e+02      -1.02492709e+00      -2.25205279e+01       2.88136376e+01                  460       6.51923770e+02
+
+STAT_1:             0       5.84162197e+06       2.82817135e-01       9.97182479e-01       8.85336334e+00       2.88136376e+01                   40       9.79846385e-01
+
+################################################################################
+############################# STARTING SIMULATION ##############################
+
+MTITLE:          STEP               DISTRY            DISACCEPT           DISACCEPT%               DISMAX               ROTATE            ROTACCEPT           ROTACCEPT%               ROTMAX        MULTIPARTICLE             MPACCEPT            MPACCEPT%             REGROWTH         REGROWACCEPT        REGROWACCEPT%           CRANKSHAFT       CRKSHAFTACCEPT      CRKSHAFTACCEPT%             TRANSFER           TRANACCEPT          TRANACCEPT%         NEMTMCTRANSF         NEMTMCACCEPT        NEMTMCACCEPT%               VOLUME            VOLACCEPT           VOLACCEPT%               VOLMAX
+
+ETITLE:          STEP                TOTAL             INTRA(B)            INTRA(NB)            INTER(LJ)                  LRC          TOTAL_ELECT                 REAL                RECIP                 SELF                 CORR
+
+STITLE:          STEP               VOLUME             PRESSURE      COMPRESSIBILITY             ENTHALPY             HEAT_VAP             TOTALMOL          TOT_DENSITY
+
+Opening DCD coordinate file: C6A_prod_BOX_0.dcd 
+Opening DCD coordinate file: C6A_prod_BOX_1.dcd 
+Writing DCD coordinate to file C6A_prod_BOX_0.dcd at step 1 
+Finished writing DCD coordinate to file C6A_prod_BOX_0.dcd at step 1 
+Writing DCD coordinate to file C6A_prod_BOX_1.dcd at step 1 

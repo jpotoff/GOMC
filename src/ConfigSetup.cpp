@@ -1050,6 +1050,21 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
                  sys.neMTMCVal.lambdaLimit);
         }
       }
+    } else if (CheckString(line[0], "NeMTMCRelaxRadius")) {
+      if (line.size() > 1) {
+        sys.neMTMCVal.relaxRadius = stringtod(line[1]);
+        sys.neMTMCVal.readRelaxRadius = true;
+        printf("%-40s %-4.4f A \n", "Info: NeMTMC Relaxing Radius",
+               sys.neMTMCVal.relaxRadius);
+      }
+    } else if (CheckString(line[0], "NeMTMCFracMoveProb")) {
+      if (line.size() > 1) {
+        sys.neMTMCVal.fracMoveProb = stringtod(line[1]);
+        sys.neMTMCVal.readFracMoveProb = true;
+        printf("%-40s %-4.4f \n",
+               "Info: NeMTMC Fractional Molecule Move Probability",
+               sys.neMTMCVal.fracMoveProb);
+      }
     }
 #endif
     else if (CheckString(line[0], "CellBasisVector1")) {
@@ -1600,6 +1615,19 @@ void ConfigSetup::fillDefaults(void) {
              "Default: Lambda VDW limit for Intra-Swap move in NeMTMC Relaxing "
              "Steps",
              sys.neMTMCVal.lambdaLimit);
+    }
+    if (!sys.neMTMCVal.readRelaxRadius) {
+      sys.neMTMCVal.readRelaxRadius = true;
+      sys.neMTMCVal.relaxRadius = sys.ff.cutoff;
+      printf("%-40s %-4.4f A \n", "Default: NeMTMC Relaxing Radius",
+             sys.neMTMCVal.relaxRadius);
+    }
+    if (!sys.neMTMCVal.readFracMoveProb) {
+      sys.neMTMCVal.readFracMoveProb = true;
+      sys.neMTMCVal.fracMoveProb = 0.2;
+      printf("%-40s %-4.4f \n",
+             "Default: NeMTMC Fractional Molecule Move Probability",
+             sys.neMTMCVal.fracMoveProb);
     }
   }
 
@@ -2384,6 +2412,17 @@ void ConfigSetup::verifyInputs(void) {
       std::cout
           << "ERROR: Intra-Swap/Regrowth Frequency in NeMTMC Relaxing Steps \n"
           << "       must be less than 1.0! \n";
+      exit(EXIT_FAILURE);
+    }
+
+    if (sys.neMTMCVal.relaxRadius < 0.0) {
+      std::cout << "ERROR: NeMTMC Relaxing Radius must be non-negative! \n";
+      exit(EXIT_FAILURE);
+    }
+
+    if (sys.neMTMCVal.fracMoveProb < 0.0 || sys.neMTMCVal.fracMoveProb > 1.0) {
+      std::cout << "ERROR: NeMTMC Fractional Molecule Move Probability must \n"
+                << "       be between 0.0 and 1.0! \n";
       exit(EXIT_FAILURE);
     }
 

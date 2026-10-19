@@ -11,6 +11,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <numeric>
 
 #include "MoveBase.h"
+#include "Translate.h"
 #include "TrialMol.h"
 
 using std::vector;
@@ -34,6 +35,8 @@ public:
       BrownianDynamicEnable = statV.neMTMCVal.MPBEnable;
       stepCounter = 0;
       relaxSteps = statV.neMTMCVal.relaxSteps;
+      relaxRadius = statV.neMTMCVal.relaxRadius;
+      fracMoveProb = statV.neMTMCVal.fracMoveProb;
       lambdaWindow = statV.neMTMCVal.lambdaVDW.size() - 1;
       lambdaCoulomb = statV.neMTMCVal.lambdaCoulomb;
       lambdaVDW = statV.neMTMCVal.lambdaVDW;
@@ -66,6 +69,8 @@ private:
 
   void Propagation();
   void RelaxingTransform(uint box);
+  uint PickRelaxMol(uint &m, uint &mk, const uint box);
+  bool InRelaxRadius(XYZ const &com, const uint box) const;
   void AddWork();
 
   Lambda &lambdaRef;
@@ -90,6 +95,9 @@ private:
   bool MPEnable, BrownianDynamicEnable;
   ulong stepCounter;
   MoveBase *propagationMove;
+  // Radius around the fractional molecule for local relaxing (0 = whole box)
+  double relaxRadius, fracMoveProb;
+  vector<uint> neighbors;
 
   cbmc::TrialMol oldMolNEMT, newMolNEMT;
   Energy oldEnergy[BOX_TOTAL], newEnergy[BOX_TOTAL];
@@ -462,12 +470,20 @@ inline void NEMTMC::RelaxingTransform(uint box) {
 
     } else {
       // Use random translation and rotation to propagate
-      // Randomly pick a molecule in Box
       uint pStart = 0;
       uint pLen = 0;
       uint m = 0;
       uint mk = 0;
-      rejectState = prng.PickMol(m, mk, box);
+      if (relaxRadius > 0.0) {
+        // Pick the fractional molecule or one of its neighbors
+        rejectState = PickRelaxMol(m, mk, box);
+        // Nothing to move if the fractional molecule has no neighbors
+        if (rejectState != mv::fail_state::NO_FAIL)
+          continue;
+      } else {
+        // Randomly pick a molecule in Box
+        rejectState = prng.PickMol(m, mk, box);
+      }
       if (rejectState == mv::fail_state::NO_FAIL) {
         molRef.GetRangeStartLength(pStart, pLen, m);
         if (pLen == 1) {
@@ -481,6 +497,23 @@ inline void NEMTMC::RelaxingTransform(uint box) {
         // prepare the move with box, picked molkind and index
         rejectState = propagationMove->PrepNEMTMC(box, m, mk);
       }
+      if (rejectState == mv::fail_state::NO_FAIL) {
+        rejectState = propagationMove->Transform();
+      }
+      // A neighbor may not leave the relaxing sphere, which keeps the
+      // neighbor count, and so the pick probability, the same in reverse.
+      if (rejectState == mv::fail_state::NO_FAIL && relaxRadius > 0.0 &&
+          m != molIndex &&
+          propagationMove == systemRef.GetMoveObject(mv::DISPLACE)) {
+        Translate *trans = static_cast<Translate *>(propagationMove);
+        if (!InRelaxRadius(trans->NewCOM(), box))
+          rejectState = mv::fail_state::OUTSIDE_RELAX_RADIUS;
+      }
+      if (rejectState == mv::fail_state::NO_FAIL) {
+        propagationMove->CalcEn();
+      }
+      propagationMove->Accept(rejectState, s + stepCounter);
+      continue;
     }
 
     // Transform, CalcEn, and Accept/Reject
@@ -495,6 +528,34 @@ inline void NEMTMC::RelaxingTransform(uint box) {
   }
   // To advance the number of steps during intermediate states
   stepCounter += relaxSteps;
+}
+
+inline bool NEMTMC::InRelaxRadius(XYZ const &com, const uint box) const {
+  XYZ dist = boxDimRef.MinImage(com - comCurrRef.Get(molIndex), box);
+  return dist.LengthSq() < relaxRadius * relaxRadius;
+}
+
+inline uint NEMTMC::PickRelaxMol(uint &m, uint &mk, const uint box) {
+  if (prng() < fracMoveProb) {
+    m = molIndex;
+    mk = kindIndex;
+    return mv::fail_state::NO_FAIL;
+  }
+  // Neighbors are molecules with COM inside the sphere around the fractional
+  // molecule's COM in the current configuration
+  neighbors.clear();
+  MoleculeLookup::box_iterator end = molLookRef.BoxEnd(box);
+  for (MoleculeLookup::box_iterator it = molLookRef.BoxBegin(box); it != end;
+       ++it) {
+    if (*it != molIndex && !molLookRef.IsFix(*it) &&
+        InRelaxRadius(comCurrRef.Get(*it), box))
+      neighbors.push_back(*it);
+  }
+  if (neighbors.empty())
+    return mv::fail_state::NO_MOL_OF_KIND_IN_BOX;
+  m = neighbors[prng.randIntExc(neighbors.size())];
+  mk = molRef.GetMolKind(m);
+  return mv::fail_state::NO_FAIL;
 }
 
 #endif

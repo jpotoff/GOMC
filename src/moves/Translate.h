@@ -24,6 +24,7 @@ public:
   virtual void CalcEn();
   virtual void Accept(const uint rejectState, const ulong step);
   virtual void PrintAcceptKind();
+  XYZ const &NewCOM() const { return newCOM; }
 
 private:
   Intermolecular inter_LJ, inter_Real, recip;

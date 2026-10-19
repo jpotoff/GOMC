@@ -779,6 +779,9 @@ struct NEMTMCVal {
   bool MPEnable, MPBEnable;
   bool readRelaxSteps, readMPEnable, readMPBEnable;
   bool readLambdaLimit, readConformationProb;
+  // local relaxing around the fractional molecule
+  double relaxRadius, fracMoveProb;
+  bool readRelaxRadius, readFracMoveProb;
   // scaling parameter
   uint scalePower;
   double scaleAlpha, scaleSigma;
@@ -791,6 +794,7 @@ struct NEMTMCVal {
     readMPEnable = MPEnable = readLambdaVDW = enable = false;
     scalePowerRead = scaleAlphaRead = scaleSigmaRead = scaleCoulombRead = false;
     MPBEnable = readMPBEnable = readLambdaLimit = readConformationProb = false;
+    readRelaxRadius = readFracMoveProb = false;
   }
 };
 
