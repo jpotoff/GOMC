@@ -218,8 +218,12 @@ inline uint NEMTMC::Transform() {
     AddWork();
     // Update the system Energy
     UpdateEnergy();
-    // Relax the system (propagation)
-    Propagation();
+    // Relax the system (propagation). Not after the last jump: the protocol
+    // J1 R1 ... J(M-1) R(M-1) JM is its own time reverse, so the reverse move
+    // can generate the reversed path. A relaxation at the end state would be
+    // applied only to accepted moves and would break balance.
+    if (lambdaIdxNew > 0)
+      Propagation();
     // Go to the next lambda
     --lambdaIdxNew;
     --lambdaIdxOld;
@@ -362,6 +366,13 @@ inline void NEMTMC::Accept(const uint rejectState, const ulong step) {
   r123wrapper.SetKey(0);
   // reset the trial/acceptance to original values if the move is rejected
   moveSetRef.SetValues(backUpMoveSetting);
+#ifdef GOMC_INSTRUMENT
+  instr::Collector::Get().MoveDone(
+      mv::NE_MTMC, destBox, kindIndex, rejectState, result,
+      std::log(molTransCoeff) - BETA * work, false, nullptr, nullptr, false);
+  instr::Collector::Get().NemtDone(destBox, kindIndex, result, BETA * work,
+                                   rejectState);
+#endif
   moveSetRef.Update(mv::NE_MTMC, result, destBox, kindIndex);
   GOMC_EVENT_STOP(1, GomcProfileEvent::ACC_NEMTMC);
 }
@@ -388,6 +399,8 @@ void NEMTMC::AddWork() {
   double W1 = newEnergy[sourceBox].Total() - oldEnergy[sourceBox].Total();
   double W2 = newEnergy[destBox].Total() - oldEnergy[destBox].Total();
   work += (W1 + W2 + W_tc + W_recip);
+  GOMC_INSTR(instr::Collector::Get().NemtWindow(BETA *
+                                                (W1 + W2 + W_tc + W_recip));)
 }
 
 inline void NEMTMC::UpdateEnergy() {

@@ -9,6 +9,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "BasicTypes.h"
 #include "EnergyTypes.h"
 #include "GeomLib.h"
+#include "Instrumentation.h"
 #include "MoleculeKind.h"
 #include "TransformMatrix.h"
 #include "XYZArray.h"
@@ -195,6 +196,12 @@ public:
 
   bool HasOverlap() const { return overlap; }
 
+#ifdef GOMC_INSTRUMENT
+  // Per-stage CBMC diagnostics for this trial molecule (Instrumentation.h)
+  instr::TrialRecord &InstrRecord() { return instrRecord; }
+  const instr::TrialRecord &InstrRecord() const { return instrRecord; }
+#endif
+
   // Used in MEMC move
   void SetSeed(const XYZ &coords, const XYZ &cav, const bool inCav,
                const bool fixCOM, const bool rotBB);
@@ -251,6 +258,9 @@ private:
   bool *atomBuilt;
   // To check the status of built bonds
   Bonds bonds;
+#ifdef GOMC_INSTRUMENT
+  instr::TrialRecord instrRecord;
+#endif
 };
 } // namespace cbmc
 

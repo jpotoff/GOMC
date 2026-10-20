@@ -34,6 +34,7 @@
 
 bin
 bin_MPI
+bin_instrument
 lib/cub
 .vscode
 .idea

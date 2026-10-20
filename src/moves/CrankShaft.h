@@ -120,12 +120,14 @@ inline void CrankShaft::CalcEn() {
 
 inline void CrankShaft::Accept(const uint rejectState, const ulong step) {
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_CRANKSHAFT);
+  GOMC_INSTR(double instrLn = NAN;)
   bool result;
   // If we didn't skip the move calculation
   if (rejectState == mv::fail_state::NO_FAIL) {
     double Wo = oldMol.GetWeight();
     double Wn = newMol.GetWeight();
     double Wrat = Wn / Wo * W_recip;
+    GOMC_INSTR(instrLn = std::log(Wrat);)
 
     // safety to make sure move will be rejected in overlap case
     if (newMol.GetWeight() > SMALL_WEIGHT && !overlap) {
@@ -176,6 +178,7 @@ inline void CrankShaft::Accept(const uint rejectState, const ulong step) {
   } else // else we didn't even try because we knew it would fail
     result = false;
 
+  GOMC_INSTR(instr::Collector::Get().MoveDone(mv::CRANKSHAFT, sourceBox, kindIndex, rejectState, result, instrLn, overlap, &newMol, &oldMol, false);)
   moveSetRef.Update(mv::CRANKSHAFT, result, sourceBox, kindIndex);
   GOMC_EVENT_STOP(1, GomcProfileEvent::ACC_CRANKSHAFT);
 }

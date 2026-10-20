@@ -49,6 +49,7 @@ set(GOMCSources
    src/Geometry.cpp
    src/HistOutput.cpp
    src/InputFileReader.cpp
+   src/Instrumentation.cpp
    #src/Main.cpp
    src/MoleculeKind.cpp
    src/MoleculeLookup.cpp
@@ -140,6 +141,7 @@ set(GOMCHeaders
    src/HistOutput.h
    src/InputAbstracts.h
    src/InputFileReader.h
+   src/Instrumentation.h
    src/MersenneTwister.h
    src/MoleculeKind.h
    src/MoleculeLookup.h

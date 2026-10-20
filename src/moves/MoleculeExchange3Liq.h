@@ -544,6 +544,7 @@ inline void MoleculeExchange3Liq::RecoverMol(uint box, const uint n,
 inline void MoleculeExchange3Liq::Accept(const uint rejectState,
                                          const ulong step) {
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_MEMC);
+  GOMC_INSTR(double instrLn = NAN;)
   bool result = !overlap;
 
   // If we didn't skip the move calculation
@@ -563,6 +564,7 @@ inline void MoleculeExchange3Liq::Accept(const uint rejectState,
         Wrat *= newMol[destBox][n].GetWeight() / oldMol[destBox][n].GetWeight();
       }
 
+      GOMC_INSTR(instrLn = std::log(molTransCoeff * Wrat);)
       result = prng() < molTransCoeff * Wrat;
     }
 
@@ -637,6 +639,17 @@ inline void MoleculeExchange3Liq::Accept(const uint rejectState,
     result = false;
   }
 
+#ifdef GOMC_INSTRUMENT
+  if (rejectState == mv::fail_state::NO_FAIL) {
+    for (uint b = 0; b < BOX_TOTAL; b++)
+      for (uint n = 0; n < numMolInCavity[b]; n++)
+        instr::Collector::Get().AddTrial(newMol[b][n]);
+  }
+  instr::Collector::Get().MoveDone(
+      mv::MEMC, sourceBox,
+      kindIndex[sourceBox].empty() ? 0 : kindIndex[sourceBox][0], rejectState,
+      result, instrLn, overlap, nullptr, nullptr, false);
+#endif
   moveSetRef.Update(mv::MEMC, result, sourceBox);
   moveSetRef.Update(mv::MEMC, result, destBox);
 

@@ -204,6 +204,7 @@ void DCCrankShaftAng::BuildOld(TrialMol &oldMol, uint molIndex) {
     stepWeight += ljWeights[trial];
   }
   oldMol.UpdateOverlap(overlap[0]);
+  GOMC_INSTR(instr::RecordOldStage(oldMol, instr::LATER, stepWeight / nLJTrials);)
   oldMol.MultWeight(stepWeight / nLJTrials);
   oldMol.AddEnergy(
       Energy(bondedEn[0], nonbonded[0], inter[0], real[0], 0.0, 0.0, 0.0));
@@ -273,6 +274,7 @@ void DCCrankShaftAng::BuildNew(TrialMol &newMol, uint molIndex) {
                             (inter[trial] + real[trial] + nonbonded[trial]));
     stepWeight += ljWeights[trial];
   }
+  GOMC_INSTR(instr::RecordStage(newMol, instr::LATER, ljWeights, nLJTrials, overlap));
   uint winner = prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
   newMol.UpdateOverlap(overlap[winner]);
   newMol.MultWeight(stepWeight / nLJTrials);

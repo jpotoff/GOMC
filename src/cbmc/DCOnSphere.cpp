@@ -74,6 +74,7 @@ void DCOnSphere::BuildOld(TrialMol &oldMol, uint molIndex) {
     stepWeight += exp(-1 * data->ff.beta * (inter[trial] + real[trial]));
   }
   oldMol.UpdateOverlap(overlap[0]);
+  GOMC_INSTR(instr::RecordOldStage(oldMol, instr::LATER, stepWeight / nLJTrials);)
   oldMol.MultWeight(stepWeight / nLJTrials);
   oldMol.AddEnergy(Energy(bondEnergy, 0.0, inter[0], real[0], 0.0, 0.0, 0.0));
   oldMol.ConfirmOldAtom(atom);
@@ -108,6 +109,7 @@ void DCOnSphere::BuildNew(TrialMol &newMol, uint molIndex) {
     ljWeights[trial] = exp(-1 * data->ff.beta * (inter[trial] + real[trial]));
     stepWeight += ljWeights[trial];
   }
+  GOMC_INSTR(instr::RecordStage(newMol, instr::LATER, ljWeights, nLJTrials, overlap));
   uint winner = data->prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
   newMol.UpdateOverlap(overlap[winner]);
   newMol.MultWeight(stepWeight / nLJTrials);

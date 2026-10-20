@@ -169,6 +169,7 @@ inline double MoleculeTransfer::GetCoeff() const {
 
 inline void MoleculeTransfer::Accept(const uint rejectState, const ulong step) {
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_SWAP);
+  GOMC_INSTR(double instrLn = NAN;)
   bool result;
   // If we didn't skip the move calculation
   if (rejectState == mv::fail_state::NO_FAIL) {
@@ -176,6 +177,7 @@ inline void MoleculeTransfer::Accept(const uint rejectState, const ulong step) {
     double Wo = oldMol.GetWeight();
     double Wn = newMol.GetWeight();
     double Wrat = Wn / Wo * W_tc * W_recip;
+    GOMC_INSTR(instrLn = std::log(molTransCoeff * Wrat);)
 
     // safety to make sure move will be rejected in overlap case
     if (newMol.GetWeight() > SMALL_WEIGHT && !overlap) {
@@ -241,6 +243,7 @@ inline void MoleculeTransfer::Accept(const uint rejectState, const ulong step) {
   } else // we didn't even try because we knew it would fail
     result = false;
 
+  GOMC_INSTR(instr::Collector::Get().MoveDone(mv::MOL_TRANSFER, destBox, kindIndex, rejectState, result, instrLn, overlap, &newMol, &oldMol, true);)
   moveSetRef.Update(mv::MOL_TRANSFER, result, destBox, kindIndex);
   GOMC_EVENT_STOP(1, GomcProfileEvent::ACC_SWAP);
 }

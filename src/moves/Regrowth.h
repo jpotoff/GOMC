@@ -132,6 +132,7 @@ inline void Regrowth::CalcEn() {
 
 inline void Regrowth::Accept(const uint rejectState, const ulong step) {
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_REGROWTH);
+  GOMC_INSTR(double instrLn = NAN;)
   bool result = false;
   // If we didn't skip the move calculation
   if (rejectState == mv::fail_state::NO_FAIL) {
@@ -142,6 +143,7 @@ inline void Regrowth::Accept(const uint rejectState, const ulong step) {
     // either weight is too small to allow acceptance
     if (Wn > SMALL_WEIGHT && Wo != 0.0 && !overlap) {
       double Wrat = Wn / Wo * W_recip;
+      GOMC_INSTR(instrLn = std::log(Wrat);)
       result = prng() < Wrat;
     }
 
@@ -187,6 +189,7 @@ inline void Regrowth::Accept(const uint rejectState, const ulong step) {
     }
   }
 
+  GOMC_INSTR(instr::Collector::Get().MoveDone(mv::REGROWTH, sourceBox, kindIndex, rejectState, result, instrLn, overlap, &newMol, &oldMol, false);)
   moveSetRef.Update(mv::REGROWTH, result, sourceBox, kindIndex);
   GOMC_EVENT_STOP(1, GomcProfileEvent::ACC_REGROWTH);
 }

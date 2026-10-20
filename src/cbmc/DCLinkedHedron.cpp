@@ -185,6 +185,7 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
   }
 
   double stepWeight = EvalLJ(newMol, molIndex);
+  GOMC_INSTR(instr::RecordStage(newMol, instr::LATER, ljWeights, nLJTrials, overlap));
   uint winner = prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
   RestoreBranch(winner);
   for (uint b = 0; b < hed.NumBond(); ++b) {
@@ -330,6 +331,7 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
                           nonbonded[0] + hed.GetNonBondedEn() + oneFour[0],
                           inter[0], real[0], 0.0, 0.0, 0.0));
 
+  GOMC_INSTR(instr::RecordOldStage(oldMol, instr::LATER, stepWeight / nLJTrials);)
   oldMol.MultWeight(stepWeight / nLJTrials);
 }
 

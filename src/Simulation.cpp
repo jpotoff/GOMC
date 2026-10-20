@@ -12,6 +12,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "EnergyTypes.h"
 #include "GOMCEventsProfile.h"
 #include "NumLib.h"
+#include "Instrumentation.h"
 #include "Setup.h" //For setup object
 
 #define EPSILON 0.001
@@ -44,6 +45,20 @@ Simulation::Simulation(char const *const configFileName,
   if (totalSteps == 0) {
     frameSteps = set.pdb.GetFrameSteps(set.config.in.files.pdb.name);
   }
+
+#ifdef GOMC_INSTRUMENT
+  {
+    std::vector<std::string> kindNames;
+    for (uint k = 0; k < staticValues->mol.GetKindsCount(); ++k)
+      kindNames.push_back(staticValues->mol.kinds[k].name);
+    const config_setup::InstrumentSettings &is = set.config.out.instrument;
+    instr::Collector::Get().Configure(
+        is.enable, is.frequency, is.categories,
+        set.config.out.statistics.settings.uniqueStr.val,
+        staticValues->forcefield.beta, kindNames,
+        set.config.sys.neMTMCVal.lambdaVDW);
+  }
+#endif
 
 #if GOMC_LIB_MPI
   // set.config.sys.step.parallelTemp is a boolean for enabling/disabling
@@ -95,6 +110,7 @@ void Simulation::RunSimulation(void) {
     system->moveSettings.AdjustMoves(step);
     system->ChooseAndRunMove(step);
     cpu->Output(step);
+    GOMC_INSTR(instr::Collector::Get().MaybeWrite(step);)
 
 #ifndef NDEBUG
     Energy en0 = system->potential.boxEnergy[0];
@@ -156,6 +172,7 @@ void Simulation::RunSimulation(void) {
 #endif
   }
   GOMC_EVENT_STOP(1, GomcProfileEvent::MC_RUN);
+  GOMC_INSTR(instr::Collector::Get().Write(totalSteps);)
   if (!RecalculateAndCheck()) {
     std::cerr << "Warning: Updated energy differs from Recalculated Energy!\n";
   }

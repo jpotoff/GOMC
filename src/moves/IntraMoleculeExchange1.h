@@ -578,6 +578,7 @@ inline void IntraMoleculeExchange1::RecoverMol(const uint n, const bool typeA) {
 inline void IntraMoleculeExchange1::Accept(const uint rejectState,
                                            const ulong step) {
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_INTRA_MEMC);
+  GOMC_INSTR(double instrLn = NAN;)
   bool result = !overlap;
 
   // If we didn't skip the move calculation
@@ -596,6 +597,7 @@ inline void IntraMoleculeExchange1::Accept(const uint rejectState,
         Wrat *= newMolB[n].GetWeight() / oldMolB[n].GetWeight();
       }
 
+      GOMC_INSTR(instrLn = std::log(molTransCoeff * Wrat);)
       result = prng() < molTransCoeff * Wrat;
     }
 
@@ -655,6 +657,17 @@ inline void IntraMoleculeExchange1::Accept(const uint rejectState,
     result = false;
   }
 
+#ifdef GOMC_INSTRUMENT
+  if (rejectState == mv::fail_state::NO_FAIL) {
+    for (uint n = 0; n < numInCavA; n++)
+      instr::Collector::Get().AddTrial(newMolA[n]);
+    for (uint n = 0; n < numInCavB; n++)
+      instr::Collector::Get().AddTrial(newMolB[n]);
+  }
+  instr::Collector::Get().MoveDone(
+      mv::INTRA_MEMC, sourceBox, kindIndexA.empty() ? 0 : kindIndexA[0], rejectState,
+      result, instrLn, overlap, nullptr, nullptr, false);
+#endif
   moveSetRef.Update(mv::INTRA_MEMC, result, sourceBox);
   // If we consider total acceptance of S->L and L->S
   AcceptKind(result, kindS * molRef.GetKindsCount() + kindL, sourceBox);

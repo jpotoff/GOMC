@@ -49,6 +49,9 @@ TrialMol::TrialMol(const TrialMol &other)
       tCoords(other.tCoords), cavMatrix(other.cavMatrix),
       bCoords(other.bCoords), en(other.en), totalWeight(other.totalWeight),
       basisPoint(other.basisPoint), bonds(other.bonds) {
+#ifdef GOMC_INSTRUMENT
+  instrRecord = other.instrRecord;
+#endif
   atomBuilt = new bool[kind->NumAtoms()];
   std::copy(other.atomBuilt, other.atomBuilt + kind->NumAtoms(), atomBuilt);
   bonds.Unset();
@@ -81,6 +84,9 @@ void swap(TrialMol &a, TrialMol &b) {
   swap(a.growthToWorld, b.growthToWorld);
   swap(a.worldToGrowth, b.worldToGrowth);
   swap(a.bonds, b.bonds);
+#ifdef GOMC_INSTRUMENT
+  swap(a.instrRecord, b.instrRecord);
+#endif
   a.bonds.Unset();
   b.bonds.Unset();
   a.comInCav = false;

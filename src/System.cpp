@@ -14,6 +14,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "Ewald.h"
 #include "EwaldCached.h"
 #include "GOMCEventsProfile.h"
+#include "Instrumentation.h"
 #include "IntraMoleculeExchange1.h"
 #include "IntraMoleculeExchange2.h"
 #include "IntraMoleculeExchange3.h"
@@ -286,11 +287,13 @@ void System::PickMove(uint &kind, double &draw) {
 }
 
 void System::RunMove(uint majKind, double draw, const ulong step) {
+  GOMC_INSTR(instr::Collector::Get().BeginMove(majKind);)
   // return now if move targets molecule and there's none in that box.
   uint rejectState = SetParams(majKind, draw);
   // If single atom, redo move as displacement
   if (rejectState == mv::fail_state::ROTATE_ON_SINGLE_ATOM) {
     majKind = mv::DISPLACE;
+    GOMC_INSTR(instr::Collector::Get().BeginMove(majKind);)
     Translate *disp = static_cast<Translate *>(moves[mv::DISPLACE]);
     Rotate *rot = static_cast<Rotate *>(moves[mv::ROTATE]);
     rejectState = disp->ReplaceRot(*rot);

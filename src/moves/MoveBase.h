@@ -17,6 +17,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "EwaldCached.h"
 #include "Forcefield.h"
 #include "GOMCEventsProfile.h" // for NVTX profiling
+#include "Instrumentation.h"
 #include "MolPick.h"
 #include "Molecules.h" //For start
 #include "MoveConst.h"

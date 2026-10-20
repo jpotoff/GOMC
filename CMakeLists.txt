@@ -199,6 +199,14 @@ include(${PROJECT_SOURCE_DIR}/CMake/FileLists.cmake)
 
 # Optional CMake Arguments
 option(GOMC_GTEST    "Build unit tests for GOMC" OFF)
+
+# GOMC_INSTRUMENT compiles in the sampling diagnostics (src/Instrumentation.h)
+# selected at runtime by the Instrument keyword. Off for production builds.
+option(GOMC_INSTRUMENT "Compile in CBMC/transfer sampling instrumentation" OFF)
+if(GOMC_INSTRUMENT)
+   message(STATUS "GOMC_INSTRUMENT: sampling instrumentation compiled in")
+   add_definitions(-DGOMC_INSTRUMENT)
+endif()
 option(GOMC_GTEST_MPI    "Build unit tests for GOMC - MPI Enabled" OFF)
 
 # GOMC_CELL_REFINE controls how finely the cell grid is cut relative to the

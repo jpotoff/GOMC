@@ -236,6 +236,7 @@ void DCLinkedCycle::BuildNew(TrialMol &newMol, uint molIndex) {
   }
 
   double stepWeight = EvalLJ(newMol, molIndex);
+  GOMC_INSTR(instr::RecordStage(newMol, instr::LATER, ljWeights, nLJTrials, overlap));
   uint winner = prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
 
   for (uint b = 0; b < hed.NumBond(); ++b) {
@@ -405,6 +406,7 @@ void DCLinkedCycle::BuildOld(TrialMol &oldMol, uint molIndex) {
                           inter[0], real[0], 0.0, 0.0, 0.0));
 
   oldMol.MultWeight(hed.GetWeight());
+  GOMC_INSTR(instr::RecordOldStage(oldMol, instr::LATER, stepWeight / nLJTrials);)
   oldMol.MultWeight(stepWeight / nLJTrials);
 }
 

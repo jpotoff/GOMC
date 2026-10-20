@@ -1339,6 +1339,34 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
                out.state_dcd.settings.frequency);
       } else
         printf("%-40s %-s \n", "Info: Printing DCD ", "Inactive");
+    } else if (CheckString(line[0], "Instrument")) {
+      // Instrument <bool> [frequency] [categories...]
+      if (line.size() > 1) {
+        out.instrument.enable = checkBool(line[1]);
+        out.instrument.categories.clear();
+        size_t i = 2;
+        if (line.size() > 2 &&
+            line[2].find_first_not_of("0123456789") == std::string::npos) {
+          out.instrument.frequency = stringtoi(line[2]);
+          i = 3;
+        }
+        for (; i < line.size(); i++) {
+          const std::string &c = line[i];
+          if (c != "rejection" && c != "lnacc" && c != "weights" &&
+              c != "nemtmc" && c != "nemtwork" && c != "all") {
+            std::cout << "Error: Unknown Instrument category \"" << c
+                      << "\". Use rejection, lnacc, weights, nemtmc, "
+                         "nemtwork, or all.\n";
+            exit(EXIT_FAILURE);
+          }
+          out.instrument.categories.push_back(c);
+        }
+#ifndef GOMC_INSTRUMENT
+        if (out.instrument.enable)
+          std::cout << "Warning: Instrument requested, but this binary was "
+                       "built without GOMC_INSTRUMENT; ignoring it.\n";
+#endif
+      }
     } else if (CheckString(line[0], "ConsoleFreq")) {
       out.console.enable = checkBool(line[1]);
       if (line.size() == 3)
@@ -2424,6 +2452,18 @@ void ConfigSetup::verifyInputs(void) {
       std::cout << "ERROR: NeMTMC Fractional Molecule Move Probability must \n"
                 << "       be between 0.0 and 1.0! \n";
       exit(EXIT_FAILURE);
+    }
+
+    // As for free energy calculations: at small lambda the soft-core
+    // potential gives the fractional molecule a finite energy at any
+    // distance, so a hard RcutLow overlap check rejects configurations that
+    // belong to the lambda ensemble.
+    if (sys.ff.cutoffLow > 0.0) {
+      sys.ff.cutoffLow = 0.0;
+      printf("Warning: NeMTMC is being used when RcutLow is not zero (0).\n");
+      printf("         Resetting RcutLow to zero (RcutLow=0) so overlap "
+             "checks do not\n");
+      printf("         truncate the soft-core lambda states.\n");
     }
 
     if (sys.neMTMCVal.lambdaLimit > 1.0f) {

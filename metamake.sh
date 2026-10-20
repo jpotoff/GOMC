@@ -10,6 +10,7 @@ use_mpi=0
 use_asan=0
 use_opt=0
 use_debug=0
+use_instrument=0
 ENSEMBLES=""
 CMAKEARGS=""
 ICC_PATH=""
@@ -69,7 +70,7 @@ if command -v nvcc &> /dev/null; then
 	fi
 fi
 
-while getopts 'A:C:acdglmOpt' opt; do
+while getopts 'A:C:acdgilmOpt' opt; do
     case "$opt" in
         A)
             CMAKEARGS+="-DGOMC_ARCH=$OPTARG ";;
@@ -83,6 +84,8 @@ while getopts 'A:C:acdglmOpt' opt; do
             use_debug=1;;
         g)
             use_gcc=1;;
+        i)
+            use_instrument=1;;
         l)
             use_clang=1;;
         m)
@@ -110,6 +113,8 @@ while getopts 'A:C:acdglmOpt' opt; do
             echo "-c, enables clang-tidy source code checks"
             echo "-d, enables Debug Mode compilation"
             echo "-g, use the GNU compiler"
+            echo "-i, enables sampling instrumentation (Instrument keyword);"
+            echo "           builds into bin_instrument, leaving bin untouched"
 			echo "-l, use the Clang compiler"
             echo "-m, enables MPI support (Required for Parallel Tempering)"
             echo "-O, enables -march= optimization flags (now on by default)"
@@ -158,9 +163,20 @@ fi
 if (( use_mpi )); then
 	mkdir -p bin_MPI
 	cd bin_MPI
+elif (( use_instrument )); then
+	mkdir -p bin_instrument
+	cd bin_instrument
 else
 	mkdir -p bin
 	cd bin
+fi
+
+# Always pass the instrumentation switch so a cached value never leaks
+# between builds.
+if (( use_instrument )); then
+    CMAKEARGS+="-DGOMC_INSTRUMENT=on "
+else
+    CMAKEARGS+="-DGOMC_INSTRUMENT=off "
 fi
 
 # Clear use_cuda flag if no GPU executable is being built

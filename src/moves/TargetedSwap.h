@@ -686,6 +686,7 @@ inline double TargetedSwap::GetCoeff() const {
 
 inline void TargetedSwap::Accept(const uint rejectState, const ulong step) {
   GOMC_EVENT_START(1, GomcProfileEvent::ACC_TARGETED_SWAP);
+  GOMC_INSTR(double instrLn = NAN;)
   bool result;
   // If we didn't skip the move calculation
   if (rejectState == mv::fail_state::NO_FAIL) {
@@ -693,6 +694,7 @@ inline void TargetedSwap::Accept(const uint rejectState, const ulong step) {
     double Wo = oldMol.GetWeight();
     double Wn = newMol.GetWeight();
     double Wrat = Wn / Wo * W_tc * W_recip;
+    GOMC_INSTR(instrLn = std::log(molTransCoeff * Wrat);)
 
     // safety to make sure move will be rejected in overlap case
     if (newMol.GetWeight() > SMALL_WEIGHT && !overlap) {
@@ -755,6 +757,7 @@ inline void TargetedSwap::Accept(const uint rejectState, const ulong step) {
   } else // we didn't even try because we knew it would fail
     result = false;
 
+  GOMC_INSTR(instr::Collector::Get().MoveDone(mv::TARGETED_SWAP, destBox, kindIndex, rejectState, result, instrLn, overlap, &newMol, &oldMol, true);)
   moveSetRef.Update(mv::TARGETED_SWAP, result, destBox, kindIndex);
   AcceptSubVolumeIdx(result, kindIndex, destBox);
   GOMC_EVENT_STOP(1, GomcProfileEvent::ACC_TARGETED_SWAP);

@@ -164,6 +164,7 @@ void DCFreeCycle::BuildNew(TrialMol &newMol, uint molIndex) {
     stepWeight += ljWeights[lj];
   }
 
+  GOMC_INSTR(instr::RecordStage(newMol, instr::LATER, ljWeights, nLJTrials, overlap));
   uint winner = prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
   for (uint b = 0; b < hed.NumBond(); ++b) {
     newMol.AddAtom(hed.Bonded(b), positions[b][winner]);
@@ -257,6 +258,7 @@ void DCFreeCycle::BuildOld(TrialMol &oldMol, uint molIndex) {
   oldMol.AddEnergy(Energy(hed.GetEnergy() + bondEnergy, hed.GetNonBondedEn(),
                           inter[0], real[0], 0.0, 0.0, 0.0));
   oldMol.MultWeight(hed.GetWeight());
+  GOMC_INSTR(instr::RecordOldStage(oldMol, instr::LATER, stepWeight / nLJTrials);)
   oldMol.MultWeight(stepWeight / nLJTrials);
 }
 

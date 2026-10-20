@@ -125,6 +125,10 @@ inline void Rotate::Accept(const uint rejectState, const ulong step) {
     molRemoved = false;
   }
 
+  GOMC_INSTR(instr::Collector::Get().MoveDone(
+      mv::ROTATE, b, mk, rejectState, result,
+      -BETA * (inter_LJ.energy + inter_Real.energy + recip.energy), overlap,
+      nullptr, nullptr, false);)
   moveSetRef.Update(mv::ROTATE, result, b, mk);
   GOMC_EVENT_STOP(1, GomcProfileEvent::ACC_ROTATE);
 }

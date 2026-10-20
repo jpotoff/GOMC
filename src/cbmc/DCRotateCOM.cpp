@@ -221,6 +221,7 @@ void DCRotateCOM::BuildNew(TrialMol &newMol, uint molIndex) {
       stepWeight += ljWeights[lj];
     }
   }
+  GOMC_INSTR(instr::RecordStage(newMol, instr::FIRST, ljWeights, totalTrials, overlap));
   uint winner = prng.PickWeighted(ljWeights, totalTrials, stepWeight);
   for (uint a = 0; a < atomNumber; ++a) {
     newMol.AddAtom(a, multiPosRotions[a][winner]);
@@ -345,6 +346,7 @@ void DCRotateCOM::BuildOld(TrialMol &oldMol, uint molIndex) {
 
   oldMol.UpdateOverlap(overlap[0]);
   oldMol.AddEnergy(Energy(0.0, 0.0, inter[0], real[0], 0.0, 0.0, 0.0));
+  GOMC_INSTR(instr::RecordOldStage(oldMol, instr::FIRST, stepWeight / totalTrials);)
   oldMol.MultWeight(stepWeight / totalTrials);
 }
 

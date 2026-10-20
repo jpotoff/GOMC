@@ -894,11 +894,20 @@ struct Statistics {
   Settings settings;
   TrackedVars vars;
 };
+// Sampling diagnostics (Instrumentation.h); only active in builds compiled
+// with GOMC_INSTRUMENT.
+struct InstrumentSettings {
+  bool enable = false;
+  ulong frequency = 0; // 0: write only at the end of the run
+  std::vector<std::string> categories;
+};
+
 struct Output {
   SysState state, restart, state_dcd, restart_dcd;
   SysState restart_vel;
   Statistics statistics;
   EventSettings console, checkpoint;
+  InstrumentSettings instrument;
 };
 
 } // namespace config_setup
