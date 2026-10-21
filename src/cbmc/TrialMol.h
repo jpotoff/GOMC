@@ -104,6 +104,10 @@ public:
   //! Confirms that atom at index i has been built (used for oldMols)
   void ConfirmOldAtom(uint i);
 
+  //! Marks atom i as not built (undoes a tentative placement in recoil
+  //! growth; the coordinates are left as they are)
+  void RemoveAtom(uint i) { atomBuilt[i] = false; }
+
   //! Sets an orthonormal basis for coordinate conversion.
   /*!\param p1 Index of particle new additions will be bonded to
    * \param p2 Index of particle that will be in angles with new additions

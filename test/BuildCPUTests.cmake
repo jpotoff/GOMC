@@ -38,6 +38,10 @@ function(add_ensemble_test name ENSEMBLE_ID ENSEMBLE_LABEL)
              COMMAND ${name} --gtest_filter=ForcefieldAnalyticTest.*)
     add_test(NAME BranchSamplerTest_${ENSEMBLE_LABEL}
              COMMAND ${name} --gtest_filter=BranchSamplerTest.*)
+    add_test(NAME RecoilGrowthTest_${ENSEMBLE_LABEL}
+             COMMAND ${name} --gtest_filter=RecoilGrowthTest.*)
+    add_test(NAME LookAheadCBMCTest_${ENSEMBLE_LABEL}
+             COMMAND ${name} --gtest_filter=LookAheadCBMCTest.*)
 
     if(${ENSEMBLE_ID} EQUAL 2 OR ${ENSEMBLE_ID} EQUAL 3)
         add_test(NAME ConsistentTrajectoryTest_${ENSEMBLE_LABEL}

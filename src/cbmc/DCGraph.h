@@ -34,6 +34,9 @@ public:
   void CrankShaft(TrialMol &oldMol, TrialMol &newMol, uint molIndex);
   void BuildEdges(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
                   const uint current);
+  // The edge steps of Build grown by recoil growth (CBMC_Recoil)
+  void BuildEdgesRecoil(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
+                        uint current);
   // used in MEMC moves
   void BuildIDNew(TrialMol &newMol, uint molIndex);
   void BuildIDOld(TrialMol &oldMol, uint molIndex);
@@ -48,6 +51,10 @@ public:
 private:
   // Find the two nodes that are forming dihedral or angle and initialize it.
   void InitCrankShaft(const mol_setup::MolKind &kind);
+  // recoil growth engine and the current edge sequence (DCGraph.cpp); null
+  // unless CBMC_Recoil is on
+  struct RecoilState;
+  RecoilState *recoil;
   // Store edge's atom that are connected to node and has more than 1 bond
   // Each edge is a node as well
   struct Edge {

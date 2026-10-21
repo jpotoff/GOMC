@@ -233,9 +233,19 @@ struct GrowBond {
   uint ang, dih;
 };
 
+// Recoil growth for CBMC insertion/deletion growth (src/cbmc/RecoilGrowth.h)
+struct GrowRecoil {
+  bool enable;
+  uint length, trials; // recoil length l, trials per growth step k
+  double threshold;    // kT; trials with lower energy are always open
+};
+
 struct CBMC {
   GrowNonbond nonbonded;
   GrowBond bonded;
+  GrowRecoil recoil;
+  uint lookAhead;    // look-ahead samples per LJ trial (0 = off)
+  uint lookAheadDih; // torsion samples per look-ahead step (0 = CBMC_Dih)
 };
 
 #if ENSEMBLE == GCMC

@@ -13,6 +13,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "EnergyTypes.h"
 #include "Ewald.h"
 #include "EwaldCached.h"
+#include "Instrumentation.h"
 #include "NoEwald.h"
 
 //
@@ -100,6 +101,13 @@ public:
   void ParticleNonbonded(double *inter, const cbmc::TrialMol &trialMol,
                          XYZArray const &trialPos, const uint partIndex,
                          const uint box, const uint trials) const;
+#ifdef GOMC_INSTRUMENT
+  //! The same pairs as ParticleNonbonded for one position, returned per
+  //! partner with LJ and Coulomb separate (sampling diagnostics)
+  void ParticleNonbondedPairs(const cbmc::TrialMol &trialMol, const XYZ &pos,
+                              const uint partIndex, const uint box,
+                              std::vector<instr::PairE> &out) const;
+#endif
 
   //! Calculates Nonbonded inter energy (LJ and coulomb)for
   //!                      candidate positions

@@ -139,6 +139,13 @@ ConfigSetup::ConfigSetup(void) {
 #endif
   out.statistics.vars.density.block = false;
   out.statistics.vars.density.fluct = false;
+  // CBMC growth options; regrowth uses them in every ensemble
+  sys.cbmcTrials.recoil.enable = false;
+  sys.cbmcTrials.recoil.length = 2;
+  sys.cbmcTrials.recoil.trials = 4;
+  sys.cbmcTrials.recoil.threshold = 0.0;
+  sys.cbmcTrials.lookAhead = 2;
+  sys.cbmcTrials.lookAheadDih = 0;
 }
 
 int ConfigSetup::stringtoi(const std::string &s) {
@@ -1339,6 +1346,30 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
                out.state_dcd.settings.frequency);
       } else
         printf("%-40s %-s \n", "Info: Printing DCD ", "Inactive");
+    } else if (CheckString(line[0], "CBMC_Recoil")) {
+      sys.cbmcTrials.recoil.enable = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: CBMC recoil growth",
+             sys.cbmcTrials.recoil.enable ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "CBMC_RecoilLength")) {
+      sys.cbmcTrials.recoil.length = stringtoi(line[1]);
+      printf("%-40s %-4d \n", "Info: CBMC recoil length",
+             sys.cbmcTrials.recoil.length);
+    } else if (CheckString(line[0], "CBMC_RecoilTrials")) {
+      sys.cbmcTrials.recoil.trials = stringtoi(line[1]);
+      printf("%-40s %-4d \n", "Info: CBMC recoil trials per step",
+             sys.cbmcTrials.recoil.trials);
+    } else if (CheckString(line[0], "CBMC_LookAhead")) {
+      sys.cbmcTrials.lookAhead = stringtoi(line[1]);
+      printf("%-40s %-4d \n", "Info: CBMC look-ahead samples per trial",
+             sys.cbmcTrials.lookAhead);
+    } else if (CheckString(line[0], "CBMC_LookAheadDih")) {
+      sys.cbmcTrials.lookAheadDih = stringtoi(line[1]);
+      printf("%-40s %-4d \n", "Info: CBMC look-ahead torsion samples",
+             sys.cbmcTrials.lookAheadDih);
+    } else if (CheckString(line[0], "CBMC_RecoilThreshold")) {
+      sys.cbmcTrials.recoil.threshold = stringtod(line[1]);
+      printf("%-40s %-4.4f kT \n", "Info: CBMC recoil open threshold",
+             sys.cbmcTrials.recoil.threshold);
     } else if (CheckString(line[0], "Instrument")) {
       // Instrument <bool> [frequency] [categories...]
       if (line.size() > 1) {
@@ -1817,6 +1848,15 @@ void ConfigSetup::fillDefaults(void) {
 void ConfigSetup::verifyInputs(void) {
   int i;
 
+  // look-ahead is on by default, so report it whether or not it was set
+  if (sys.cbmcTrials.lookAhead > 0)
+    printf("%-40s %u samples, %u torsions\n", "Info: CBMC look-ahead",
+           sys.cbmcTrials.lookAhead,
+           sys.cbmcTrials.lookAheadDih > 0 ? sys.cbmcTrials.lookAheadDih
+                                           : sys.cbmcTrials.bonded.dih);
+  else
+    printf("%-40s %-s \n", "Info: CBMC look-ahead", "Inactive");
+
 #ifdef VARIABLE_PARTICLE_NUMBER
   if (sys.targetedSwapCollection.enable) {
     for (i = 0; i < (int)sys.targetedSwapCollection.targetedSwap.size(); i++) {
@@ -2246,6 +2286,17 @@ void ConfigSetup::verifyInputs(void) {
   if (sys.cbmcTrials.nonbonded.nth == UINT_MAX) {
     std::cout << "ERROR: CBMC number of nth site trials was not specified!\n";
     exit(EXIT_FAILURE);
+  }
+  if (sys.cbmcTrials.recoil.enable) {
+    if (sys.cbmcTrials.recoil.length < 1 ||
+        sys.cbmcTrials.recoil.length > 254) {
+      std::cout << "ERROR: CBMC_RecoilLength must be between 1 and 254!\n";
+      exit(EXIT_FAILURE);
+    }
+    if (sys.cbmcTrials.recoil.trials < 1) {
+      std::cout << "ERROR: CBMC_RecoilTrials must be at least 1!\n";
+      exit(EXIT_FAILURE);
+    }
   }
   if (sys.memcVal.enable || sys.intraMemcVal.enable) {
     if ((sys.memcVal.MEMC1 && sys.memcVal.MEMC2) ||

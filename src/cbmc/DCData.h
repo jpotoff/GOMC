@@ -39,6 +39,13 @@ public:
   const uint nDihTrials;
   const uint nLJTrialsFirst;
   const uint nLJTrialsNth;
+  // recoil growth (RecoilGrowth.h) for DCGraph::Build
+  const bool recoil;
+  const uint recoilLength, recoilTrials;
+  const double recoilThreshold; // kT; trials below it are always open
+  // one-step look-ahead in DCLinkedHedron: samples per LJ trial (0 = off)
+  // and torsion samples per look-ahead step
+  const uint lookAhead, lookAheadDih;
   uint totalTrials;
 
   // used for both angles and dihedrals
@@ -79,11 +86,22 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
       nDihTrials(set.config.sys.cbmcTrials.bonded.dih),
       nLJTrialsFirst(set.config.sys.cbmcTrials.nonbonded.first),
       nLJTrialsNth(set.config.sys.cbmcTrials.nonbonded.nth),
+      recoil(set.config.sys.cbmcTrials.recoil.enable),
+      recoilLength(set.config.sys.cbmcTrials.recoil.length),
+      recoilTrials(set.config.sys.cbmcTrials.recoil.trials),
+      recoilThreshold(set.config.sys.cbmcTrials.recoil.threshold),
+      lookAhead(set.config.sys.cbmcTrials.lookAhead),
+      lookAheadDih(set.config.sys.cbmcTrials.lookAheadDih > 0
+                       ? set.config.sys.cbmcTrials.lookAheadDih
+                       : set.config.sys.cbmcTrials.bonded.dih),
       positions(*multiPositions) {
   calcEwald = sys.GetEwald();
   uint maxLJTrials = nLJTrialsFirst;
   if (nLJTrialsNth > nLJTrialsFirst)
     maxLJTrials = nLJTrialsNth;
+  // recoil growth evaluates its trials in the same buffers
+  if (recoil && recoilTrials > maxLJTrials)
+    maxLJTrials = recoilTrials;
 
   totalTrials = nLJTrialsFirst * nLJTrialsNth;
   if (totalTrials == 0)

@@ -82,13 +82,28 @@ struct StageRec {
   float bestFrac;  // largest trial weight / sum of weights
   float overFrac;  // fraction of trials that overlapped
   double lnMean;   // ln(mean trial weight), -HUGE_VAL if all zero
+  // ln(mean bonded importance weight) of the trials, where the component
+  // reports it (RecordBondedPart); lnMean - lnBonded is the nonbonded part
+  double lnBonded = 0.0;
 };
+
+// One intramolecular 1-5+ pair seen by a growth step
+// (CalculateEnergy::ParticleNonbondedPairs)
+struct PairE {
+  uint partner;
+  double lj, coul;
+};
+
+// Pair classes: separation (1-5, 1-6, 1-7+) x atom types (C-C, C-H, H-H,
+// other) x term (LJ, Coulomb)
+enum { N_SEP = 3, N_PTYPE = 4, N_PAIRCLASS = N_SEP * N_PTYPE * 2 };
 
 // Per-trial-molecule record, carried by cbmc::TrialMol.
 struct TrialRecord {
   int failStage = -1; // first stage with all weights zero, -1 if none
   bool failOverlap = false;
   std::vector<StageRec> stages;
+  double pairE[N_PAIRCLASS] = {}; // 1-5+ energy by class over the growth
 };
 
 // Fixed-width histogram; values outside [lo, hi) go into the end bins.
@@ -118,6 +133,21 @@ struct StageStats {
 struct PosStats {
   ulong nNew = 0, zeroNew = 0, best90New = 0, nOld = 0, nPair = 0;
   double lnNew = 0.0, lnOld = 0.0, diff = 0.0;
+  double lnBNew = 0.0, lnBOld = 0.0, diffB = 0.0; // bonded part
+};
+
+// Per attempt: ln(W_new / W_old) summed over growth stages, split into the
+// bonded part dB and the nonbonded part dE (dB + dE = d ln W over stages)
+struct SplitStats {
+  ulong n = 0;
+  double sB = 0.0, sE = 0.0, sBB = 0.0, sEE = 0.0, sBE = 0.0;
+};
+
+struct PairStats {
+  ulong n = 0;
+  double sN[N_PAIRCLASS] = {}, sO[N_PAIRCLASS] = {};  // beta*E new, old
+  double sD[N_PAIRCLASS] = {}, sDD[N_PAIRCLASS] = {}; // beta*(E new - old)
+  double tD = 0.0, tDD = 0.0;                         // all classes
 };
 
 struct MoveStats {
@@ -133,6 +163,8 @@ struct MoveStats {
   ulong widomN = 0;
   StageStats stage[N_STAGE];
   std::vector<PosStats> pos;
+  SplitStats split;
+  PairStats pairs;
   std::vector<unsigned char> posStage; // stage type seen at each position
 };
 
@@ -179,6 +211,14 @@ public:
   void MaybeWrite(ulong step);
   void Write(ulong step);
 
+  // Topological distance and element class of each atom of a kind
+  struct Topo {
+    uint n;
+    std::vector<unsigned char> dist; // bonds between atoms i and j
+    std::vector<char> elem;          // 'C', 'H' or 'X'
+  };
+  const Topo &Topology(const cbmc::TrialMol &mol);
+
 private:
   Collector() = default;
   struct Key {
@@ -204,12 +244,24 @@ private:
   std::vector<double> windowWork;
   std::map<Key, MoveStats> moves;
   std::map<std::pair<uint, uint>, NemtStats> nemt; // (destBox, kind)
+  std::map<const void *, Topo> topo;                 // by MoleculeKind
 };
 
 // Record one CBMC trial set of the new configuration on its trial molecule.
 // w: trial weights, overlap: per-trial overlap flags (may be null).
 void RecordStage(cbmc::TrialMol &mol, Stage stage, const double *w, uint n,
                  const bool *overlap);
+// Record one recoil growth step of the new configuration: trial weights and
+// overlaps as for RecordStage, but with the step's Rosenbluth factor
+// (0 if no trial was feasible) in place of the mean trial weight.
+void RecordStageFactor(cbmc::TrialMol &mol, Stage stage, const double *w,
+                       uint n, const bool *overlap, double factor);
+// Add the 1-5+ pair energies of atom (placed by a growth step) to mol's
+// record, classified by separation, atom types and term
+void RecordPairs(cbmc::TrialMol &mol, uint atom,
+                 const std::vector<PairE> &pairs);
+// Attach ln(mean bonded importance weight) to the stage just recorded on mol
+void RecordBondedPart(cbmc::TrialMol &mol, double lnBonded);
 // Record one stage of the old configuration (mean trial weight only; the old
 // configuration cannot fail, since trial 0 is the actual molecule).
 void RecordOldStage(cbmc::TrialMol &mol, Stage stage, double meanW);

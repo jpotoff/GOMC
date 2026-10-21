@@ -165,6 +165,7 @@ set(headers
    src/cbmc/DCFreeHedronSeed.h
    src/cbmc/DCGraph.h
    src/cbmc/DCHedron.h
+   src/cbmc/RecoilGrowth.h
    src/cbmc/DCHedronCycle.h
    src/cbmc/DCLinear.h
    src/cbmc/DCLinkedCycle.h

@@ -2454,6 +2454,43 @@ bool CalculateEnergy::MoleculeInter(Intermolecular &inter_LJ,
   return overlap;
 }
 
+#ifdef GOMC_INSTRUMENT
+void CalculateEnergy::ParticleNonbondedPairs(
+    const cbmc::TrialMol &trialMol, const XYZ &pos, const uint partIndex,
+    const uint box, std::vector<instr::PairE> &out) const {
+  out.clear();
+  if (box >= BOXES_WITH_U_B)
+    return;
+  const MoleculeKind &kind = trialMol.GetKind();
+  XYZArray tp(1);
+  tp.Set(0, pos);
+  DispatchForcefield(forcefield, [&](const auto &ff) {
+    const uint *partner = kind.sortedNB.Begin(partIndex);
+    const uint *end = kind.sortedNB.End(partIndex);
+    for (; partner != end; ++partner) {
+      if (!trialMol.AtomExists(*partner))
+        continue;
+      double distSq;
+      if (!currentAxes.InRcut(distSq, tp, 0, trialMol.GetCoords(), *partner,
+                              box))
+        continue;
+      instr::PairE e;
+      e.partner = *partner;
+      e.lj = ff.CalcEn(distSq, kind.AtomKind(partIndex),
+                       kind.AtomKind(*partner), 1.0);
+      e.coul = 0.0;
+      if (electrostatic) {
+        double qq = kind.AtomCharge(partIndex) * kind.AtomCharge(*partner) *
+                    num::qqFact;
+        if (qq != 0.0)
+          ff.CalcCoulombAdd_1_4(e.coul, distSq, qq, true);
+      }
+      out.push_back(e);
+    }
+  });
+}
+#endif
+
 void CalculateEnergy::ParticleNonbonded(double *inter,
                                         cbmc::TrialMol const &trialMol,
                                         XYZArray const &trialPos,

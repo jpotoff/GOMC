@@ -7,6 +7,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 
 #include <cassert>
 #include <map>
+#include <memory>
 
 #include "DCCrankShaftAng.h"
 #include "DCCrankShaftDih.h"
@@ -14,8 +15,96 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "DCFreeHedronSeed.h"
 #include "DCLinkedHedron.h"
 #include "DCRotateCOM.h"
+#include "RecoilGrowth.h"
 
 namespace cbmc {
+
+namespace {
+// Recoil growth provider (RecoilGrowth.h) over the edge steps of a DCGraph
+// growth. Place/Unplace put a trial's atoms into the trial molecule and
+// restore what was there before, so the old configuration's coordinates
+// survive the tentative placements made while weighing it.
+class EdgeSteps {
+public:
+  typedef DCLinkedHedron::StepTrial Trial;
+  EdgeSteps(TrialMol &mol, uint molIndex,
+            const std::vector<DCLinkedHedron *> &steps, bool old)
+      : mol(mol), molIndex(molIndex), steps(steps), old(old) {}
+
+  uint NumSteps() const { return steps.size(); }
+  void Generate(uint s, uint n, Trial *out) {
+    steps[s]->GenerateTrials(mol, molIndex, n, old, out);
+  }
+  void Actual(uint s, Trial &out) { steps[s]->ActualTrial(mol, molIndex, out); }
+  void Place(uint s, const Trial &t) {
+    const DCLinkedHedron *c = steps[s];
+    undo.push_back(Saved());
+    Saved &sv = undo.back();
+    for (uint b = 0; b < c->NumBonded(); ++b) {
+      uint a = c->BondedAtom(b);
+      sv.pos[b] = mol.AtomPosition(a);
+      sv.built[b] = mol.AtomExists(a);
+      if (t.actual)
+        mol.ConfirmOldAtom(a); // keep the stored coordinates bit for bit
+      else
+        mol.AddAtom(a, t.pos[b]);
+    }
+  }
+  void Unplace(uint s) {
+    const DCLinkedHedron *c = steps[s];
+    const Saved &sv = undo.back();
+    for (uint b = 0; b < c->NumBonded(); ++b) {
+      uint a = c->BondedAtom(b);
+      mol.SetAtomCoords(a, sv.pos[b]);
+      if (!sv.built[b])
+        mol.RemoveAtom(a);
+    }
+    undo.pop_back();
+  }
+
+private:
+  struct Saved {
+    XYZ pos[MAX_BONDS];
+    bool built[MAX_BONDS];
+  };
+  TrialMol &mol;
+  uint molIndex;
+  const std::vector<DCLinkedHedron *> &steps;
+  bool old;
+  std::vector<Saved> undo;
+};
+
+#ifdef GOMC_INSTRUMENT
+// Record each recoil growth step as one stage; its Rosenbluth factor is
+// m_i w_i / (k p_i) rather than the mean trial weight of standard CBMC.
+template <class RG>
+void RecordRecoilStages(TrialMol &mol, const RG &rg, bool old) {
+  if (!instr::Collector::Get().StagesOn())
+    return;
+  for (uint i = 0; i < rg.StepsDone(); ++i) {
+    if (old) {
+      instr::RecordOldStage(mol, instr::LATER, rg.Factor(i));
+      continue;
+    }
+    const auto &tr = rg.StepTrials(i);
+    std::vector<double> w(tr.size());
+    std::unique_ptr<bool[]> ov(new bool[tr.size()]);
+    for (size_t j = 0; j < tr.size(); ++j) {
+      w[j] = tr[j].w;
+      ov[j] = tr[j].overlap;
+    }
+    instr::RecordStageFactor(mol, instr::LATER, w.data(), tr.size(), ov.get(),
+                             rg.Factor(i));
+  }
+}
+#endif
+} // namespace
+
+struct DCGraph::RecoilState {
+  RecoilState(uint k, uint l) : rg(k, l) {}
+  RecoilGrowth<EdgeSteps, PRNG> rg;
+  std::vector<DCLinkedHedron *> seq;
+};
 DCGraph::DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
                  const Setup &set)
     : data(sys, ff, set) {
@@ -85,7 +174,23 @@ DCGraph::DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
     }
   }
 
+  // Link each linked hedron to the steps that grow from the atoms it places,
+  // for the one-step look-ahead (CBMC_LookAhead)
+  for (uint i = 0; i < nodes.size(); ++i) {
+    for (uint j = 0; j < nodes[i].edges.size(); ++j) {
+      Edge &e = nodes[i].edges[j];
+      std::vector<DCLinkedHedron *> kids;
+      for (Edge &f : nodes[e.destination].edges)
+        if (f.destination != (int)i)
+          kids.push_back(static_cast<DCLinkedHedron *>(f.component));
+      static_cast<DCLinkedHedron *>(e.component)->SetChildren(kids);
+    }
+  }
+
   InitCrankShaft(setupKind);
+  recoil = data.recoil
+               ? new RecoilState(data.recoilTrials, data.recoilLength)
+               : nullptr;
 }
 
 void DCGraph::InitCrankShaft(const mol_setup::MolKind &kind) {
@@ -197,8 +302,56 @@ void DCGraph::Build(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
   comp->BuildNew(newMol, molIndex);
   comp->PrepareOld(oldMol, molIndex);
   comp->BuildOld(oldMol, molIndex);
+  if (recoil != nullptr) {
+    BuildEdgesRecoil(oldMol, newMol, molIndex, current);
+    return;
+  }
   // Advance along edges, building as we go
   BuildEdges(oldMol, newMol, molIndex, current);
+}
+
+void DCGraph::BuildEdgesRecoil(TrialMol &oldMol, TrialMol &newMol,
+                               uint molIndex, uint current) {
+  // the same random fringe walk as BuildEdges, collecting the steps; every
+  // edge is a DCLinkedHedron (see the constructor)
+  std::vector<DCLinkedHedron *> &seq = recoil->seq;
+  seq.clear();
+  fringe = nodes[current].edges;
+  while (!fringe.empty()) {
+    uint pick = data.prng.randIntExc(fringe.size());
+    seq.push_back(static_cast<DCLinkedHedron *>(fringe[pick].component));
+    current = fringe[pick].destination;
+    fringe[pick] = fringe.back();
+    fringe.pop_back();
+    visited[current] = true;
+    for (uint i = 0; i < nodes[current].edges.size(); ++i) {
+      Edge &e = nodes[current].edges[i];
+      if (!visited[e.destination]) {
+        fringe.push_back(e);
+      }
+    }
+  }
+
+  RecoilGrowth<EdgeSteps, PRNG> &rg = recoil->rg;
+  GOMC_INSTR(rg.KeepSteps(instr::Collector::Get().StagesOn());)
+  EdgeSteps grow(newMol, molIndex, seq, false);
+  double wn = rg.GrowNew(grow, data.prng);
+  GOMC_INSTR(RecordRecoilStages(newMol, rg, false);)
+  if (wn > 0.0) {
+    for (uint i = 0; i < seq.size(); ++i)
+      seq[i]->Commit(newMol, rg.Chosen(i));
+  }
+  newMol.MultWeight(wn);
+
+  // the old configuration's bond lengths, before any tentative placement
+  for (uint i = 0; i < seq.size(); ++i)
+    seq[i]->CacheOldBonds(oldMol);
+  EdgeSteps weigh(oldMol, molIndex, seq, true);
+  double wo = rg.WeighOld(weigh, data.prng);
+  GOMC_INSTR(RecordRecoilStages(oldMol, rg, true);)
+  for (uint i = 0; i < seq.size(); ++i)
+    seq[i]->Commit(oldMol, rg.Chosen(i));
+  oldMol.MultWeight(wo);
 }
 
 void DCGraph::BuildEdges(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
@@ -590,6 +743,7 @@ void DCGraph::BuildGrowInCav(TrialMol &oldMol, TrialMol &newMol,
 
 DCGraph::~DCGraph() {
   delete idExchange;
+  delete recoil;
   for (uint v = 0; v < nodes.size(); ++v) {
     Node &node = nodes[v];
     delete node.starting;

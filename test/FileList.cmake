@@ -10,6 +10,8 @@ set(TestSources
     test/src/EwaldRealTableTest.cpp
     test/src/ForcefieldAnalyticTest.cpp
     test/src/BranchSamplerTest.cpp
+    test/src/RecoilGrowthTest.cpp
+    test/src/LookAheadCBMCTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )
@@ -188,6 +190,7 @@ set(GOMCHeaders
    src/cbmc/DCLinkedCycle.h
    src/cbmc/DCGraph.h
    src/cbmc/DCHedron.h
+   src/cbmc/RecoilGrowth.h
    src/cbmc/DCHedronCycle.h
    src/cbmc/DCLinear.h
    src/cbmc/DCOnSphere.h

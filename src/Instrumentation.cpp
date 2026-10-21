@@ -11,6 +11,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <cmath>
 #include <iostream>
 
+#include "MoleculeKind.h"
 #include "MoveConst.h"
 #include "NumLib.h"
 #include "StrLib.h"
@@ -271,16 +272,54 @@ void Collector::MoveDone(uint move, uint box, uint kind, uint rejectState,
           ++ps.zeroNew;
         else {
           ps.lnNew += ns[p].lnMean;
+          ps.lnBNew += ns[p].lnBonded;
           ps.best90New += ns[p].bestFrac > 0.9f;
         }
       }
       if (hasO && !(*os)[p].zero) {
         ++ps.nOld;
         ps.lnOld += (*os)[p].lnMean;
+        ps.lnBOld += (*os)[p].lnBonded;
       }
       if (hasN && hasO && !ns[p].zero && !(*os)[p].zero) {
         ++ps.nPair;
         ps.diff += ns[p].lnMean - (*os)[p].lnMean;
+        ps.diffB += ns[p].lnBonded - (*os)[p].lnBonded;
+      }
+    }
+    // whole-growth split, only when every stage of both has finite weight
+    if (os != nullptr && ns.size() == os->size() && !ns.empty()) {
+      double dB = 0.0, dL = 0.0;
+      bool finite = true;
+      for (size_t p = 0; p < ns.size() && finite; ++p) {
+        finite = !ns[p].zero && !(*os)[p].zero;
+        dB += ns[p].lnBonded - (*os)[p].lnBonded;
+        dL += ns[p].lnMean - (*os)[p].lnMean;
+      }
+      if (finite) {
+        PairStats &ps = s.pairs;
+        const double *pn = newMol->InstrRecord().pairE;
+        const double *po = oldMol->InstrRecord().pairE;
+        double td = 0.0;
+        ++ps.n;
+        for (int c = 0; c < N_PAIRCLASS; ++c) {
+          double d = beta * (pn[c] - po[c]);
+          ps.sN[c] += beta * pn[c];
+          ps.sO[c] += beta * po[c];
+          ps.sD[c] += d;
+          ps.sDD[c] += d * d;
+          td += d;
+        }
+        ps.tD += td;
+        ps.tDD += td * td;
+        double dE = dL - dB;
+        SplitStats &sp = s.split;
+        ++sp.n;
+        sp.sB += dB;
+        sp.sE += dE;
+        sp.sBB += dB * dB;
+        sp.sEE += dE * dE;
+        sp.sBE += dB * dE;
       }
     }
     for (const StageRec &st : ns) {
@@ -485,15 +524,70 @@ void Collector::Write(ulong step) {
       for (size_t p = 0; p < s.pos.size(); ++p) {
         const PosStats &ps = s.pos[p];
         ulong nzn = ps.nNew - ps.zeroNew;
-        fprintf(f, "%s %u %s %d %zu %s %lu %lu %.4f %.4f %lu %.4f %lu %.4f\n",
+        fprintf(f,
+                "%s %u %s %d %zu %s %lu %lu %.4f %.4f %lu %.4f %lu %.4f "
+                "%.4f %.4f %.4f\n",
                 moveName(it.first.move).c_str(), it.first.box,
                 kindName(it.first.kind), (int)it.first.nested, p,
                 s.posStage[p] == FIRST ? "first" : "later", ps.nNew,
                 ps.zeroNew, nzn ? (double)ps.best90New / nzn : 0.0,
                 nzn ? ps.lnNew / nzn : 0.0, ps.nOld,
                 ps.nOld ? ps.lnOld / ps.nOld : 0.0, ps.nPair,
-                ps.nPair ? ps.diff / ps.nPair : 0.0);
+                ps.nPair ? ps.diff / ps.nPair : 0.0,
+                nzn ? ps.lnBNew / nzn : 0.0,
+                ps.nOld ? ps.lnBOld / ps.nOld : 0.0,
+                ps.nPair ? ps.diffB / ps.nPair : 0.0);
       }
+    }
+    fprintf(f, "\n[weight_split]\n# per attempt with finite weights: "
+               "d = ln(W_new/W_old) over the recorded growth stages, split "
+               "into bonded dB (importance weights of branch and torsion "
+               "sampling) and nonbonded dE (Boltzmann factors of the trial "
+               "energies); var(d) = var(dB) + var(dE) + 2 cov\n"
+               "# move box kind nested n mean_dB mean_dE var_dB var_dE "
+               "cov_dBdE\n");
+    for (const auto &it : moves) {
+      const SplitStats &sp = it.second.split;
+      if (sp.n < 2)
+        continue;
+      double mB = sp.sB / sp.n, mE = sp.sE / sp.n;
+      fprintf(f, "%s %u %s %d %lu %.4f %.4f %.4f %.4f %.4f\n",
+              moveName(it.first.move).c_str(), it.first.box,
+              kindName(it.first.kind), (int)it.first.nested, sp.n, mB, mE,
+              sp.sBB / sp.n - mB * mB, sp.sEE / sp.n - mE * mE,
+              sp.sBE / sp.n - mB * mE);
+    }
+  }
+
+  if (On(WEIGHTS)) {
+    static const char *SEP[N_SEP] = {"1-5", "1-6", "1-7+"};
+    static const char *TYP[N_PTYPE] = {"C-C", "C-H", "H-H", "other"};
+    static const char *TERM[2] = {"LJ", "Coul"};
+    fprintf(f, "\n[pair_split]\n# intramolecular 1-5+ energy formed by the "
+               "growth steps that record pairs (DCLinkedHedron), by class, "
+               "per attempt with finite weights; kT units; diff = new - old\n"
+               "# move box kind nested sep types term n mean_new mean_old "
+               "mean_diff var_diff\n");
+    for (const auto &it : moves) {
+      const PairStats &ps = it.second.pairs;
+      if (ps.n < 2)
+        continue;
+      std::string mn = moveName(it.first.move);
+      for (int c = 0; c < N_PAIRCLASS; ++c) {
+        if (ps.sN[c] == 0.0 && ps.sO[c] == 0.0)
+          continue;
+        int term = c % 2, typ = (c / 2) % N_PTYPE, sep = c / (2 * N_PTYPE);
+        double md = ps.sD[c] / ps.n;
+        fprintf(f, "%s %u %s %d %s %s %s %lu %.4f %.4f %.4f %.4f\n",
+                mn.c_str(), it.first.box, kindName(it.first.kind),
+                (int)it.first.nested, SEP[sep], TYP[typ], TERM[term], ps.n,
+                ps.sN[c] / ps.n, ps.sO[c] / ps.n, md,
+                ps.sDD[c] / ps.n - md * md);
+      }
+      double mt = ps.tD / ps.n;
+      fprintf(f, "%s %u %s %d all all all %lu 0 0 %.4f %.4f\n", mn.c_str(),
+              it.first.box, kindName(it.first.kind), (int)it.first.nested,
+              ps.n, mt, ps.tDD / ps.n - mt * mt);
     }
   }
 
@@ -551,6 +645,102 @@ void RecordStage(cbmc::TrialMol &mol, Stage stage, const double *w, uint n,
     rec.failStage = stage;
     rec.failOverlap = r.allOverlap;
   }
+}
+
+void RecordStageFactor(cbmc::TrialMol &mol, Stage stage, const double *w,
+                       uint n, const bool *overlap, double factor) {
+  if (!Collector::Get().StagesOn() || n == 0)
+    return;
+  double sum = 0.0, best = 0.0;
+  uint nOver = 0;
+  for (uint i = 0; i < n; ++i) {
+    sum += w[i];
+    best = std::max(best, w[i]);
+    if (overlap[i])
+      ++nOver;
+  }
+  StageRec r;
+  r.stage = (unsigned char)stage;
+  r.zero = !(factor > 0.0);
+  r.allOverlap = (nOver == n);
+  r.bestFrac = sum > 0.0 ? (float)(best / sum) : 0.0f;
+  r.overFrac = (float)nOver / n;
+  r.lnMean = r.zero ? -HUGE_VAL : std::log(factor);
+  TrialRecord &rec = mol.InstrRecord();
+  rec.stages.push_back(r);
+  if (r.zero && rec.failStage < 0) {
+    rec.failStage = stage;
+    rec.failOverlap = r.allOverlap;
+  }
+}
+
+const Collector::Topo &Collector::Topology(const cbmc::TrialMol &mol) {
+  const MoleculeKind &kind = mol.GetKind();
+  auto it = topo.find(&kind);
+  if (it != topo.end())
+    return it->second;
+  Topo &t = topo[&kind];
+  t.n = kind.NumAtoms();
+  t.dist.assign(t.n * t.n, 255);
+  std::vector<std::vector<uint>> adj(t.n);
+  for (uint b = 0; b < kind.bondList.count; ++b) {
+    adj[kind.bondList.part1[b]].push_back(kind.bondList.part2[b]);
+    adj[kind.bondList.part2[b]].push_back(kind.bondList.part1[b]);
+  }
+  for (uint s = 0; s < t.n; ++s) {
+    std::vector<uint> queue(1, s);
+    t.dist[s * t.n + s] = 0;
+    for (size_t q = 0; q < queue.size(); ++q) {
+      uint a = queue[q];
+      for (uint nb : adj[a]) {
+        if (t.dist[s * t.n + nb] == 255) {
+          t.dist[s * t.n + nb] = t.dist[s * t.n + a] + 1;
+          queue.push_back(nb);
+        }
+      }
+    }
+  }
+  t.elem.resize(t.n);
+  for (uint a = 0; a < t.n; ++a) {
+    char e = kind.atomTypeNames[a].empty() ? 'X' : kind.atomTypeNames[a][0];
+    e = (char)toupper(e);
+    t.elem[a] = (e == 'C' || e == 'H') ? e : 'X';
+  }
+  return t;
+}
+
+void RecordPairs(cbmc::TrialMol &mol, uint atom,
+                 const std::vector<PairE> &pairs) {
+  Collector &col = Collector::Get();
+  if (!col.On(WEIGHTS))
+    return;
+  const Collector::Topo &t = col.Topology(mol);
+  double *pe = mol.InstrRecord().pairE;
+  for (const PairE &p : pairs) {
+    uint d = t.dist[atom * t.n + p.partner];
+    if (d < 4)
+      continue; // not a 1-5+ pair
+    int sep = d == 4 ? 0 : (d == 5 ? 1 : 2);
+    char a = t.elem[atom], b = t.elem[p.partner];
+    int typ = 3;
+    if (a == 'C' && b == 'C')
+      typ = 0;
+    else if ((a == 'C' && b == 'H') || (a == 'H' && b == 'C'))
+      typ = 1;
+    else if (a == 'H' && b == 'H')
+      typ = 2;
+    int c = (sep * N_PTYPE + typ) * 2;
+    pe[c] += p.lj;
+    pe[c + 1] += p.coul;
+  }
+}
+
+void RecordBondedPart(cbmc::TrialMol &mol, double lnBonded) {
+  if (!Collector::Get().On(WEIGHTS))
+    return;
+  std::vector<StageRec> &st = mol.InstrRecord().stages;
+  if (!st.empty())
+    st.back().lnBonded = lnBonded;
 }
 
 void RecordOldStage(cbmc::TrialMol &mol, Stage stage, double meanW) {

@@ -1,5 +1,77 @@
 # Recoil Growth for GOMC CBMC — Design
 
+## Status (2026-10-20): Phases 0–2 implemented
+
+**Code:**
+- [src/cbmc/RecoilGrowth.h](src/cbmc/RecoilGrowth.h): the generic engine.
+- `DCLinkedHedron`: trial interface (`GenerateTrials`, `ActualTrial`,
+  `Commit`).
+- `DCGraph::BuildEdgesRecoil`: the provider and the `Build` path.
+- [test/src/RecoilGrowthTest.cpp](test/src/RecoilGrowthTest.cpp): exactness
+  test.
+
+**Behaviour:**
+- **Off by default.** With `CBMC_Recoil false` the trajectory is bit-identical
+  to before.
+- **Not yet covered:** Regrowth, MEMC and TargetedSwap (Phase 3).
+
+**Two departures from the design below,** both exact. The first fixed a
+measured problem; the second follows from it:
+1. **Weighted selection.** Growth picks among the feasible trials with
+   probability proportional to w, not uniformly, and the step factor is
+   W_i = S_i / (k p_i), where S_i is the summed weight of the feasible trials.
+   With every trial open this is exactly standard CBMC, so recoil growth only
+   removes dead-end trials from the choice.
+2. **Open-probability threshold.** p = min(1, exp(u₀ − βu)), with u₀ set by
+   `CBMC_RecoilThreshold` in kT. The textbook p = min(1, exp(−βu)), with
+   uniform selection, made 36% of all-atom hexane growths fail at k = 4,
+   because 1-5+ energies of a few kT closed every trial. It gave 8.7%
+   acceptance against 12.9% for CBMC.
+
+**Keywords:**
+
+| Keyword | Meaning | Default |
+|---|---|---|
+| `CBMC_Recoil` | enable recoil growth for `DCGraph::Build` (swap, intra-swap) | `false` |
+| `CBMC_RecoilTrials` | trials per growth step k | 4 |
+| `CBMC_RecoilLength` | recoil length l | 2 |
+| `CBMC_RecoilThreshold` | u₀ in kT; trials below it are always open | 0 |
+
+**Validation:**
+- **Toy chain:** matches full enumeration for 8 (k, l, u₀) cases, with max
+  |z| 2.0–3.1. Three deliberately broken weight formulas fail with max |z| of
+  24 to 1271.
+- **GOMC:** Widom ln⟨W⟩ and mean intramolecular energies agree with standard
+  CBMC within error. There are no energy-mismatch warnings in ideal-gas or
+  dense GEMC runs.
+
+**Results** (same seed, 50,000 swaps). All-atom hexane GEMC (2 molecules,
+ceiling 50%):
+
+| Method | Acceptance | Time | New − old ln W deficit |
+|---|---|---|---|
+| CBMC, `CBMC_Nth` 4 | 9.9% | 64 s | — |
+| CBMC, `CBMC_Nth` 10 | 12.9% | 121 s | −5.0 |
+| Recoil k=4, l=2, u₀=3 | 11.5% | 143 s | −4.0 (8% failures) |
+| Recoil k=10, l=2, u₀=0 | 14.9% | 502 s | −2.9 (9% failures) |
+| Recoil k=10, l=2, u₀=3 | 14.0% | 608 s | −3.7 (1.6% failures) |
+
+Dense UA hexane GEMC, insertion into the liquid, 300,000 steps:
+
+| Method | Acceptance |
+|---|---|
+| CBMC | 0.30% |
+| Recoil k=10, l=2, u₀=0 | 0.36% (about 1.3σ) |
+
+**What this shows:**
+- **The look-ahead works.** It removes 25–40% of the late-growth weight
+  deficit.
+- **The acceptance gain is modest:** about 1.15–1.2× at a matched trial count.
+- **The cost is several times higher** in the all-atom ideal gas, where
+  intramolecular trial generation dominates.
+- **The target of more than 40% is not met.** The weight that remains is lost
+  within steps and to failed growths, not to dead ends that l = 2–3 can see.
+
 ## Goal
 
 Remove the "look-ahead" loss in CBMC growth. On the all-atom hexane GEMC test
