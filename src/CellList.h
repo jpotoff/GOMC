@@ -153,6 +153,18 @@ public:
 
   int CellsInBox(int box) const { return head[box].size(); }
 
+  //
+  // Calls f(particle) for every particle in the cells that overlap the cube of
+  // half-width `reach` centred on pos, so every particle within `reach` of pos
+  // (minimum image) is visited. Each cell is visited once, also when the cube
+  // wraps around the box or spans a whole edge. Returns false, without calling
+  // f, for a non-orthogonal box: there the grid is in unslanted coordinates
+  // and a cube no longer bounds the sphere.
+  //
+  template <typename F>
+  bool ForEachNear(const XYZ &pos, const double reach, const int box,
+                   F &&f) const;
+
   //! Bumped by every mutator below. Lets a consumer cache something derived
   //! from the list contents and know when it went stale. Private setter by
   //! design: the increments live inside AddMol/RemoveMol/GridAll/GridBox so a
@@ -205,6 +217,41 @@ inline int CellList::PositionToCell(const XYZ &posRef, int box) const {
   y -= (y == edgeCells[box][1] ? 1 : 0);
   z -= (z == edgeCells[box][2] ? 1 : 0);
   return x * edgeCells[box][1] * edgeCells[box][2] + y * edgeCells[box][2] + z;
+}
+
+template <typename F>
+bool CellList::ForEachNear(const XYZ &pos, const double reach, const int box,
+                           F &&f) const {
+  if (!dimensions->orthogonal[box])
+    return false;
+  const double p[3] = {pos.x, pos.y, pos.z};
+  const double size[3] = {cellSize[box].x, cellSize[box].y, cellSize[box].z};
+  int lo[3], n[3];
+  for (int a = 0; a < 3; ++a) {
+    const int e = edgeCells[box][a];
+    lo[a] = (int)std::floor((p[a] - reach) / size[a]);
+    n[a] = (int)std::floor((p[a] + reach) / size[a]) - lo[a] + 1;
+    if (n[a] >= e) {
+      lo[a] = 0;
+      n[a] = e;
+    }
+    lo[a] = ((lo[a] % e) + e) % e;
+  }
+  const int e0 = edgeCells[box][0], e1 = edgeCells[box][1],
+            e2 = edgeCells[box][2];
+  for (int i = 0; i < n[0]; ++i) {
+    const int cx = (lo[0] + i) % e0;
+    for (int j = 0; j < n[1]; ++j) {
+      const int cy = (lo[1] + j) % e1;
+      for (int k = 0; k < n[2]; ++k) {
+        const int cz = (lo[2] + k) % e2;
+        for (int at = head[box][cx * e1 * e2 + cy * e2 + cz]; at != END_CELL;
+             at = list[at])
+          f(at);
+      }
+    }
+  }
+  return true;
 }
 
 class CellList::Cell {

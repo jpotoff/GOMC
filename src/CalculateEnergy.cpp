@@ -11,6 +11,8 @@ A copy of the MIT License can be found in License.txt with this program or at
 #define GOMC_HAVE_COMPRESS 1
 #endif
 #include <cassert>
+#include <cmath>
+#include <memory>
 
 #include "BasicTypes.h" //uint
 #include "BoxDimensions.h"
@@ -374,6 +376,140 @@ int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
   boxPackVersion = cellList.Version();
   boxPackCount = n;
   return n;
+}
+
+//
+// Per-growth-step candidate list. See the header for the contract.
+//
+// Exactness: a trial atom is within reach of the center, so by the triangle
+// inequality (which holds for the minimum-image distance) any atom within
+// rCut of it is within rCut + reach of the center. The list keeps every such
+// atom, and ParticleInterTemplate still applies the exact cutoffs to the
+// trial-atom distances, so the pair set is the one the plain path finds.
+//
+// Cost: one cell-list walk (or one pass over the packed box) per growth step,
+// against one per trial atom in the plain cell path. Steps with fewer trial
+// atoms than kLocalMinTrials skip it, as the walk would not pay for itself.
+//
+namespace {
+constexpr uint kLocalMinTrials = 3;
+// Slack on the reach, for rounding in the cell index and distance arithmetic
+constexpr double kLocalMargin = 0.01;
+} // namespace
+
+void CalculateEnergy::BeginLocalCandidates(const XYZ &center,
+                                           XYZArray const *pos,
+                                           const uint nArrays, const uint n,
+                                           const uint box) const {
+  localActive = false;
+  if (box >= BOXES_WITH_U_NB || nArrays * n < kLocalMinTrials)
+    return;
+  double reachSq = 0.0;
+  for (uint a = 0; a < nArrays; ++a)
+    for (uint t = 0; t < n; ++t)
+      reachSq = std::max(
+          reachSq, currentAxes.MinImage(pos[a][t] - center, box).LengthSq());
+  const double reach = std::sqrt(reachSq) + kLocalMargin;
+  if (currentAxes.orthogonal[box])
+    BuildLocalCandidates<BoxDimensions>(center, reach, box, currentAxes);
+  else
+    BuildLocalCandidates<BoxDimensionsNonOrth>(
+        center, reach, box,
+        static_cast<const BoxDimensionsNonOrth &>(currentAxes));
+}
+
+template <typename BoxType>
+void CalculateEnergy::BuildLocalCandidates(const XYZ &center,
+                                           const double reach, const uint box,
+                                           const BoxType &boxAxes) const {
+  const int cap = (int)currentCoords.Count();
+  if ((int)localX.size() < cap) {
+    localX.resize(cap);
+    localY.resize(cap);
+    localZ.resize(cap);
+    localCharge.resize(cap);
+    localKind.resize(cap);
+    localMol.resize(cap);
+  }
+  const XYZ c = currentAxes.WrapPBC(center, box);
+  const double radius = std::sqrt(boxAxes.rCutSq[box]) + reach;
+  const double radiusSq = radius * radius;
+
+  // Source atoms, packed: the whole box when the stencil covers it (the
+  // cached pack), otherwise the cells around the center, copied into the
+  // local arrays and then compacted in place below.
+  int nSrc = 0;
+  const double *sX, *sY, *sZ, *sQ;
+  const int *sKind, *sMol;
+  if (StencilCoversBox(box)) {
+    nSrc = BuildBoxPacked(currentCoords, box);
+    sX = boxPackX.data();
+    sY = boxPackY.data();
+    sZ = boxPackZ.data();
+    sQ = boxPackCharge.data();
+    sKind = boxPackKind.data();
+    sMol = boxPackMol.data();
+  } else {
+    const bool walked =
+        cellList.ForEachNear(c, radius, box, [&](const int p) {
+          localX[nSrc] = currentCoords.x[p];
+          localY[nSrc] = currentCoords.y[p];
+          localZ[nSrc] = currentCoords.z[p];
+          localCharge[nSrc] = particleCharge[p];
+          localKind[nSrc] = particleKind[p];
+          localMol[nSrc] = particleMol[p];
+          ++nSrc;
+        });
+    if (!walked)
+      return; // non-orthogonal grid: keep the plain path
+    sX = localX.data();
+    sY = localY.data();
+    sZ = localZ.data();
+    sQ = localCharge.data();
+    sKind = localKind.data();
+    sMol = localMol.data();
+  }
+
+  // Keep the atoms within radius of the center. Writes never overtake reads,
+  // so compacting the local arrays in place is safe.
+  int n = 0;
+  double distSq[GOMC_DISTSQ_CHUNK];
+  for (int base = 0; base < nSrc; base += GOMC_DISTSQ_CHUNK) {
+    const int m = std::min(GOMC_DISTSQ_CHUNK, nSrc - base);
+    boxAxes.BoxType::DistSqRange(distSq, c.x, c.y, c.z, sX + base, sY + base,
+                                 sZ + base, m, box);
+    for (int k = 0; k < m; ++k) {
+      if (!(distSq[k] < radiusSq))
+        continue;
+      const int j = base + k;
+      localX[n] = sX[j];
+      localY[n] = sY[j];
+      localZ[n] = sZ[j];
+      localCharge[n] = sQ[j];
+      localKind[n] = sKind[j];
+      localMol[n] = sMol[j];
+      ++n;
+    }
+  }
+  localCount = n;
+  localBox = box;
+  localVersion = cellList.Version();
+  localCenter = c;
+  localReachSq = reach * reach;
+  localActive = true;
+}
+
+template <typename BoxType>
+bool CalculateEnergy::LocalCandidatesCover(XYZArray const &trialPos,
+                                           const uint trials, const uint box,
+                                           const BoxType &boxAxes) const {
+  if (!localActive || localBox != box || localVersion != cellList.Version())
+    return false;
+  for (uint t = 0; t < trials; ++t)
+    if (boxAxes.MinImage(trialPos[t] - localCenter, box).LengthSq() >
+        localReachSq)
+      return false;
+  return true;
 }
 
 //
@@ -1783,14 +1919,21 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
   // arrays instead of gathering currentCoords through the chased index list.
   // That is what lets DistSqRange vectorize here, the way it already does in
   // BoxInterTemplate.
-  if (StencilCoversBox(box)) {
-    const int nPacked = BuildBoxPacked(currentCoords, box);
-    const double *const pX = boxPackX.data();
-    const double *const pY = boxPackY.data();
-    const double *const pZ = boxPackZ.data();
-    const double *const pQ = boxPackCharge.data();
-    const int *const pKind = boxPackKind.data();
-    const int *const pMol = boxPackMol.data();
+  //
+  // The same path also serves the per-growth-step candidate list
+  // (BeginLocalCandidates) whenever one covers these trials: a subset of the
+  // box, packed the same way, that every trial atom of the step shares.
+  const bool useLocal = LocalCandidatesCover(trialPos, trials, box, boxAxes);
+  if (useLocal || StencilCoversBox(box)) {
+    const int nPacked =
+        useLocal ? localCount : BuildBoxPacked(currentCoords, box);
+    const double *const pX = useLocal ? localX.data() : boxPackX.data();
+    const double *const pY = useLocal ? localY.data() : boxPackY.data();
+    const double *const pZ = useLocal ? localZ.data() : boxPackZ.data();
+    const double *const pQ =
+        useLocal ? localCharge.data() : boxPackCharge.data();
+    const int *const pKind = useLocal ? localKind.data() : boxPackKind.data();
+    const int *const pMol = useLocal ? localMol.data() : boxPackMol.data();
     const double rCutSqBox = boxAxes.rCutSq[box];
     const double rCutLowSq = forcefield.rCutLowSq;
     // Per-kernel cutoffs and the table window, as in BoxInterTemplate: pass 2
@@ -2519,6 +2662,19 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
   // outlined region the firstprivate copy gets spilled and re-loaded anyway,
   // and the disassembly still showed four byte-loads from memory in the hot
   // clone. The template removes the test rather than the load.
+#ifndef NDEBUG
+  // With a candidate list active, redo the call on the plain path and compare
+  // below. Only the summation order differs, so energies agree to rounding
+  // and the overlap flags exactly.
+  const bool checkLocal = localActive && localBox == box;
+  std::vector<double> enRef, realRef;
+  std::vector<char> overlapRef;
+  if (checkLocal) {
+    enRef.assign(en, en + trials);
+    realRef.assign(real, real + trials);
+    overlapRef.assign(overlap, overlap + trials);
+  }
+#endif
   DispatchForcefield(forcefield, [&](const auto &ffRef) {
     using FFT = std::decay_t<decltype(ffRef)>;
     if (currentAxes.orthogonal[box]) {
@@ -2543,6 +2699,25 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
             trials, nonOrth);
     }
   });
+#ifndef NDEBUG
+  if (checkLocal) {
+    std::unique_ptr<bool[]> ovRef(new bool[trials]);
+    std::copy(overlapRef.begin(), overlapRef.end(), ovRef.get());
+    localActive = false;
+    ParticleInter(enRef.data(), realRef.data(), trialPos, ovRef.get(),
+                  partIndex, molIndex, box, trials);
+    localActive = true;
+    auto close = [](const double a, const double b) {
+      return a == b ||
+             std::abs(a - b) <= 1e-9 * std::max(1.0, std::abs(a) + std::abs(b));
+    };
+    for (uint t = 0; t < trials; ++t) {
+      assert(close(en[t], enRef[t]) && close(real[t], realRef[t]) &&
+             overlap[t] == ovRef[t] &&
+             "candidate list disagrees with the plain ParticleInter path");
+    }
+  }
+#endif
 }
 
 // Calculates the change in the TC from adding numChange atoms of a kind

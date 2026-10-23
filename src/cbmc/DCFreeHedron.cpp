@@ -130,12 +130,16 @@ void DCFreeHedron::BuildNew(TrialMol &newMol, uint molIndex) {
     data->axes.WrapPBC(positions[b], newMol.GetBox());
   }
 
+  // all trials sit around the focus atom: one candidate list serves them
+  calc.BeginLocalCandidates(center, positions, hed.NumBond() + 1, nLJTrials,
+                            newMol.GetBox());
   for (uint b = 0; b < hed.NumBond(); ++b) {
     calc.ParticleInter(inter, real, positions[b], overlap, hed.Bonded(b),
                        molIndex, newMol.GetBox(), nLJTrials);
   }
   calc.ParticleInter(inter, real, positions[hed.NumBond()], overlap, hed.Prev(),
                      molIndex, newMol.GetBox(), nLJTrials);
+  calc.EndLocalCandidates();
 
   double stepWeight = 0;
   for (uint lj = 0; lj < nLJTrials; ++lj) {
@@ -214,6 +218,9 @@ void DCFreeHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
     data->axes.WrapPBC(positions[b], oldMol.GetBox());
   }
 
+  // all trials sit around the focus atom: one candidate list serves them
+  calc.BeginLocalCandidates(center, positions, hed.NumBond() + 1, nLJTrials,
+                            oldMol.GetBox());
   for (uint b = 0; b < hed.NumBond(); ++b) {
     calc.ParticleInter(inter, real, positions[b], overlap, hed.Bonded(b),
                        molIndex, oldMol.GetBox(), nLJTrials);
@@ -221,6 +228,7 @@ void DCFreeHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
   double stepWeight = 0;
   calc.ParticleInter(inter, real, positions[hed.NumBond()], overlap, hed.Prev(),
                      molIndex, oldMol.GetBox(), nLJTrials);
+  calc.EndLocalCandidates();
 
   for (uint lj = 0; lj < nLJTrials; ++lj) {
     stepWeight += exp(-ff.beta * (inter[lj] + real[lj]));

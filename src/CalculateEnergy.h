@@ -121,6 +121,23 @@ public:
                      bool *overlap, const uint partIndex, const uint molIndex,
                      const uint box, const uint trials) const;
 
+  //! Per-growth-step candidate list for ParticleInter.
+  //!
+  //! A CBMC growth step places all of its trial atoms within a bond length of
+  //! one focus atom, so they share one neighbourhood. This gathers it once:
+  //! every atom within rCut + reach of `center`, where reach is the largest
+  //! distance from `center` to any of the n positions in each of the nArrays
+  //! arrays. Until EndLocalCandidates, ParticleInter for `box` scans that list
+  //! instead of the cell list or the whole box. The pair set is unchanged, so
+  //! energies agree with the plain path to rounding (summation order).
+  //!
+  //! ParticleInter checks before every use that each trial position is within
+  //! reach and that the cell list has not changed, and falls back otherwise.
+  void BeginLocalCandidates(const XYZ &center, XYZArray const *pos,
+                            const uint nArrays, const uint n,
+                            const uint box) const;
+  void EndLocalCandidates() const { localActive = false; }
+
   //! Calculates change in the ENergyTC from adding numChange atoms of a kind
   //! @param box Index of box under consideration
   //! @param kind Kind of particle being added or removed
@@ -247,6 +264,16 @@ private:
                              bool *overlap, const uint partIndex,
                              const uint molIndex, const uint box,
                              const uint trials, const BoxType &boxAxes) const;
+
+  template <typename BoxType>
+  void BuildLocalCandidates(const XYZ &center, const double reach,
+                            const uint box, const BoxType &boxAxes) const;
+
+  //! True when the list from BeginLocalCandidates is current and covers
+  //! every trial position in trialPos.
+  template <typename BoxType>
+  bool LocalCandidatesCover(XYZArray const &trialPos, const uint trials,
+                            const uint box, const BoxType &boxAxes) const;
 
   //! Calculates full TC energy for one box in current system
   void EnergyCorrection(SystemPotential &pot, BoxDimensions const &boxAxes,
@@ -421,6 +448,16 @@ private:
   mutable uint boxPackBox = 0;
   mutable unsigned boxPackVersion = 0;
   mutable int boxPackCount = 0;
+
+  // Candidate list from BeginLocalCandidates, packed like boxPack*.
+  mutable std::vector<double> localX, localY, localZ, localCharge;
+  mutable std::vector<int> localKind, localMol;
+  mutable bool localActive = false;
+  mutable uint localBox = 0;
+  mutable unsigned localVersion = 0;
+  mutable int localCount = 0;
+  mutable XYZ localCenter;
+  mutable double localReachSq = 0.0;
   const MoleculeLookup &molLookup;
   const BoxDimensions &currentAxes;
   const CellList &cellList;

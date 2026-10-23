@@ -619,12 +619,16 @@ void DCLinkedHedron::EvalTrials(TrialMol &mol, uint molIndex, uint n,
   std::fill_n(real, n, 0.0);
   std::fill_n(nonbonded, n, 0.0);
   std::fill_n(overlap, n, false);
+  // all n trials sit around the focus atom: one candidate list serves them
+  data->calc.BeginLocalCandidates(mol.AtomPosition(hed.Focus()), positions,
+                                  hed.NumBond(), n, mol.GetBox());
   for (uint b = 0; b < hed.NumBond(); ++b) {
     data->calc.ParticleInter(inter, real, positions[b], overlap, hed.Bonded(b),
                              molIndex, mol.GetBox(), n);
     data->calc.ParticleNonbonded(nonbonded, mol, positions[b], hed.Bonded(b),
                                  mol.GetBox(), n);
   }
+  data->calc.EndLocalCandidates();
   const double beta = data->ff.beta;
   for (uint t = 0; t < n; ++t) {
     StepTrial &tr = out[t];
@@ -691,6 +695,9 @@ double DCLinkedHedron::EvalLJ(TrialMol &mol, uint molIndex) {
   std::fill_n(data->nonbonded, nLJTrials, 0.0);
   std::fill_n(real, nLJTrials, 0.0);
 
+  // all trials sit around the focus atom: one candidate list serves them
+  data->calc.BeginLocalCandidates(mol.AtomPosition(hed.Focus()), positions,
+                                  hed.NumBond(), nLJTrials, mol.GetBox());
   for (uint b = 0; b < hed.NumBond(); ++b) {
     data->calc.ParticleInter(inter, real, positions[b], overlap, hed.Bonded(b),
                              molIndex, mol.GetBox(), nLJTrials);
@@ -698,6 +705,7 @@ double DCLinkedHedron::EvalLJ(TrialMol &mol, uint molIndex) {
     data->calc.ParticleNonbonded(nonbonded, mol, positions[b], hed.Bonded(b),
                                  mol.GetBox(), nLJTrials);
   }
+  data->calc.EndLocalCandidates();
   double stepWeight = 0;
   for (uint lj = 0; lj < nLJTrials; ++lj) {
     data->ljWeights[lj] *=

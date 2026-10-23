@@ -1,0 +1,79 @@
+* initial_box_0 and initial_box_1 - created by MoSDeF-GOMC using the on 2024-01-09 23:05:48.595985
+* These parameters use the non-bonded LJ form --- with these force field(s) via MoSDef  {'C2OH': '../../trappe-ua.xml'}.
+*  1-4 electrostatic scaling = {'C2OH': 0.0} , and 1-4 non-bonded scaling = {'C2OH': 0.0}, and non-bonded mixing rule = geometric
+
+*            4000 atoms
+*            3000 bonds
+*            2000 angles
+*            1000 dihedrals
+*               0 impropers
+
+
+* masses
+
+! atom_types      mass            ! atomClass_ResidueName
+* CH30            15.035          ! C2OH_CH3_sp3             
+* CH20            14.027          ! C2OH_CH2_O               
+* O0              15.9994         ! C2OH_O                   
+* H0              1.008           ! C2OH_H                   
+
+BONDS * harmonic
+! 
+! V(bond) = Kb(b - b0)**2
+! 
+! Kb: kcal/mol/A**2 (LJ) and  K/A**2 (Mie and Exp6)
+! b0: A
+! Kb (kcal/mol) = Kb_K (K) * Boltz. const.; (9999999999 if no stretching)
+! 
+! type_1   type_2     Kb              b0              ! extended_type_1      extended_type_2     
+CH30       CH20       999999999999    1.54            ! C2OH_CH3_sp3         C2OH_CH2_O          
+CH20       O0         999999999999    1.43            ! C2OH_CH2_O           C2OH_O              
+O0         H0         999999999999    0.945           ! C2OH_O               C2OH_H              
+
+ANGLES * harmonic
+! 
+! V(angle) = Ktheta(Theta - Theta0)**2
+! 
+! Ktheta: kcal/mol/rad**2 (LJ) and  K/rad**2 (Mie and Exp6)
+! Theta0: degrees
+! 
+!  Boltzmann = 0.0019872041 kcal / (mol * K)
+! 
+! Ktheta (kcal/mol) = Ktheta_K (K) * Boltz. const.
+! 
+! type_1   type_2     type_3     Ktheta          Theta0          ! extended_type_1      extended_type_2      extended_type_3     
+CH30       CH20       O0         50.077544       109.469889      ! C2OH_CH3_sp3         C2OH_CH2_O           C2OH_O              
+CH20       O0         H0         55.045554       108.499872      ! C2OH_CH2_O           C2OH_O               C2OH_H              
+
+DIHEDRALS * CHARMM
+! 
+! V(dihedral) = Kchi(1 + cos(n(chi) - delta)), where delta also called chi0 
+! NOTE: For the CHARMM FF n=0 is a harmonic dihedral, which is not supported. CHARMM FF where n=0 -->  V(dihedral) = Kchi(chi - chi0)**2) 
+! 
+! Kchi: kcal/mol (LJ) and K (Mie and Exp6)
+! n: multiplicity
+! delta: degrees
+! 
+! Kchi (kcal/mol) = Kchi_K (K) * Boltz. const.
+! Boltzmann = 0.0019872041 kcal / (mol * K)
+! 
+! type_1   type_2     type_3     type_4     Kchi            n          delta           ! extended_type_1      extended_type_2      extended_type_3      extended_type_4     
+CH30       CH20       O0         H0         -0.416956       1          180.0           ! C2OH_CH3_sp3         C2OH_CH2_O           C2OH_O               C2OH_H              
+CH30       CH20       O0         H0         0.057967        2          0.0             ! C2OH_CH3_sp3         C2OH_CH2_O           C2OH_O               C2OH_H              
+CH30       CH20       O0         H0         -0.373455       3          180.0           ! C2OH_CH3_sp3         C2OH_CH2_O           C2OH_O               C2OH_H              
+! The input dihedral to periodic dihedral conversion error is OK [error <= 10^(-10)]
+! Maximum( |(input dihedral calc)-(periodic dihedral calc)| ) =  8.881784197001252e-16
+
+NONBONDED
+! 
+! V(Lennard-Jones) = Epsilon,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+!                                    or
+! V(Lennard-Jones) = 4 * Epsilon,i,j[(Sigma,i,j/ri,j)**12 - (Sigma,i,j/ri,j)**6]
+! 
+! type_1   ignored         epsilon         Rmin/2          ignored         epsilon,1-4     Rmin/2,1-4      ! extended_type_1      extended_type_2     
+CH30       0.0             -0.1947459369   2.1046163406    0.0             -0.0            2.1046163406    ! C2OH_CH3_sp3         C2OH_CH3_sp3        
+CH20       0.0             -0.0914113289   2.2168625454    0.0             -0.0            2.2168625454    ! C2OH_CH2_O           C2OH_CH2_O          
+O0         0.0             -0.1848099904   1.6949176929    0.0             -0.0            1.6949176929    ! C2OH_O               C2OH_O              
+H0         0.0             -0.0            5.6123102415    0.0             -0.0            5.6123102415    ! C2OH_H               C2OH_H              
+
+END
