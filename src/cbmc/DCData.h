@@ -95,9 +95,7 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
       lookAheadDih(set.config.sys.cbmcTrials.lookAheadDih > 0
                        ? set.config.sys.cbmcTrials.lookAheadDih
                        : set.config.sys.cbmcTrials.bonded.dih),
-      lookAheadAng(set.config.sys.cbmcTrials.lookAheadAng >= 0
-                       ? set.config.sys.cbmcTrials.lookAheadAng
-                       : set.config.sys.cbmcTrials.bonded.ang),
+      lookAheadAng(set.config.sys.cbmcTrials.lookAheadAng),
       positions(*multiPositions) {
   calcEwald = sys.GetEwald();
   uint maxLJTrials = nLJTrialsFirst;
