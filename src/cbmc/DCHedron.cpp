@@ -130,15 +130,17 @@ void DCHedron::BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
 // proportional to its weight and accumulate the Rosenbluth weight. Each
 // trial's weight is its importance weight from the sampler times the 1-3
 // Boltzmann factor. useOld selects the old configuration's bond lengths.
-void DCHedron::SampleTrials(TrialMol &mol, uint molIndex, bool useOld) {
+void DCHedron::SampleTrials(TrialMol &mol, uint molIndex, bool useOld,
+                            uint nTrials) {
   const double beta = data->ff.beta;
   double th[MAX_BONDS], ph[MAX_BONDS], bend, nb13;
   weight = 0.0;
-  for (uint i = 0; i < data->nAngleTrials; ++i) {
-    if (!sampler.Sample(data->prng, beta, th, ph))
+  for (uint i = 0; i < nTrials; ++i) {
+    double ws;
+    if (!sampler.Sample(data->prng, beta, th, ph, &ws))
       BranchFailure(mol);
     BranchEnergy(mol, molIndex, th, ph, useOld, bend, nb13);
-    double w = sampler.Weight(beta, th, ph) * exp(-beta * nb13);
+    double w = ws * exp(-beta * nb13);
     weight += w;
     // keep each trial with probability proportional to its weight
     if (i == 0 || data->prng() * weight < w) {
@@ -151,11 +153,63 @@ void DCHedron::SampleTrials(TrialMol &mol, uint molIndex, bool useOld) {
 }
 
 void DCHedron::PrepareNew(TrialMol &newMol, uint molIndex) {
-  SampleTrials(newMol, molIndex, false);
+  SampleTrials(newMol, molIndex, false, data->nAngleTrials);
 }
 
 void DCHedron::PrepareTrialOld(TrialMol &oldMol, uint molIndex) {
-  SampleTrials(oldMol, molIndex, true);
+  SampleTrials(oldMol, molIndex, true, data->nAngleTrials);
+}
+
+void DCHedron::PrepareLookAhead(TrialMol &mol, uint molIndex, uint nTrials) {
+  if (nTrials > 0) {
+    SampleTrials(mol, molIndex, false, nTrials);
+    return;
+  }
+  if (!haveEquilibrium)
+    SetEquilibriumBranch();
+  std::copy(eqTheta, eqTheta + nBonds, theta);
+  std::copy(eqPhi, eqPhi + nBonds, phi);
+  // the look-ahead reads only the geometry and the weight; a weight shared by
+  // every trial cancels in the step weight
+  bendEnergy = oneThree = 0.0;
+  weight = 1.0;
+}
+
+// Equilibrium branch geometry: every prev-focus-b angle at its equilibrium
+// value, and each twist chosen so that the angle to the first branch atom is
+// at equilibrium. Of the two mirror solutions, the one whose angles to all
+// atoms placed so far are closest to equilibrium is kept. Near-linear
+// branches, where the twist is undefined, are spaced evenly.
+void DCHedron::SetEquilibriumBranch() {
+  const FFAngles &ang = *data->ff.angles;
+  for (uint b = 0; b < nBonds; ++b)
+    eqTheta[b] = ang.Angle(angleKinds[b][b]);
+  eqPhi[0] = 0.0;
+  for (uint b = 1; b < nBonds; ++b) {
+    eqPhi[b] = 2.0 * M_PI * b / nBonds;
+    double s = sin(eqTheta[b]) * sin(eqTheta[0]);
+    if (s < 1e-8)
+      continue;
+    double x = (cos(ang.Angle(angleKinds[b][0])) -
+                cos(eqTheta[b]) * cos(eqTheta[0])) /
+               s;
+    double omega = acos(std::max(-1.0, std::min(1.0, x)));
+    double best = -1.0;
+    for (double cand : {omega, -omega}) {
+      double dev = 0.0;
+      for (uint c = 0; c < b; ++c) {
+        double d = BranchSampler::AngleBetween(eqTheta[b], cand, eqTheta[c],
+                                               eqPhi[c]) -
+                   ang.Angle(angleKinds[b][c]);
+        dev += d * d;
+      }
+      if (best < 0.0 || dev < best) {
+        best = dev;
+        eqPhi[b] = cand;
+      }
+    }
+  }
+  haveEquilibrium = true;
 }
 
 void DCHedron::SetBranch(const double *th, const double *ph, double bend,
@@ -203,10 +257,11 @@ void DCHedron::ConstrainedAnglesOld(uint nTrials, TrialMol &oldMol,
   weight = sampler.Weight(beta, theta, phi) * exp(-beta * oneThree);
   double th[MAX_BONDS], ph[MAX_BONDS], bend, nb13;
   for (uint i = 0; i < nTrials; ++i) {
-    if (!sampler.Sample(data->prng, beta, th, ph))
+    double ws;
+    if (!sampler.Sample(data->prng, beta, th, ph, &ws))
       BranchFailure(oldMol);
     BranchEnergy(oldMol, molIndex, th, ph, true, bend, nb13);
-    weight += sampler.Weight(beta, th, ph) * exp(-beta * nb13);
+    weight += ws * exp(-beta * nb13);
   }
 }
 } // namespace cbmc

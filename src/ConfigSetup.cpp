@@ -146,6 +146,7 @@ ConfigSetup::ConfigSetup(void) {
   sys.cbmcTrials.recoil.threshold = 0.0;
   sys.cbmcTrials.lookAhead = 2;
   sys.cbmcTrials.lookAheadDih = 0;
+  sys.cbmcTrials.lookAheadAng = -1;
 }
 
 int ConfigSetup::stringtoi(const std::string &s) {
@@ -1366,6 +1367,16 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       sys.cbmcTrials.lookAheadDih = stringtoi(line[1]);
       printf("%-40s %-4d \n", "Info: CBMC look-ahead torsion samples",
              sys.cbmcTrials.lookAheadDih);
+    } else if (CheckString(line[0], "CBMC_LookAheadAng")) {
+      if (line.size() > 1)
+        sys.cbmcTrials.lookAheadAng = stringtoi(line[1]);
+      if (line.size() < 2 || sys.cbmcTrials.lookAheadAng < 0) {
+        std::cout << "Error: CBMC_LookAheadAng must be 0 (equilibrium angles) "
+                     "or a positive number of trials!\n";
+        exit(EXIT_FAILURE);
+      }
+      printf("%-40s %-4d \n", "Info: CBMC look-ahead angle trials",
+             sys.cbmcTrials.lookAheadAng);
     } else if (CheckString(line[0], "CBMC_RecoilThreshold")) {
       sys.cbmcTrials.recoil.threshold = stringtod(line[1]);
       printf("%-40s %-4.4f kT \n", "Info: CBMC recoil open threshold",
@@ -1849,12 +1860,18 @@ void ConfigSetup::verifyInputs(void) {
   int i;
 
   // look-ahead is on by default, so report it whether or not it was set
-  if (sys.cbmcTrials.lookAhead > 0)
-    printf("%-40s %u samples, %u torsions\n", "Info: CBMC look-ahead",
+  if (sys.cbmcTrials.lookAhead > 0) {
+    printf("%-40s %u samples, %u torsions, ", "Info: CBMC look-ahead",
            sys.cbmcTrials.lookAhead,
            sys.cbmcTrials.lookAheadDih > 0 ? sys.cbmcTrials.lookAheadDih
                                            : sys.cbmcTrials.bonded.dih);
-  else
+    if (sys.cbmcTrials.lookAheadAng == 0)
+      printf("equilibrium angles\n");
+    else
+      printf("%u angle trials\n", sys.cbmcTrials.lookAheadAng > 0
+                                      ? (uint)sys.cbmcTrials.lookAheadAng
+                                      : sys.cbmcTrials.bonded.ang);
+  } else
     printf("%-40s %-s \n", "Info: CBMC look-ahead", "Inactive");
 
 #ifdef VARIABLE_PARTICLE_NUMBER

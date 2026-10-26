@@ -30,6 +30,11 @@ public:
   void PrepareOld(TrialMol &oldMol, uint molIndex);
   // Generate a branch for an old-configuration trial (old bond lengths)
   void PrepareTrialOld(TrialMol &oldMol, uint molIndex);
+  // Branch for a look-ahead estimate (new bond lengths): nTrials sampled
+  // geometries as in PrepareNew, or the equilibrium geometry with unit
+  // weight when nTrials is 0. The look-ahead only needs an estimate, so any
+  // choice keeps the move exact.
+  void PrepareLookAhead(TrialMol &mol, uint molIndex, uint nTrials);
   // Restore a previously generated branch and its energies and weight
   void SetBranch(const double *th, const double *ph, double bend, double nb13,
                  double w);
@@ -52,7 +57,8 @@ public:
 
 private:
   void BranchFailure(TrialMol &mol) const;
-  void SampleTrials(TrialMol &mol, uint molIndex, bool useOld);
+  void SampleTrials(TrialMol &mol, uint molIndex, bool useOld, uint nTrials);
+  void SetEquilibriumBranch();
   void BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
                     const double *ph, bool useOld, double &bend,
                     double &nb13);
@@ -75,6 +81,9 @@ private:
   double bendEnergy, oneThree;
   double anchorBond, anchorBondOld;
   BranchSampler sampler;
+  // equilibrium branch geometry, computed on first use
+  bool haveEquilibrium = false;
+  double eqTheta[MAX_BONDS], eqPhi[MAX_BONDS];
 };
 } // namespace cbmc
 

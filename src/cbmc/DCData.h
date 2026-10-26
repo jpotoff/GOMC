@@ -43,9 +43,10 @@ public:
   const bool recoil;
   const uint recoilLength, recoilTrials;
   const double recoilThreshold; // kT; trials below it are always open
-  // one-step look-ahead in DCLinkedHedron: samples per LJ trial (0 = off)
-  // and torsion samples per look-ahead step
-  const uint lookAhead, lookAheadDih;
+  // one-step look-ahead in DCLinkedHedron: samples per LJ trial (0 = off),
+  // torsion samples per look-ahead step, and branch-angle trials per
+  // look-ahead step (0 = equilibrium angles)
+  const uint lookAhead, lookAheadDih, lookAheadAng;
   uint totalTrials;
 
   // used for both angles and dihedrals
@@ -94,6 +95,9 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
       lookAheadDih(set.config.sys.cbmcTrials.lookAheadDih > 0
                        ? set.config.sys.cbmcTrials.lookAheadDih
                        : set.config.sys.cbmcTrials.bonded.dih),
+      lookAheadAng(set.config.sys.cbmcTrials.lookAheadAng >= 0
+                       ? set.config.sys.cbmcTrials.lookAheadAng
+                       : set.config.sys.cbmcTrials.bonded.ang),
       positions(*multiPositions) {
   calcEwald = sys.GetEwald();
   uint maxLJTrials = nLJTrialsFirst;

@@ -246,6 +246,9 @@ struct CBMC {
   GrowRecoil recoil;
   uint lookAhead;    // look-ahead samples per LJ trial (0 = off)
   uint lookAheadDih; // torsion samples per look-ahead step (0 = CBMC_Dih)
+  // branch-angle trials per look-ahead step: 0 = equilibrium angles,
+  // -1 (unset) = CBMC_Ang
+  int lookAheadAng;
 };
 
 #if ENSEMBLE == GCMC

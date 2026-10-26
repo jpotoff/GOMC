@@ -7,6 +7,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #define BRANCHSAMPLER_H
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <vector>
 
@@ -64,11 +65,16 @@ public:
 
   // Draws one trial geometry. Returns false if no geometry satisfying the
   // rejection tests was found, which indicates inconsistent angle parameters.
+  // With w, also returns the trial's importance weight, equal to Weight() on
+  // the same geometry but reusing what the draw already computed.
   template <class RNG>
-  bool Sample(RNG &rng, double beta, double *th, double *ph);
+  bool Sample(RNG &rng, double beta, double *th, double *ph,
+              double *w = nullptr);
 
   // Importance weight of a branch geometry (new trial or old configuration).
-  double Weight(double beta, const double *th, const double *ph);
+  double Weight(double beta, const double *th, const double *ph) {
+    return WeightFrom(beta, th, ph, nullptr);
+  }
 
   // Angle between bonded atoms b and c from their spherical coordinates
   static double AngleBetween(double tb, double pb, double tc, double pc) {
@@ -80,6 +86,17 @@ public:
   int FailedFixedPair() const { return failedFixed; }
 
 private:
+  // What Sample() computed for branch atom b on its accepted try, so the
+  // weight need not compute it again. drew: phi[b] came from the Gaussian on
+  // the reference pair (not the uniform mixture component), so rChosen, the
+  // rest factor at phi[b], is known.
+  struct DrawState {
+    double lo, hi, z, mix;
+    bool drew;
+    double rChosen;
+  };
+  double WeightFrom(double beta, const double *th, const double *ph,
+                    const DrawState *st);
   const BendTable &Table(uint kind, double beta);
   template <class RNG> double SampleTheta(RNG &rng, uint kind, double beta);
   template <class RNG> double Normal(RNG &rng);
@@ -91,7 +108,9 @@ private:
   // the support and normalization of the truncated Gaussian on theta(b,c*)
   double MixFraction(uint b, double beta, const double *th, double &lo,
                      double &hi, double &z) const;
-  double PhiDensity(uint b, double beta, const double *th, const double *ph);
+  // x is the (b, c*) angle; st, if not null, holds b's state from Sample()
+  double PhiDensity(uint b, double beta, const double *th, const double *ph,
+                    double x, const DrawState *st);
   // Boltzmann factor of the pair angles of atom b at twist phi, excluding
   // fixed angles and (if skipRef) the reference pair
   double RestFactor(uint b, double beta, const double *th, const double *ph,
@@ -285,17 +304,24 @@ inline double BranchSampler::RestFactor(uint b, double beta, const double *th,
 
 // Proposal density of phi[b] given the thetas and the earlier twists
 inline double BranchSampler::PhiDensity(uint b, double beta, const double *th,
-                                        const double *ph) {
+                                        const double *ph, double x,
+                                        const DrawState *st) {
   using namespace branch_detail;
-  double lo, hi, z;
-  double mix = MixFraction(b, beta, th, lo, hi, z);
+  double lo, hi, z, mix;
+  if (st) {
+    lo = st->lo;
+    hi = st->hi;
+    z = st->z;
+    mix = st->mix;
+  } else {
+    mix = MixFraction(b, beta, th, lo, hi, z);
+  }
   double q = mix / (2.0 * M_PI);
   if (mix >= 1.0)
     return q;
   const uint c = ref[b];
   double d = remainder(ph[b] - ph[c], 2.0 * M_PI);
   double omega = std::abs(d);
-  double x = AngleBetween(th[b], ph[b], th[c], ph[c]);
   double sx = sin(x);
   if (sx < 1e-12 || x < lo || x > hi)
     return q;
@@ -304,8 +330,11 @@ inline double BranchSampler::PhiDensity(uint b, double beta, const double *th,
                  (sigma * sqrt(2.0 * M_PI) * z);
   // |d theta_bc / d phi_b|, from cos(theta_bc) = sin sin cos(omega) + cos cos
   double jac = sin(th[b]) * sin(th[c]) * sin(omega) / sx;
-  // probability of having chosen this mirror solution
-  double rThis = RestFactor(b, beta, th, ph, ph[b], true);
+  // probability of having chosen this mirror solution. rThis is the rest
+  // factor Sample() used at phi[b] (same argument, so the same value);
+  // rOther is evaluated at the mirror as reconstructed from phi[b].
+  double rThis = (st && st->drew) ? st->rChosen
+                                  : RestFactor(b, beta, th, ph, ph[b], true);
   double rOther = RestFactor(b, beta, th, ph, ph[c] - d, true);
   double pSign = (rThis + kSignFloor) / (rThis + rOther + 2.0 * kSignFloor);
   return q + (1.0 - mix) * gauss * jac * pSign;
@@ -313,9 +342,10 @@ inline double BranchSampler::PhiDensity(uint b, double beta, const double *th,
 
 template <class RNG>
 inline bool BranchSampler::Sample(RNG &rng, double beta, double *th,
-                                  double *ph) {
+                                  double *ph, double *w) {
   using namespace branch_detail;
   failedFixed = -1;
+  DrawState st[MAX_BONDS];
   for (unsigned long tries = 0; tries < kMaxTries; ++tries) {
     bool accepted = true;
     for (uint b = 0; b < nBonds && accepted; ++b) {
@@ -331,13 +361,14 @@ inline bool BranchSampler::Sample(RNG &rng, double beta, double *th,
       } else if (UseGaussian(b, beta)) {
         gaussian = true;
         const uint c = ref[b];
-        double lo, hi, z;
-        double mix = MixFraction(b, beta, th, lo, hi, z);
-        if (rng() < mix) {
+        DrawState &s = st[b];
+        s.mix = MixFraction(b, beta, th, s.lo, s.hi, s.z);
+        s.drew = false;
+        if (rng() < s.mix) {
           ph[b] = 2.0 * M_PI * rng();
         } else {
           double sigma = 1.0 / sqrt(beta * refCurv[b]);
-          double x = TruncNormal(rng, refMu[b], sigma, lo, hi, z);
+          double x = TruncNormal(rng, refMu[b], sigma, s.lo, s.hi, s.z);
           double cosOmega = (cos(x) - cos(th[b]) * cos(th[c])) /
                             (sin(th[b]) * sin(th[c]));
           double omega = acos(std::max(-1.0, std::min(1.0, cosOmega)));
@@ -345,23 +376,39 @@ inline bool BranchSampler::Sample(RNG &rng, double beta, double *th,
           double rMinus = RestFactor(b, beta, th, ph, ph[c] - omega, true);
           double pPlus =
               (rPlus + kSignFloor) / (rPlus + rMinus + 2.0 * kSignFloor);
-          ph[b] = ph[c] + (rng() < pPlus ? omega : -omega);
+          bool plus = rng() < pPlus;
+          ph[b] = ph[c] + (plus ? omega : -omega);
+          s.drew = true;
+          s.rChosen = plus ? rPlus : rMinus;
         }
       } else {
         ph[b] = 2.0 * M_PI * rng();
       }
 
-      // exact Boltzmann rejection on the remaining free pair angles
-      accepted = rng() < RestFactor(b, beta, th, ph, ph[b], gaussian);
+      // exact Boltzmann rejection on the remaining free pair angles. After a
+      // Gaussian draw the rest factor at phi[b] is the one just computed for
+      // the chosen sign: the same function at the same argument.
+      double rest = (gaussian && st[b].drew)
+                        ? st[b].rChosen
+                        : RestFactor(b, beta, th, ph, ph[b], gaussian);
+      accepted = rng() < rest;
     }
-    if (accepted)
+    if (accepted) {
+      if (w) {
+        *w = WeightFrom(beta, th, ph, st);
+        assert(std::abs(*w - Weight(beta, th, ph)) <=
+                   1e-12 * std::abs(Weight(beta, th, ph)) &&
+               "fused branch weight disagrees with Weight()");
+      }
       return true;
+    }
   }
   return false;
 }
 
-inline double BranchSampler::Weight(double beta, const double *th,
-                                    const double *ph) {
+inline double BranchSampler::WeightFrom(double beta, const double *th,
+                                        const double *ph,
+                                        const DrawState *st) {
   double w = 1.0;
   for (uint b = 1; b < nBonds; ++b) {
     if (!UseGaussian(b, beta))
@@ -370,7 +417,7 @@ inline double BranchSampler::Weight(double beta, const double *th,
     const uint k = kinds[b][c];
     double x = AngleBetween(th[b], ph[b], th[c], ph[c]);
     w *= exp(-beta * (ang->Calc(k, x) - Table(k, beta).uMin)) /
-         PhiDensity(b, beta, th, ph);
+         PhiDensity(b, beta, th, ph, x, st ? &st[b] : nullptr);
   }
   return w;
 }

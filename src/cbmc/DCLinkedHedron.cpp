@@ -402,7 +402,7 @@ double DCLinkedHedron::LookAheadValue(TrialMol &mol, uint molIndex,
 
   double sum = 0.0;
   for (uint s = 0; s < m; ++s) {
-    hed.PrepareNew(mol, molIndex);
+    hed.PrepareLookAhead(mol, molIndex, data->lookAheadAng);
     XYZ base[MAX_BONDS];
     for (uint b = 0; b < hed.NumBond(); ++b)
       base[b] = mol.RawRectCoords(bondLength[b], hed.Theta(b), hed.Phi(b));
