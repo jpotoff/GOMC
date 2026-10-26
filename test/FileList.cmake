@@ -12,12 +12,14 @@ set(TestSources
     test/src/BranchSamplerTest.cpp
     test/src/RecoilGrowthTest.cpp
     test/src/LookAheadCBMCTest.cpp
+    test/src/RigidBodyHMCTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )
 
 set(TestHeaders
     lib/NumLib.h
+    src/RigidBody.h
     src/EwaldRealTable.h
 )
 
