@@ -31,6 +31,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "MoveConst.h" //For array of move objects.
 #include "MultiParticle.h"
 #include "MultiParticleBrownianMotion.h"
+#include "HybridMC.h"
 #include "NeMTMC.h"
 #include "NoEwald.h"
 #include "Regrowth.h"
@@ -168,6 +169,7 @@ void System::InitMoves(Setup const &set) {
   moves[mv::DISPLACE] = new Translate(*this, statV);
   moves[mv::MULTIPARTICLE] = new MultiParticle(*this, statV);
   moves[mv::MULTIPARTICLE_BM] = new MultiParticleBrownian(*this, statV);
+  moves[mv::HYBRID_MC] = new HybridMC(*this, statV);
   moves[mv::ROTATE] = new Rotate(*this, statV);
   moves[mv::INTRA_SWAP] = new IntraSwap(*this, statV);
   moves[mv::REGROWTH] = new Regrowth(*this, statV);

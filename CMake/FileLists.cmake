@@ -143,6 +143,7 @@ set(headers
    src/PSFOutput.h
    src/Random123Wrapper.h
    src/Reader.h
+   src/RigidBody.h
    src/SeedReader.h
    src/Setup.h
    src/SimEventFrequency.h
@@ -176,6 +177,7 @@ set(headers
    src/cbmc/DCSingle.h
    src/cbmc/TrialMol.h
    src/moves/CrankShaft.h
+   src/moves/HybridMC.h
    src/moves/IntraMoleculeExchange1.h
    src/moves/IntraMoleculeExchange2.h
    src/moves/IntraMoleculeExchange3.h

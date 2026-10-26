@@ -138,6 +138,13 @@ void ConsoleOutput::PrintMove(const uint box, const ulong step) const {
       printElement(var->GetAcceptPercent(box, sub), elementWidth);
     }
 
+    if (var->Performed(mv::HYBRID_MC)) {
+      sub = mv::HYBRID_MC;
+      printElement(var->GetTries(box, sub), elementWidth);
+      printElement(var->GetAccepted(box, sub), elementWidth);
+      printElement(var->GetAcceptPercent(box, sub), elementWidth);
+    }
+
     if (var->Performed(mv::INTRA_SWAP)) {
       sub = mv::INTRA_SWAP;
       printElement(var->GetTries(box, sub), elementWidth);
@@ -410,6 +417,12 @@ void ConsoleOutput::PrintMoveTitle() {
     printElement("MULTIPARTICLEBM", elementWidth);
     printElement("MPBMACCEPT", elementWidth);
     printElement("MPBMACCEPT%", elementWidth);
+  }
+
+  if (var->Performed(mv::HYBRID_MC)) {
+    printElement("HYBRIDMC", elementWidth);
+    printElement("HMCACCEPT", elementWidth);
+    printElement("HMCACCEPT%", elementWidth);
   }
 
   if (var->Performed(mv::INTRA_SWAP)) {

@@ -202,6 +202,7 @@ set(GOMCHeaders
    src/cbmc/TrialMol.h
    src/moves/NeMTMC.h
    src/moves/CrankShaft.h
+   src/moves/HybridMC.h
    src/moves/IntraMoleculeExchange1.h
    src/moves/IntraMoleculeExchange2.h
    src/moves/IntraMoleculeExchange3.h

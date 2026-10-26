@@ -206,7 +206,7 @@ protected:
   const SystemPotential &sysPotRef;
   const Lambda &lambdaRef;
 
-  bool electrostatic, ewald, multiParticleEnabled;
+  bool electrostatic, ewald, forcesEnabled;
   double alpha;
   double recip_rcut, recip_rcut_Sq;
   uint *imageSize;

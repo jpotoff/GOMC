@@ -64,6 +64,9 @@ void StaticVals::InitMovePercents(config_setup::MovePercents const &perc) {
     case mv::INTRA_TARGETED_SWAP:
       movePerc[m] = perc.intraTargetedSwap;
       break;
+    case mv::HYBRID_MC:
+      movePerc[m] = perc.hybridMC;
+      break;
 #ifdef VARIABLE_VOLUME
     case mv::VOL_TRANSFER:
       movePerc[m] = perc.volume;
@@ -137,6 +140,14 @@ StaticVals::StaticVals(Setup &set)
   multiParticleEnabled = set.config.sys.moves.multiParticleEnabled;
   multiParticleLiquid = set.config.sys.moves.multiParticleLiquid;
   multiParticleGas = set.config.sys.moves.multiParticleGas;
+  forcesEnabled =
+      multiParticleEnabled || set.config.sys.moves.hybridMC > 0.0;
+  hmcTimeStep = set.config.sys.moves.hmcTimeStep;
+  hmcStepsMin = set.config.sys.moves.hmcStepsMin;
+  hmcStepsMax = set.config.sys.moves.hmcStepsMax;
+  hmcAdjust = set.config.sys.moves.hmcAdjust;
+  hmcLiquid = set.config.sys.moves.hmcLiquid;
+  hmcGas = set.config.sys.moves.hmcGas;
   isOrthogonal = true;
   if (set.config.in.restart.enable) {
     IsBoxOrthogonal(set.pdb.cryst.cellAngle);

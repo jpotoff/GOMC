@@ -32,24 +32,30 @@ const uint REGROWTH = 5;
 const uint INTRA_MEMC = 6;
 const uint CRANKSHAFT = 7;
 const uint INTRA_TARGETED_SWAP = 8;
+// Hybrid MC is appended after the last move of each ensemble, so adding it
+// left every older move number (and checkpoint layout) unchanged
 #if ENSEMBLE == NVT
-const uint MOVE_KINDS_TOTAL = 9;
+const uint HYBRID_MC = 9;
+const uint MOVE_KINDS_TOTAL = 10;
 #elif ENSEMBLE == GCMC
 const uint MEMC = 9;
 const uint MOL_TRANSFER = 10;
 const uint NE_MTMC = 11;
 const uint TARGETED_SWAP = 12;
-const uint MOVE_KINDS_TOTAL = 13;
+const uint HYBRID_MC = 13;
+const uint MOVE_KINDS_TOTAL = 14;
 #elif ENSEMBLE == GEMC
 const uint MEMC = 9;
 const uint MOL_TRANSFER = 10;
 const uint NE_MTMC = 11;
 const uint TARGETED_SWAP = 12;
 const uint VOL_TRANSFER = 13;
-const uint MOVE_KINDS_TOTAL = 14;
+const uint HYBRID_MC = 14;
+const uint MOVE_KINDS_TOTAL = 15;
 #elif ENSEMBLE == NPT
 const uint VOL_TRANSFER = 9;
-const uint MOVE_KINDS_TOTAL = 10;
+const uint HYBRID_MC = 10;
+const uint MOVE_KINDS_TOTAL = 11;
 #endif
 
 const uint BOX0 = 0;

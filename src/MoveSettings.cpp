@@ -124,7 +124,7 @@ void MoveSettings::Update(const uint move, const bool isAccepted,
   // for any move that we don't care about kind of molecule, it should be
   // included in the if condition
   if (move == mv::INTRA_MEMC || move == mv::MULTIPARTICLE ||
-      move == mv::MULTIPARTICLE_BM
+      move == mv::MULTIPARTICLE_BM || move == mv::HYBRID_MC
 #if ENSEMBLE == GEMC || ENSEMBLE == GCMC
       || move == mv::MEMC
 #endif
@@ -269,7 +269,7 @@ uint MoveSettings::GetAcceptTot(const uint box, const uint move) const {
   }
 
   if (move == mv::INTRA_MEMC || move == mv::MULTIPARTICLE ||
-      move == mv::MULTIPARTICLE_BM
+      move == mv::MULTIPARTICLE_BM || move == mv::HYBRID_MC
 #if ENSEMBLE == GEMC || ENSEMBLE == GCMC
       || move == mv::MEMC
 #endif
@@ -297,7 +297,7 @@ uint MoveSettings::GetTrialTot(const uint box, const uint move) const {
   }
 
   if (move == mv::INTRA_MEMC || move == mv::MULTIPARTICLE ||
-      move == mv::MULTIPARTICLE_BM
+      move == mv::MULTIPARTICLE_BM || move == mv::HYBRID_MC
 #if ENSEMBLE == GEMC || ENSEMBLE == GCMC
       || move == mv::MEMC
 #endif

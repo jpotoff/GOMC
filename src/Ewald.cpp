@@ -62,7 +62,7 @@ Ewald::Ewald(StaticVals &stat, System &sys)
   alpha = 0.0;
   recip_rcut = 0.0;
   recip_rcut_Sq = 0.0;
-  multiParticleEnabled = stat.multiParticleEnabled;
+  forcesEnabled = stat.forcesEnabled;
 }
 
 Ewald::~Ewald() {
@@ -2240,7 +2240,7 @@ void compareDouble(const double &x, const double &y, const int &i) {
 void Ewald::BoxForceReciprocal(XYZArray const &molCoords,
                                XYZArray &atomForceRec, XYZArray &molForceRec,
                                uint box) {
-  if (multiParticleEnabled && (box < BOXES_WITH_U_NB)) {
+  if (forcesEnabled && (box < BOXES_WITH_U_NB)) {
     GOMC_EVENT_START(1, GomcProfileEvent::RECIP_BOX_FORCE);
     // M_2_SQRTPI is 2/sqrt(PI)
     double constValue = ff.alpha[box] * M_2_SQRTPI;

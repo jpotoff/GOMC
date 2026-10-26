@@ -85,6 +85,11 @@ ConfigSetup::ConfigSetup(void) {
   sys.moves.multiParticleGas = false;
   sys.moves.multiParticle = DBL_MAX;
   sys.moves.multiParticleBrownian = DBL_MAX;
+  sys.moves.hybridMC = 0.0;
+  sys.moves.hmcTimeStep = 2.0;
+  sys.moves.hmcStepsMin = sys.moves.hmcStepsMax = 100;
+  sys.moves.hmcAdjust = true;
+  sys.moves.hmcLiquid = sys.moves.hmcGas = true;
   sys.moves.regrowth = DBL_MAX;
   sys.moves.crankShaft = DBL_MAX;
   sys.moves.intraTargetedSwap = DBL_MAX;
@@ -820,6 +825,42 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       sys.moves.multiParticleGas = checkBool(line[1]);
       printf("%-40s %-s \n", "Info: Multi-Particle gas box move",
              sys.moves.multiParticleGas ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "HMCFreq")) {
+      sys.moves.hybridMC = stringtod(line[1]);
+      printf("%-40s %-4.4f \n", "Info: Hybrid MC move frequency",
+             sys.moves.hybridMC);
+    } else if (CheckString(line[0], "HMCTimeStep")) {
+      sys.moves.hmcTimeStep = stringtod(line[1]);
+      if (!(sys.moves.hmcTimeStep > 0.0)) {
+        std::cout << "Error: HMCTimeStep must be positive (fs)!\n";
+        exit(EXIT_FAILURE);
+      }
+      printf("%-40s %-4.4f fs \n", "Info: Hybrid MC time step",
+             sys.moves.hmcTimeStep);
+    } else if (CheckString(line[0], "HMCSteps")) {
+      // HMCSteps L, or HMCSteps Lmin Lmax to draw L uniformly per move
+      sys.moves.hmcStepsMin = stringtoi(line[1]);
+      sys.moves.hmcStepsMax =
+          line.size() > 2 ? stringtoi(line[2]) : sys.moves.hmcStepsMin;
+      if (sys.moves.hmcStepsMin < 1 ||
+          sys.moves.hmcStepsMax < sys.moves.hmcStepsMin) {
+        std::cout << "Error: HMCSteps needs 1 <= Lmin <= Lmax!\n";
+        exit(EXIT_FAILURE);
+      }
+      printf("%-40s %u - %u \n", "Info: Hybrid MC steps per trajectory",
+             sys.moves.hmcStepsMin, sys.moves.hmcStepsMax);
+    } else if (CheckString(line[0], "HMCAdjust")) {
+      sys.moves.hmcAdjust = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: Hybrid MC time step adjustment",
+             sys.moves.hmcAdjust ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "HMCLiquid")) {
+      sys.moves.hmcLiquid = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: Hybrid MC liquid box move",
+             sys.moves.hmcLiquid ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "HMCGas")) {
+      sys.moves.hmcGas = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: Hybrid MC gas box move",
+             sys.moves.hmcGas ? "Active" : "Inactive");
     } else if (CheckString(line[0], "MultiParticleBrownianFreq")) {
       sys.moves.multiParticleBrownian = stringtod(line[1]);
       if (sys.moves.multiParticleBrownian > 0.0) {
@@ -2106,6 +2147,11 @@ void ConfigSetup::verifyInputs(void) {
     }
   }
 
+  if (sys.moves.hybridMC > 0.0 && !sys.moves.hmcLiquid && !sys.moves.hmcGas) {
+    std::cout << "ERROR: Hybrid MC moves require either liquid or gas box "
+              << "active!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   if (sys.moves.multiParticleEnabled && !sys.moves.multiParticleLiquid &&
       !sys.moves.multiParticleGas) {
     std::cout << "ERROR: Multi-Particle moves require either liquid or gas "
@@ -2161,7 +2207,7 @@ void ConfigSetup::verifyInputs(void) {
                sys.moves.memc + sys.moves.intraMemc + sys.moves.crankShaft +
                sys.moves.multiParticle + sys.moves.multiParticleBrownian +
                sys.moves.neMolTransfer + sys.moves.targetedSwap +
-               sys.moves.intraTargetedSwap - 1.0) > 0.001) {
+               sys.moves.intraTargetedSwap + sys.moves.hybridMC - 1.0) > 0.001) {
     std::cout << "ERROR: Sum of move frequencies is not equal to one!\n";
     exit(EXIT_FAILURE);
   }
@@ -2181,8 +2227,8 @@ void ConfigSetup::verifyInputs(void) {
   if (std::abs(sys.moves.displace + sys.moves.rotate + sys.moves.intraSwap +
                sys.moves.volume + sys.moves.regrowth + sys.moves.intraMemc +
                sys.moves.crankShaft + sys.moves.multiParticle +
-               sys.moves.multiParticleBrownian + sys.moves.intraTargetedSwap -
-               1.0) > 0.001) {
+               sys.moves.multiParticleBrownian + sys.moves.intraTargetedSwap +
+               sys.moves.hybridMC - 1.0) > 0.001) {
     std::cout << "ERROR: Sum of move frequencies is not equal to one!\n";
     exit(EXIT_FAILURE);
   }
@@ -2204,7 +2250,7 @@ void ConfigSetup::verifyInputs(void) {
                sys.moves.intraMemc + sys.moves.crankShaft +
                sys.moves.multiParticle + sys.moves.multiParticleBrownian +
                sys.moves.neMolTransfer + sys.moves.targetedSwap +
-               sys.moves.intraTargetedSwap - 1.0) > 0.001) {
+               sys.moves.intraTargetedSwap + sys.moves.hybridMC - 1.0) > 0.001) {
     std::cout << "ERROR: Sum of move frequencies is not equal to one!!\n";
     exit(EXIT_FAILURE);
   }
@@ -2212,7 +2258,7 @@ void ConfigSetup::verifyInputs(void) {
   if (std::abs(sys.moves.displace + sys.moves.rotate + sys.moves.intraSwap +
                sys.moves.regrowth + sys.moves.intraMemc + sys.moves.crankShaft +
                sys.moves.multiParticle + sys.moves.multiParticleBrownian +
-               sys.moves.intraTargetedSwap - 1.0) > 0.001) {
+               sys.moves.intraTargetedSwap + sys.moves.hybridMC - 1.0) > 0.001) {
     std::cout << "ERROR: Sum of move frequencies is not equal to one!!\n";
     exit(EXIT_FAILURE);
   }

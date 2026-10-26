@@ -117,6 +117,17 @@ inline std::string MoveTypetoStr(uint moveType) {
     break;
 #endif
 #endif
+#if ENSEMBLE == NVT
+  case 9:
+#elif ENSEMBLE == NPT
+  case 10:
+#elif ENSEMBLE == GCMC
+  case 13:
+#elif ENSEMBLE == GEMC
+  case 14:
+#endif
+    moveTypeStr = "Hybrid MC";
+    break;
   default:
     moveTypeStr =
         "Update MoveTypetoStr() function in lib/StrLib.h!!! Undefined";

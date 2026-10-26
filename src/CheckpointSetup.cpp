@@ -135,6 +135,21 @@ void CheckpointSetup::SetMoveSettings() {
   moveSetRef.mp_r_max = chkObj.mp_r_maxVec;
   moveSetRef.mp_t_max = chkObj.mp_t_maxVec;
   moveSetRef.isSingleMoveAccepted = chkObj.isSingleMoveAcceptedVec;
+  // A checkpoint written before a move kind was appended (Hybrid MC) has one
+  // move fewer per box; give the new kinds zeroed statistics
+  auto pad = [](auto &v) {
+    for (auto &box : v)
+      if (!box.empty() && box.size() < mv::MOVE_KINDS_TOTAL)
+        box.resize(mv::MOVE_KINDS_TOTAL,
+                   typename std::decay_t<decltype(box)>::value_type(
+                       box[0].size()));
+  };
+  pad(moveSetRef.scale);
+  pad(moveSetRef.acceptPercent);
+  pad(moveSetRef.accepted);
+  pad(moveSetRef.tries);
+  pad(moveSetRef.tempAccepted);
+  pad(moveSetRef.tempTries);
 }
 
 void CheckpointSetup::SetPRNGVariables() {

@@ -172,6 +172,12 @@ struct MovePercents {
       multiParticle, multiParticleBrownian, intraTargetedSwap;
   bool multiParticleEnabled; // for both multiparticle and multiparticleBrownian
   bool multiParticleLiquid, multiParticleGas; // GEMC: set boxes for MP moves
+  // rigid-body hybrid MC (src/moves/HybridMC.h)
+  double hybridMC;    // move frequency
+  double hmcTimeStep; // fs
+  uint hmcStepsMin, hmcStepsMax;
+  bool hmcAdjust;          // tune the time step during equilibration
+  bool hmcLiquid, hmcGas;  // GEMC: boxes the move acts on
 #ifdef VARIABLE_VOLUME
   double volume;
 #endif

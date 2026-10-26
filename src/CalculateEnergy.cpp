@@ -141,7 +141,7 @@ void CalculateEnergy::Init(System &sys) {
   calcEwald = sys.GetEwald();
   electrostatic = forcefield.electrostatic;
   ewald = forcefield.ewald;
-  multiParticleEnabled = sys.statV.multiParticleEnabled;
+  forcesEnabled = sys.statV.forcesEnabled;
   for (uint m = 0; m < mols.count; ++m) {
     const MoleculeKind &molKind = mols.GetKind(m);
     if (molKind.NumAtoms() > maxAtomInMol)
@@ -3327,7 +3327,7 @@ void CalculateEnergy::CalculateTorque(std::vector<uint> &moleculeIndex,
                                       XYZArray const &atomForce,
                                       XYZArray const &atomForceRec,
                                       XYZArray &molTorque, const uint box) {
-  if (multiParticleEnabled && (box < BOXES_WITH_U_NB)) {
+  if (forcesEnabled && (box < BOXES_WITH_U_NB)) {
     GOMC_EVENT_START(1, GomcProfileEvent::BOX_TORQUE);
     // make a pointer to mol torque for OpenMP
     double *torquex = molTorque.x;
@@ -3366,7 +3366,7 @@ void CalculateEnergy::CalculateTorque(std::vector<uint> &moleculeIndex,
 
 void CalculateEnergy::ResetForce(XYZArray &atomForce, XYZArray &molForce,
                                  uint box) {
-  if (multiParticleEnabled) {
+  if (forcesEnabled) {
     uint length, start;
 
     // molecule iterator

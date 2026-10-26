@@ -372,7 +372,7 @@ private:
   const Lambda &lambdaRef;
   XYZArray &atomForceRef;
   XYZArray &molForceRef;
-  bool multiParticleEnabled;
+  bool forcesEnabled; // multiparticle or hybrid MC moves need forces
   bool electrostatic, ewald;
 
   // stores kindIndex for each global atom idx

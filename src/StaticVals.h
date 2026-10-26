@@ -38,6 +38,11 @@ public:
   bool isOrthogonal;
   bool multiParticleEnabled;
   bool multiParticleLiquid, multiParticleGas;
+  // forces are computed (multiparticle or hybrid MC moves)
+  bool forcesEnabled;
+  double hmcTimeStep;
+  uint hmcStepsMin, hmcStepsMax;
+  bool hmcAdjust, hmcLiquid, hmcGas;
 
   Forcefield forcefield;
   SimEventFrequency simEventFreq;
