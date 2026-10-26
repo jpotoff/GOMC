@@ -215,6 +215,15 @@ struct FFAdapter : public FFParticle {
     return VdwEval::template EnergyFixed<NEXP>(p, distSq, idx);
   }
 
+  //
+  // CalcEnFullInRange against a view the caller already built, for any
+  // exponent: the same evaluation, minus the per-pair VdwView().
+  //
+  double CalcEnFullInRangeAt(const ff::VdwParams &p, const double distSq,
+                             const uint idx) const {
+    return VdwEval::Energy(p, distSq, idx);
+  }
+
   void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
                    const uint kind2) const override {
     if (forcefield.rCutSq < distSq)

@@ -1860,30 +1860,53 @@ void CalculateEnergy::ParticleNonbondedTemplate(
     return;
 
   GOMC_EVENT_START(1, GomcProfileEvent::EN_CBMC_INTRA_NB);
+  // One partner at a time against every trial position. The trial coordinates
+  // are contiguous, so DistSqRange vectorises over the trials, and it is the
+  // same arithmetic as InRcut (partner - trial instead of trial - partner;
+  // the minimum image is odd, so the squares are identical). The parameter
+  // view and pair index are built once per call and per partner rather than
+  // per pair, which is most of what CalcEn spent. The look-ahead calls this
+  // for every torsion sample, which made it a hot spot.
+  //
+  // Pair set, values and summation order are those of the per-pair form:
+  // LJ first, then Coulomb, for each partner in sortedNB order; the zero
+  // contributions the old form added are skipped.
   const MoleculeKind &kind = trialMol.GetKind();
   const uint *partner = kind.sortedNB.Begin(partIndex);
   const uint *end = kind.sortedNB.End(partIndex);
-  while (partner != end) {
-    if (trialMol.AtomExists(*partner)) {
-      for (uint t = 0; t < trials; ++t) {
-        double distSq;
-        if (boxAxes.InRcut(distSq, trialPos, t, trialMol.GetCoords(), *partner,
-                           box)) {
-          inter[t] += ff.FFType::CalcEn(
-              distSq, kind.AtomKind(partIndex), kind.AtomKind(*partner), 1.0);
-          if (electrostatic) {
-            double qi_qj_fact = kind.AtomCharge(partIndex) *
-                                kind.AtomCharge(*partner) * num::qqFact;
-
-            if (qi_qj_fact != 0.0) {
-              ff.FFType::CalcCoulombAdd_1_4(inter[t], distSq,
-                                                       qi_qj_fact, true);
-            }
-          }
-        }
+  const XYZArray &coords = trialMol.GetCoords();
+  const ff::VdwParams vp = ff.VdwView();
+  const uint stride = ff.KindCount();
+  const uint kindI = kind.AtomKind(partIndex);
+  const double rCutSqBox = boxAxes.rCutSq[box];
+  const double rCutSqVdw = forcefield.rCutSq;
+  double distSq[GOMC_DISTSQ_CHUNK];
+  for (; partner != end; ++partner) {
+    if (!trialMol.AtomExists(*partner))
+      continue;
+    const uint idx = kindI + kind.AtomKind(*partner) * stride; // FlatIndex
+    const double qi_qj_fact =
+        electrostatic
+            ? kind.AtomCharge(partIndex) * kind.AtomCharge(*partner) *
+                  num::qqFact
+            : 0.0;
+    for (uint base = 0; base < trials; base += GOMC_DISTSQ_CHUNK) {
+      const int m = (int)std::min<uint>(GOMC_DISTSQ_CHUNK, trials - base);
+      boxAxes.BoxType::DistSqRange(distSq, coords.x[*partner],
+                                   coords.y[*partner], coords.z[*partner],
+                                   trialPos.x + base, trialPos.y + base,
+                                   trialPos.z + base, m, box);
+      for (int k = 0; k < m; ++k) {
+        const double d = distSq[k];
+        if (!(rCutSqBox > d))
+          continue;
+        double &en = inter[base + k];
+        if (!(rCutSqVdw < d))
+          en += ff.CalcEnFullInRangeAt(vp, d, idx);
+        if (qi_qj_fact != 0.0)
+          ff.FFType::CalcCoulombAdd_1_4(en, d, qi_qj_fact, true);
       }
     }
-    ++partner;
   }
   GOMC_EVENT_STOP(1, GomcProfileEvent::EN_CBMC_INTRA_NB);
 }
