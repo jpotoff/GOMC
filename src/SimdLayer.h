@@ -23,8 +23,10 @@ A copy of the MIT License can be found in License.txt with this program or at
 // Lane counts are 4 or 8 and the kernel's tile is 16 pairs (4 i-atoms by 4
 // j-atoms), so a tile is 4 or 2 registers. The lane layout within a tile is
 // i-major: pair (i, j) is lane 4*i + j. Hence LoadJ4, which repeats a
-// j-cluster's 4 values across the register, and FoldJ4, which sums the lanes
-// that belong to the same j.
+// j-cluster's 4 values across the register; LoadRows, which fills each group
+// of 4 lanes (one i) from its own 4 contiguous values, row[0] for the first
+// i of the register, row[1] for the second (W = 8 only); and FoldJ4, which
+// sums the lanes that belong to the same j.
 //
 // The one non-elementwise operation that matters for speed is TableEnVir.
 // Each pair's real-space Ewald coefficients (energy and virial cubics, see
@@ -59,6 +61,7 @@ struct Generic {
   static Vec Set1(const double a) { return {{a, a, a, a}}; }
   static Vec Load(const double *p) { return {{p[0], p[1], p[2], p[3]}}; }
   static Vec LoadJ4(const double *p) { return Load(p); }
+  static Vec LoadRows(const double *const *row) { return Load(row[0]); }
   static void Store(double *p, const Vec &a) {
     for (int k = 0; k < 4; ++k)
       p[k] = a.v[k];
@@ -170,6 +173,9 @@ struct Avx2 {
   static Vec Set1(const double a) { return _mm256_set1_pd(a); }
   static Vec Load(const double *p) { return _mm256_loadu_pd(p); }
   static Vec LoadJ4(const double *p) { return _mm256_loadu_pd(p); }
+  static Vec LoadRows(const double *const *row) {
+    return _mm256_loadu_pd(row[0]);
+  }
   static void Store(double *p, const Vec a) { _mm256_storeu_pd(p, a); }
   static Vec Add(const Vec a, const Vec b) { return _mm256_add_pd(a, b); }
   static Vec Sub(const Vec a, const Vec b) { return _mm256_sub_pd(a, b); }
@@ -258,6 +264,10 @@ struct Avx512 {
   static Vec Load(const double *p) { return _mm512_loadu_pd(p); }
   static Vec LoadJ4(const double *p) {
     return _mm512_broadcast_f64x4(_mm256_loadu_pd(p));
+  }
+  static Vec LoadRows(const double *const *row) {
+    return _mm512_insertf64x4(_mm512_castpd256_pd512(_mm256_loadu_pd(row[0])),
+                              _mm256_loadu_pd(row[1]), 1);
   }
   static void Store(double *p, const Vec a) { _mm512_storeu_pd(p, a); }
   static Vec Add(const Vec a, const Vec b) { return _mm512_add_pd(a, b); }

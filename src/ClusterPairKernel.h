@@ -32,6 +32,15 @@ A copy of the MIT License can be found in License.txt with this program or at
 // a Coulomb pair falls outside the table; the caller then uses the reference
 // kernel for this evaluation.
 //
+// LJ parameters depend on the kinds of both atoms. Rather than gathering
+// them per lane from the kind-pair matrix, Compute first copies, for every
+// kind k and every slot s, the matrix entry for (k, kind of s) into per-kind
+// rows. A tile row (one i-atom against the 4 j-atoms) is then 4 contiguous
+// values of the i-atom's kind's row: plain loads, and the same numbers the
+// matrix holds, so NBFIX and per-pair Mie parameters are unaffected. The rows
+// take (3 or 4) * kinds * slots doubles; past kRowBytesMax the kernel gathers
+// from the matrix instead.
+//
 
 #include <algorithm>
 #include <cmath>
@@ -74,7 +83,14 @@ public:
   // real-space table.
   //
   template <class B, bool HasCharge, bool Shift, uint NEXP>
-  bool Compute(const Params &P, double &enReal, double &enLJ);
+  bool Compute(const Params &P, double &enReal, double &enLJ) {
+    const size_t nPar = Shift ? 4 : 3;
+    if (nPar * P.stride * CS * nClusters * sizeof(double) <= kRowBytesMax) {
+      FillRows<Shift>(P);
+      return Tiles<B, HasCharge, Shift, NEXP, true>(P, enReal, enLJ);
+    }
+    return Tiles<B, HasCharge, Shift, NEXP, false>(P, enReal, enLJ);
+  }
 
   //! Add the forces of the last successful Compute to atom-order arrays.
   void AddForces(double *ax, double *ay, double *az) const {
@@ -98,6 +114,12 @@ public:
   const std::vector<double> &ForceZ() const { return fZ; }
 
 private:
+  static constexpr size_t kRowBytesMax = 8u << 20;
+
+  template <bool Shift> void FillRows(const Params &P);
+  template <class B, bool HasCharge, bool Shift, uint NEXP, bool Rows>
+  bool Tiles(const Params &P, double &enReal, double &enLJ);
+
   bool Near(const int a, const int b) const {
     double d2 = 0.0;
     for (int ax = 0; ax < 3; ++ax) {
@@ -141,6 +163,11 @@ private:
   std::vector<int> jThread, jOff, jLen;
   std::vector<const int *> jPtr;
   long listSize = 0;
+
+  // Per-kind LJ rows: parameter p of kind k against slot s is
+  // pRow[(p * kinds + k) * slots + s], p = sigmaSq, epsilon_cn, epsilon_cn_6
+  // and shiftConst.
+  std::vector<double> pRow;
 
   // Cluster-order forces.
   std::vector<double> fX, fY, fZ;
@@ -312,9 +339,30 @@ inline void ClusterPairKernel::ScanPairs(const int ci,
   }
 }
 
-template <class B, bool HasCharge, bool Shift, uint NEXP>
-inline bool ClusterPairKernel::Compute(const Params &P, double &enReal,
-                                       double &enLJ) {
+template <bool Shift> inline void ClusterPairKernel::FillRows(const Params &P) {
+  const int nPar = Shift ? 4 : 3;
+  const int K = (int)P.stride;
+  const int ns = CS * nClusters;
+  const double *const par[4] = {P.vp.sigmaSq, P.vp.epsilon_cn,
+                                P.vp.epsilon_cn_6, P.vp.shiftConst};
+  pRow.resize((size_t)nPar * K * ns);
+  double *const out = pRow.data();
+  const int *const kc = kindC.data();
+#if defined _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+  for (int p = 0; p < nPar; ++p)
+    for (int k = 0; k < K; ++k) {
+      const double *const src = par[p] + k;
+      double *const row = out + ((size_t)p * K + k) * ns;
+      for (int s = 0; s < ns; ++s)
+        row[s] = src[kc[s] * K];
+    }
+}
+
+template <class B, bool HasCharge, bool Shift, uint NEXP, bool Rows>
+inline bool ClusterPairKernel::Tiles(const Params &P, double &enReal,
+                                     double &enLJ) {
   typedef typename B::Vec V;
   typedef typename B::Mask M;
   constexpr int W = B::W;
@@ -336,6 +384,7 @@ inline bool ClusterPairKernel::Compute(const Params &P, double &enReal,
   const double *const qc = qC.data();
   const double *const mc = molC.data();
   const int *const kc = kindC.data();
+  const double *const rowBase = pRow.data();
   const int *const *const jp = jPtr.data();
   const int *const jn = jLen.data();
   const int nCl = nClusters;
@@ -362,6 +411,14 @@ inline bool ClusterPairKernel::Compute(const Params &P, double &enReal,
     // l / 4.
     alignas(64) double xI[16], yI[16], zI[16], qI[16], mI[16];
     int kI[16];
+    // Rows: rowI[p][u] is parameter p's row for i-atom u's kind.
+    const double *rowI[4][CS];
+    if constexpr (Rows) {
+      const size_t ns_ = (size_t)ns, K = P.stride;
+      for (int p = 0; p < (Shift ? 4 : 3); ++p)
+        for (int u = 0; u < CS; ++u)
+          rowI[p][u] = rowBase + (p * K + kc[CS * ci + u]) * ns_;
+    }
     for (int l = 0; l < 16; ++l) {
       const int a = CS * ci + l / 4;
       xI[l] = xc[a];
@@ -386,8 +443,22 @@ inline bool ClusterPairKernel::Compute(const Params &P, double &enReal,
       if constexpr (HasCharge)
         qJ = B::LoadJ4(qc + b4);
       alignas(64) int idx[16];
-      for (int l = 0; l < 16; ++l)
-        idx[l] = kI[l] + kc[b4 + (l & 3)] * (int)P.stride;
+      if constexpr (!Rows)
+        for (int l = 0; l < 16; ++l)
+          idx[l] = kI[l] + kc[b4 + (l & 3)] * (int)P.stride;
+      // LJ parameter p for tile register r.
+      auto param = [&](const int p, const int r) -> V {
+        if constexpr (Rows) {
+          const double *row[W / 4];
+          for (int h = 0; h < W / 4; ++h)
+            row[h] = rowI[p][r * (W / 4) + h] + b4;
+          return B::LoadRows(row);
+        } else {
+          const double *const par[4] = {P.vp.sigmaSq, P.vp.epsilon_cn,
+                                        P.vp.epsilon_cn_6, P.vp.shiftConst};
+          return B::Gather(par[p], idx + r * W);
+        }
+      };
       const M validJ = B::Ge(mJ, zero);
       V fjX = zero, fjY = zero, fjZ = zero;
 
@@ -410,8 +481,7 @@ inline bool ClusterPairKernel::Compute(const Params &P, double &enReal,
         const M mV = B::And(pair, B::Le(d, rcV));
         const V dV = B::Select(mV, d, one);
         const V inv = B::Div(one, dV);
-        const int *ix = idx + r * W;
-        const V rr = B::Mul(B::Gather(P.vp.sigmaSq, ix), inv);
+        const V rr = B::Mul(param(0, r), inv);
         const V rr2 = B::Mul(rr, rr);
         const V att = B::Mul(rr2, rr);
         V rep;
@@ -422,11 +492,11 @@ inline bool ClusterPairKernel::Compute(const Params &P, double &enReal,
           const V rr4 = B::Mul(rr2, rr2);
           rep = B::Mul(rr4, rr4);
         }
-        V enL = B::Mul(B::Gather(P.vp.epsilon_cn, ix), B::Sub(rep, att));
+        V enL = B::Mul(param(1, r), B::Sub(rep, att));
         if constexpr (Shift)
-          enL = B::Sub(enL, B::Gather(P.vp.shiftConst, ix));
+          enL = B::Sub(enL, param(3, r));
         const V virL =
-            B::Mul(B::Mul(B::Gather(P.vp.epsilon_cn_6, ix),
+            B::Mul(B::Mul(param(2, r),
                           B::Sub(B::Mul(vN6, rep), att)),
                    inv);
         accL = B::Add(accL, B::Select(mV, enL, zero));
