@@ -13,6 +13,7 @@ set(TestSources
     test/src/RecoilGrowthTest.cpp
     test/src/LookAheadCBMCTest.cpp
     test/src/RigidBodyHMCTest.cpp
+    test/src/SimdLayerTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
 )

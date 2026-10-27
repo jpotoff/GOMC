@@ -580,8 +580,23 @@ inconsistent Hamiltonian. The kernel therefore uses the existing
 
 That replaces 64 gathered elements per 8 pairs with 8 full-width loads and
 about 24 shuffles. Pairs outside the table range drop the whole call to
-the reference kernel, as `tabBad` does now. An analytical erfc only makes
-sense if every kernel in GOMC switches to it together.
+the reference kernel, as `tabBad` does now.
+
+An analytical erfc only makes sense if every kernel in GOMC switches to it
+together. One inline approximation, used by the scalar and SIMD paths
+alike, would replace the table. Mixing the two would give HMC and the other
+moves Hamiltonians that differ by up to the table's 2 × 10⁻⁷ relative error
+per pair. The Coulomb evaluation is therefore a swappable piece of the SIMD
+layer.
+
+**Benchmark item:** once the tile kernel runs, time an analytical SIMD erfc
+against the transposed table on the 9950X:
+- **analytical:** about 40–50 register operations per 8 pairs, no memory;
+- **table:** 8 loads and about 24 shuffles per 8 pairs, plus about 0.2 MB of
+  table in cache.
+
+Switch globally only on a clear win, and then re-benchmark the scalar
+CBMC and single-move paths the table was introduced for.
 
 **LJ parameters.** Lookups go per kind pair through the flattened table,
 so NBFIX keeps working. With i fixed per broadcast, each lane needs

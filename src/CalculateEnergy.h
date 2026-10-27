@@ -10,6 +10,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 
 #include "BasicTypes.h"
 #include "CellList.h"
+#include "ClusterPairKernel.h"
 #include "EnergyTypes.h"
 #include "Ewald.h"
 #include "EwaldCached.h"
@@ -231,6 +232,24 @@ private:
                         const std::vector<int> &cellStartIndex,
                         const std::vector<int> &mapParticleToCell,
                         const std::vector<std::vector<int>> &neighborList);
+
+  //! The cluster-pair kernel for BoxForce; false means use BoxForceTemplate.
+  //! See ClusterPairKernel.h.
+  template <typename FFType>
+  bool ClusterBoxForce(const FFType &ff, BoxDimensions const &boxAxes,
+                       const uint box, const std::vector<int> &cellVector,
+                       XYZArray &atomForce, const bool addForces,
+                       double &tempREn, double &tempLJEn);
+
+  void CheckClusterForce(XYZArray const &atomForce, const uint box,
+                         const double clREn, const double clLJEn,
+                         const double refREn, const double refLJEn);
+
+  //! molForce as the sum of each molecule's atom forces, for box `box`.
+  void MolForceFromAtoms(XYZArray const &atomForce, XYZArray &molForce,
+                         const uint box);
+
+  ClusterPairKernel clusterKernel;
 
   template <typename BoxType, typename FFType>
   void VirialCalcTemplate(const FFType &ff, const BoxType &boxAxes,

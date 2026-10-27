@@ -12,7 +12,10 @@ A copy of the MIT License can be found in License.txt with this program or at
 #endif
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
+#include <type_traits>
 
 #include "BasicTypes.h" //uint
 #include "BoxDimensions.h"
@@ -1078,9 +1081,6 @@ void CalculateEnergy::BoxForceTemplate(
   double *aForcex = atomForce.x;
   double *aForcey = atomForce.y;
   double *aForcez = atomForce.z;
-  double *mForcex = molForce.x;
-  double *mForcey = molForce.y;
-  double *mForcez = molForce.z;
   int atomCount = atomForce.Count();
 
   const int fracMol = HasLambda ? lambdaRef.GetMolIndex(box) : -1;
@@ -1371,6 +1371,17 @@ void CalculateEnergy::BoxForceTemplate(
   // order interleaved with OpenMP's reduction tree, this accumulates in atom
   // order. Same value to within rounding, different last bits.
   //
+  MolForceFromAtoms(atomForce, molForce, box);
+}
+
+void CalculateEnergy::MolForceFromAtoms(XYZArray const &atomForce,
+                                        XYZArray &molForce, const uint box) {
+  const double *aForcex = atomForce.x;
+  const double *aForcey = atomForce.y;
+  const double *aForcez = atomForce.z;
+  double *mForcex = molForce.x;
+  double *mForcey = molForce.y;
+  double *mForcez = molForce.z;
   MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
   MoleculeLookup::box_iterator endMol = molLookup.BoxEnd(box);
   for (; thisMol != endMol; ++thisMol) {
@@ -2355,6 +2366,131 @@ SystemPotential CalculateEnergy::BoxInter(SystemPotential potential,
   return potential;
 }
 
+//
+// Whether BoxForce uses the cluster-pair kernel, from GOMC_CLUSTER_KERNEL:
+// unset or "1" uses it where it applies, "0" never does (for timing the two
+// kernels against each other with one binary), and "check" computes both on
+// every call, keeps the reference kernel's result and reports any
+// disagreement. Read once.
+//
+static int ClusterKernelMode() {
+  static const int mode = [] {
+    const char *env = std::getenv("GOMC_CLUSTER_KERNEL");
+    int m = 1;
+    if (env != NULL && std::strcmp(env, "0") == 0)
+      m = 0;
+    else if (env != NULL && std::strcmp(env, "check") == 0)
+      m = 2;
+    printf("Info: Cluster-pair force kernel           %s (%s)\n",
+           m == 0 ? "Inactive" : (m == 1 ? "Active" : "Check"),
+           simd::Native::Name());
+    return m;
+  }();
+  return mode;
+}
+
+template <typename FFType>
+bool CalculateEnergy::ClusterBoxForce(const FFType &ff,
+                                      BoxDimensions const &boxAxes,
+                                      const uint box,
+                                      const std::vector<int> &cellVector,
+                                      XYZArray &atomForce,
+                                      const bool addForces, double &tempREn,
+                                      double &tempLJEn) {
+  constexpr bool isStd = std::is_same_v<FFType, FF_VDW_STD>;
+  constexpr bool isShift = std::is_same_v<FFType, FF_SHIFT>;
+  if constexpr (!(isStd || isShift)) {
+    return false;
+  } else {
+    if (!ff.nExpUniform || (ff.nExpValue != 12 && ff.nExpValue != 16))
+      return false;
+    ClusterPairKernel::Params P;
+    P.L[0] = boxAxes.axis.x[box];
+    P.L[1] = boxAxes.axis.y[box];
+    P.L[2] = boxAxes.axis.z[box];
+    P.rCutSqBox = boxAxes.rCutSq[box];
+    P.rCutSqVdw = forcefield.rCutSq;
+    P.rCutSqCoul = forcefield.rCutCoulombSq[box];
+    P.tabLo = P.tabHi = 0.0;
+    P.tab = {NULL, 0.0, 0.0};
+    P.qqFact = num::qqFact;
+    P.vp = ff.VdwView();
+    P.stride = ff.KindCount();
+    if (electrostatic && !(ff.TableRange(box, P.tabLo, P.tabHi) &&
+                           ff.CoulTableView(box, P.tab)))
+      return false;
+
+    clusterKernel.Build((int)cellVector.size(), cellOrderX.data(),
+                        cellOrderY.data(), cellOrderZ.data(),
+                        cellOrderCharge.data(), cellOrderMol.data(),
+                        cellOrderKind.data(), cellVector.data(), P.L,
+                        std::sqrt(P.rCutSqBox));
+    typedef simd::Native B;
+    bool ok;
+    if (electrostatic)
+      ok = ff.nExpValue == 12
+               ? clusterKernel.Compute<B, true, isShift, 12>(P, tempREn,
+                                                             tempLJEn)
+               : clusterKernel.Compute<B, true, isShift, 16>(P, tempREn,
+                                                             tempLJEn);
+    else
+      ok = ff.nExpValue == 12
+               ? clusterKernel.Compute<B, false, isShift, 12>(P, tempREn,
+                                                              tempLJEn)
+               : clusterKernel.Compute<B, false, isShift, 16>(P, tempREn,
+                                                              tempLJEn);
+    if (ok && addForces)
+      clusterKernel.AddForces(atomForce.x, atomForce.y, atomForce.z);
+    return ok;
+  }
+}
+
+//
+// GOMC_CLUSTER_KERNEL=check: compare the cluster kernel's energies and forces
+// with the reference kernel's, which BoxForce keeps. The first few calls are
+// always reported, then only disagreements beyond rounding: 1e-10 relative in
+// either energy, or a force component differing by more than 1e-8 of the
+// largest force component.
+//
+void CalculateEnergy::CheckClusterForce(XYZArray const &atomForce,
+                                        const uint box, const double clREn,
+                                        const double clLJEn,
+                                        const double refREn,
+                                        const double refLJEn) {
+  static int calls = 0, reports = 0;
+  const std::vector<int> &atoms = clusterKernel.SlotAtoms();
+  const std::vector<double> &fx = clusterKernel.ForceX();
+  const std::vector<double> &fy = clusterKernel.ForceY();
+  const std::vector<double> &fz = clusterKernel.ForceZ();
+  double maxDiff = 0.0, maxF = 0.0;
+  for (size_t s = 0; s < atoms.size(); ++s) {
+    const int a = atoms[s];
+    if (a < 0)
+      continue;
+    maxDiff = std::max({maxDiff, std::fabs(fx[s] - atomForce.x[a]),
+                        std::fabs(fy[s] - atomForce.y[a]),
+                        std::fabs(fz[s] - atomForce.z[a])});
+    maxF = std::max({maxF, std::fabs(atomForce.x[a]),
+                     std::fabs(atomForce.y[a]), std::fabs(atomForce.z[a])});
+  }
+  const double relR =
+      std::fabs(clREn - refREn) / std::max(std::fabs(refREn), 1e-300);
+  const double relLJ =
+      std::fabs(clLJEn - refLJEn) / std::max(std::fabs(refLJEn), 1e-300);
+  const double relF = maxDiff / std::max(maxF, 1e-300);
+  const bool off = relR > 1e-10 || relLJ > 1e-10 || relF > 1e-8;
+  ++calls;
+  if ((calls <= 3 || off) && reports < 20) {
+    ++reports;
+    printf("%s: cluster kernel check, box %u call %d: real %.12e vs %.12e "
+           "(rel %.1e), LJ %.12e vs %.12e (rel %.1e), max force diff %.1e "
+           "of %.3e (rel %.1e); %d clusters, %ld cluster pairs\n",
+           off ? "Warning" : "Info", box, calls, clREn, refREn, relR, clLJEn,
+           refLJEn, relLJ, maxDiff, maxF, relF, clusterKernel.Clusters(),
+           clusterKernel.PairListSize());
+  }
+}
+
 SystemPotential
 CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
                           XYZArray &atomForce, XYZArray &molForce,
@@ -2423,6 +2559,21 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
   // branched on for every surviving pair, inside a 29% block of pure filtering
   // and setup.
   const bool hasFractionF = lambdaRef.HasFraction(box);
+  // The cluster-pair kernel where it applies; see ClusterPairKernel.h.
+  const int clusterMode = ClusterKernelMode();
+  bool clusterRan = false;
+  double clREn = 0.0, clLJEn = 0.0;
+  if (clusterMode != 0 && boxAxes.orthogonal[box] && !hasFractionF) {
+    DispatchForcefield(forcefield, [&](const auto &ffRef) {
+      clusterRan = ClusterBoxForce(ffRef, boxAxes, box, cellVector, atomForce,
+                                   clusterMode == 1, clREn, clLJEn);
+    });
+  }
+  if (clusterRan && clusterMode == 1) {
+    tempREn = clREn;
+    tempLJEn = clLJEn;
+    MolForceFromAtoms(atomForce, molForce, box);
+  } else {
   DispatchForcefield(forcefield, [&](const auto &ffRef) {
     using FFT = std::decay_t<decltype(ffRef)>;
 #define GOMC_BF_CALL(L, C, BT, AXES)                                           \
@@ -2459,6 +2610,9 @@ CalculateEnergy::BoxForce(SystemPotential potential, XYZArray const &coords,
     }
 #undef GOMC_BF_CALL
   });
+  if (clusterRan)
+    CheckClusterForce(atomForce, box, clREn, clLJEn, tempREn, tempLJEn);
+  }
 #endif
 
   // setting energy and virial of LJ interaction

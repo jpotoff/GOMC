@@ -80,6 +80,7 @@ set(headers
    src/CheckpointOutput.h
    src/CheckpointSetup.h
    src/Clock.h
+   src/ClusterPairKernel.h
    src/COM.h
    src/ConfigSetup.h
    src/ConsoleOutput.h
@@ -147,6 +148,7 @@ set(headers
    src/SeedReader.h
    src/Setup.h
    src/SimEventFrequency.h
+   src/SimdLayer.h
    src/Simulation.h
    src/StaticVals.h
    src/SubdividedArray.h
