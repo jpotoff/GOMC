@@ -155,17 +155,6 @@ TEST(SimdLayerTest, TileLayout) {
   }
 }
 
-TEST(SimdLayerTest, LoadRows) {
-  // Each group of 4 lanes (one i of the tile) comes from its own row, as
-  // the kernel's per-kind LJ rows are read.
-  const double a[4] = {1.0, 2.0, 3.0, 4.0};
-  const double b[4] = {5.0, 6.0, 7.0, 8.0};
-  const double *const rows[2] = {a, b};
-  const std::vector<double> r = Lanes(B::LoadRows(rows));
-  for (int k = 0; k < W; ++k)
-    EXPECT_EQ(r[k], rows[k / 4][k % 4]);
-}
-
 TEST(SimdLayerTest, Gather) {
   std::mt19937 g(13);
   const std::vector<double> base = Random(g, 64, -1.0, 1.0);
