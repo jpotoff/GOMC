@@ -88,4 +88,8 @@ void CheckpointOutput::saveCheckpointFile(const ulong &step,
                          sizeof(std::int32_t) * molLookRef.atomCount));
   oa(cereal::binary_data(molLookRef.atomCharge,
                          sizeof(double) * molLookRef.atomCount));
+  // Optional records appended after everything above, each led by a tag.
+  // CheckpointSetup reads them only if present, so checkpoints from older
+  // versions still load, and older versions ignore the trailing bytes.
+  oa(std::string("HMC_TIMESTEP"), movSetRef.hmcTimeStep);
 }

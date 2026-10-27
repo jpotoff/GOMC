@@ -78,6 +78,15 @@ void CheckpointSetup::loadCheckpointFile() {
                          sizeof(std::int32_t) * molLookupRef.atomCount));
   ia(cereal::binary_data(molLookupRef.atomCharge,
                          sizeof(double) * molLookupRef.atomCount));
+  // Optional trailing records (see CheckpointOutput::saveCheckpointFile). A
+  // checkpoint written before they existed ends here, and the read throws.
+  try {
+    std::string tag;
+    ia(tag);
+    if (tag == "HMC_TIMESTEP")
+      ia(hmcTimeStepVec);
+  } catch (const cereal::Exception &) {
+  }
   SetCheckpointData();
   std::cout << "Checkpoint loaded from " << filename << std::endl;
 }
@@ -135,6 +144,16 @@ void CheckpointSetup::SetMoveSettings() {
   moveSetRef.mp_r_max = chkObj.mp_r_maxVec;
   moveSetRef.mp_t_max = chkObj.mp_t_maxVec;
   moveSetRef.isSingleMoveAccepted = chkObj.isSingleMoveAcceptedVec;
+  // Tuned hybrid MC time steps; only positive values, so a checkpoint from a
+  // run without the move does not overwrite the configured step with zero
+  for (size_t b = 0; b < hmcTimeStepVec.size() && b < BOX_TOTAL; ++b) {
+    if (hmcTimeStepVec[b] > 0.0) {
+      moveSetRef.hmcTimeStep[b] = hmcTimeStepVec[b];
+      printf("%-40s %u: %-4.5f fs\n",
+             "Info: Hybrid MC time step from checkpoint, box", (uint)b,
+             hmcTimeStepVec[b]);
+    }
+  }
   // A checkpoint written before a move kind was appended (Hybrid MC) has one
   // move fewer per box; give the new kinds zeroed statistics
   auto pad = [](auto &v) {

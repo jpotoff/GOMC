@@ -43,6 +43,7 @@ public:
     mp_interval_tries.resize(BOX_TOTAL);
     // Different since we only sample 2 Boxes in GEMC
     isSingleMoveAccepted.resize(BOXES_WITH_U_NB);
+    hmcTimeStep.resize(BOX_TOTAL, 0.0);
     for (uint b = 0; b < BOX_TOTAL; b++) {
       acceptPercent[b].resize(mv::MOVE_KINDS_TOTAL);
       scale[b].resize(mv::MOVE_KINDS_TOTAL);
@@ -124,6 +125,7 @@ public:
     this->scale = rhs.scale;
     this->mp_t_max = rhs.mp_t_max;
     this->mp_r_max = rhs.mp_r_max;
+    this->hmcTimeStep = rhs.hmcTimeStep;
   }
 
   void SetValues(const MoveSettings &rhs) {
@@ -135,6 +137,10 @@ public:
 
   bool operator==(const MoveSettings &rhs);
 #endif
+
+  // Hybrid MC time step (fs) per box, read and tuned by HybridMC; 0 = not
+  // set. Here rather than in the move so checkpoints carry the tuned value.
+  std::vector<double> hmcTimeStep;
 
 #if GOMC_GTEST || GOMC_GTEST_MPI
 

@@ -93,6 +93,8 @@ private:
   PRNG &prngPT;
 #endif
   Checkpoint chkObj;
+  // optional trailing record of the checkpoint file
+  std::vector<double> hmcTimeStepVec;
   friend class CheckpointOutput;
 };
 

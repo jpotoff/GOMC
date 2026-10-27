@@ -193,6 +193,20 @@ template <class Core, class Trunc, class Vir> struct PairEval {
                                     const uint i) {
     return Vir::Virial(p, Core::Terms(p, distSq, i), distSq, i);
   }
+
+  //
+  // Energy and virial from one evaluation of the Mie terms, exponent fixed.
+  // BoxForce needs both per pair; Energy then Virial would compute the terms
+  // twice. Each result is the same arithmetic as EnergyFixed and Virial.
+  //
+  template <uint NEXP>
+  GOMC_HOSTDEV static void EnergyVirialFixed(const VdwParams &p,
+                                             const double distSq, const uint i,
+                                             double &en, double &vir) {
+    const MieTerms t = Core::template TermsFixed<NEXP>(p, distSq, i);
+    en = Trunc::Energy(p, t, distSq, i);
+    vir = Vir::Virial(p, t, distSq, i);
+  }
 };
 
 typedef PairEval<MieCore, PlainTrunc, PlainVir> MiePlain;    //!< VDW_STD

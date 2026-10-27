@@ -224,6 +224,13 @@ struct FFAdapter : public FFParticle {
     return VdwEval::Energy(p, distSq, idx);
   }
 
+  //! Energy and virial for BoxForce's fixed-exponent run; see CalcEnFixedAt.
+  template <uint NEXP>
+  void CalcEnVirFixedAt(const ff::VdwParams &p, const double distSq,
+                        const uint idx, double &en, double &vir) const {
+    VdwEval::template EnergyVirialFixed<NEXP>(p, distSq, idx, en, vir);
+  }
+
   void CalcAdd_1_4(double &en, const double distSq, const uint kind1,
                    const uint kind2) const override {
     if (forcefield.rCutSq < distSq)

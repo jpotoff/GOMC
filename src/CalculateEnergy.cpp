@@ -112,6 +112,110 @@ static inline bool MieVdwDispatch(const FFType &ff, const double *vDistSq,
 }
 
 //
+// BoxForceTemplate's pass 3 runs: MieVdwRunFixed and the tabulated Coulomb
+// sum, for the force.
+//
+// Each takes the compacted survivors -- distSq, the minimum-image components
+// and the j parameter, contiguous -- and overwrites the components in place
+// with the pair force (component * virial). The scatter onto atom j is left
+// to the caller's separate loop: inside, it is an indexed read-modify-write
+// the compiler must assume aliases everything, and that is what kept this
+// loop scalar. Out here the body is loads, arithmetic and contiguous stores.
+//
+// As in MieVdwRunFixed, the simd reductions change the order the pairs are
+// summed in, so energies and forces agree with the scalar loop to rounding,
+// not to the bit.
+//
+template <uint NEXP, typename FFType>
+static inline void MieVdwForceRunFixed(const FFType &ff, const double *vDistSq,
+                                       const int *vKind, double *fx,
+                                       double *fy, double *fz, const int nv,
+                                       const uint currKind, double &en,
+                                       double &fxi, double &fyi, double &fzi) {
+  const ff::VdwParams vp = ff.VdwView();
+  const uint stride = ff.KindCount();
+  double acc = 0.0, sx = 0.0, sy = 0.0, sz = 0.0;
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : acc, sx, sy, sz)
+#endif
+  for (int s = 0; s < nv; s++) {
+    double e, vir;
+    ff.template CalcEnVirFixedAt<NEXP>(vp, vDistSq[s],
+                                       currKind + (uint)vKind[s] * stride, e,
+                                       vir);
+    acc += e;
+    const double x = fx[s] * vir, y = fy[s] * vir, z = fz[s] * vir;
+    fx[s] = x;
+    fy[s] = y;
+    fz[s] = z;
+    sx += x;
+    sy += y;
+    sz += z;
+  }
+  en += acc;
+  fxi += sx;
+  fyi += sy;
+  fzi += sz;
+}
+
+template <typename FFType>
+static inline bool MieVdwForceDispatch(const FFType &ff, const double *vDistSq,
+                                       const int *vKind, double *fx,
+                                       double *fy, double *fz, const int nv,
+                                       const uint currKind, const uint nExp,
+                                       double &en, double &fxi, double &fyi,
+                                       double &fzi) {
+  switch (nExp) {
+  case 12:
+    MieVdwForceRunFixed<12>(ff, vDistSq, vKind, fx, fy, fz, nv, currKind, en,
+                            fxi, fyi, fzi);
+    return true;
+  case 16:
+    MieVdwForceRunFixed<16>(ff, vDistSq, vKind, fx, fy, fz, nv, currKind, en,
+                            fxi, fyi, fzi);
+    return true;
+  default:
+    return false;
+  }
+}
+
+//
+// Every survivor inside the real-space table, so no range test and no erfc
+// fallback. The table View is by value for the reason given at its
+// definition; here it also keeps the coefficient loads gatherable.
+//
+template <typename FFType>
+static inline void CoulTabForceRun(const FFType &ff,
+                                   const EwaldRealTable::View tab,
+                                   const double *cDistSq, const double *cQ,
+                                   double *fx, double *fy, double *fz,
+                                   const int nc, const double currQ,
+                                   double &en, double &fxi, double &fyi,
+                                   double &fzi) {
+  double acc = 0.0, sx = 0.0, sy = 0.0, sz = 0.0;
+#ifdef _OPENMP
+#pragma omp simd reduction(+ : acc, sx, sy, sz)
+#endif
+  for (int s = 0; s < nc; s++) {
+    const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
+    double e, vir;
+    ff.CalcCoulombEnVirTabUnchecked(tab, cDistSq[s], qi_qj_fact, e, vir);
+    acc += e;
+    const double x = fx[s] * vir, y = fy[s] * vir, z = fz[s] * vir;
+    fx[s] = x;
+    fy[s] = y;
+    fz[s] = z;
+    sx += x;
+    sy += y;
+    sz += z;
+  }
+  en += acc;
+  fxi += sx;
+  fyi += sy;
+  fzi += sz;
+}
+
+//
 //    CalculateEnergy.cpp
 //    Energy Calculation functions for Monte Carlo simulation
 //    Calculates using const references to a particular Simulation's members
@@ -1168,19 +1272,25 @@ void CalculateEnergy::BoxForceTemplate(
     double dxs[GOMC_DISTSQ_CHUNK], dys[GOMC_DISTSQ_CHUNK],
         dzs[GOMC_DISTSQ_CHUNK];
     //
-    // The survivor lists hold SLOT OFFSETS, not the pair data.
+    // The survivors, compacted: BoxInterTemplate's layout, plus the
+    // minimum-image components the force needs and the slot of each j.
     //
-    // BoxInter compacts distSq and the per-pair scalars because it needs two
-    // doubles per pair. The force needs four -- distSq plus the three
-    // minimum-image components -- so compacting the data would cost five
-    // masked stores per list. One store of the offset k, and pass 3 reads
-    // distSq[k], dxs[k], dys[k], dzs[k] and the ord* arrays at base + k
-    // directly. Pass 3 here is scalar in any case, so an indexed load costs
-    // what a sequential one would.
+    // This used to store only the slot offset k, on the grounds that pass 3
+    // was scalar anyway -- its j scatter made it so -- and an indexed load
+    // costs what a sequential one does there. The scatter now has a loop of
+    // its own, so pass 3 is a dense run over contiguous data like BoxInter's,
+    // and that is worth the extra compress stores. The component buffers are
+    // overwritten with the pair force in pass 3 and read back by the scatter.
+    //
+    // jSlot is for what still needs the j atom itself: the scatter (through
+    // cellVec) and the general kernels' kind and molecule lookups.
     //
     constexpr int SURV = GOMC_DISTSQ_CHUNK + 8;
-    int vIdx[SURV];
-    int cIdx[HasCharge ? SURV : 1];
+    double vDistSq[SURV], vFx[SURV], vFy[SURV], vFz[SURV];
+    int vKind[SURV], vSlot[SURV];
+    constexpr int CSURV = HasCharge ? SURV : 1;
+    double cDistSq[CSURV], cQ[CSURV], cFx[CSURV], cFy[CSURV], cFz[CSURV];
+    int cSlot[CSURV];
 
     //
     // The force on atom i accumulates in registers and is written once, below.
@@ -1237,21 +1347,37 @@ void CalculateEnergy::BoxForceTemplate(
           for (; k + 8 <= m; k += 8) {
             const int j = base + k;
             const __m512d d = _mm512_loadu_pd(distSq + k);
+            const __m512d dx = _mm512_loadu_pd(dxs + k);
+            const __m512d dy = _mm512_loadu_pd(dys + k);
+            const __m512d dz = _mm512_loadu_pd(dzs + k);
             const __m256i mol =
                 _mm256_loadu_si256((const __m256i *)(ordMol + j));
-            const __m256i kv =
-                _mm256_add_epi32(_mm256_set1_epi32(k), vIota);
+            const __m256i slot =
+                _mm256_add_epi32(_mm256_set1_epi32(j), vIota);
             const __mmask8 keep =
                 _mm512_cmp_pd_mask(d, vRCut, _CMP_LT_OQ) &
                 _mm256_cmpneq_epi32_mask(mol, vCurrMol);
             const __mmask8 keepV =
                 keep & _mm512_cmp_pd_mask(d, vRCutV, _CMP_LE_OQ);
-            _mm256_mask_compressstoreu_epi32(vIdx + nv, keepV, kv);
+            _mm512_mask_compressstoreu_pd(vDistSq + nv, keepV, d);
+            _mm512_mask_compressstoreu_pd(vFx + nv, keepV, dx);
+            _mm512_mask_compressstoreu_pd(vFy + nv, keepV, dy);
+            _mm512_mask_compressstoreu_pd(vFz + nv, keepV, dz);
+            _mm256_mask_compressstoreu_epi32(
+                vKind + nv, keepV,
+                _mm256_loadu_si256((const __m256i *)(ordKind + j)));
+            _mm256_mask_compressstoreu_epi32(vSlot + nv, keepV, slot);
             nv += _mm_popcnt_u32((unsigned)keepV);
             if constexpr (HasCharge) {
               const __mmask8 keepC =
                   keep & _mm512_cmp_pd_mask(d, vRCutC, _CMP_LE_OQ);
-              _mm256_mask_compressstoreu_epi32(cIdx + nc, keepC, kv);
+              _mm512_mask_compressstoreu_pd(cDistSq + nc, keepC, d);
+              _mm512_mask_compressstoreu_pd(cQ + nc, keepC,
+                                            _mm512_loadu_pd(ordQ + j));
+              _mm512_mask_compressstoreu_pd(cFx + nc, keepC, dx);
+              _mm512_mask_compressstoreu_pd(cFy + nc, keepC, dy);
+              _mm512_mask_compressstoreu_pd(cFz + nc, keepC, dz);
+              _mm256_mask_compressstoreu_epi32(cSlot + nc, keepC, slot);
               tabBad |= keepC & ~(_mm512_cmp_pd_mask(d, vTabLo, _CMP_GE_OQ) &
                                   _mm512_cmp_pd_mask(d, vTabHi, _CMP_LT_OQ));
               nc += _mm_popcnt_u32((unsigned)keepC);
@@ -1266,84 +1392,108 @@ void CalculateEnergy::BoxForceTemplate(
           const double d = distSq[k];
           if (!(rCutSqBox > d))
             continue;
-          if (!(rCutSqVdw < d))
-            vIdx[nv++] = k;
+          if (!(rCutSqVdw < d)) {
+            vDistSq[nv] = d;
+            vFx[nv] = dxs[k];
+            vFy[nv] = dys[k];
+            vFz[nv] = dzs[k];
+            vKind[nv] = ordKind[j];
+            vSlot[nv] = j;
+            ++nv;
+          }
           if constexpr (HasCharge) {
             if (!(rCutSqCoul < d)) {
               if (!(d >= tabLo && d < tabHi))
                 tabBad = 1;
-              cIdx[nc++] = k;
+              cDistSq[nc] = d;
+              cQ[nc] = ordQ[j];
+              cFx[nc] = dxs[k];
+              cFy[nc] = dys[k];
+              cFz[nc] = dzs[k];
+              cSlot[nc] = j;
+              ++nc;
             }
           }
         }
 
         // ---- pass 3: one dense run per kernel, no cutoff test ----
         //
-        // A pair inside both cutoffs is scattered twice, once per kernel,
-        // where the fused loop scattered it once. That costs ~30% more
-        // scattered stores at Rcut 8 against RcutCoulomb 12, and buys two
-        // loops with no cutoff test, no same-molecule test and no charge
-        // test. The force contributions simply add.
+        // A pair inside both cutoffs is evaluated in both runs and scattered
+        // twice; the force contributions simply add. Each run turns its
+        // component buffers into pair forces, which the loop after it
+        // scatters onto the j atoms.
         //
         if constexpr (HasCharge) {
-          for (int t = 0; t < nc; t++) {
-            const int kk = cIdx[t];
-            const int j = base + kk;
-            const double d = distSq[kk];
-            const double qi_qj_fact = currQ * ordQ[j] * num::qqFact;
-            double en, vir;
-            if (!HasLambda && hasTab && !tabBad) {
-              // No range test, no null test, no erfc fallback, and both
-              // kernels out of a single 64-byte line.
-              ff.CalcCoulombEnVirTabUnchecked(tabView, d, qi_qj_fact, en, vir);
-            } else {
+          if (!HasLambda && hasTab && !tabBad) {
+            // No range test, no null test, no erfc fallback, and both
+            // kernels out of a single 64-byte line.
+            CoulTabForceRun(ff, tabView, cDistSq, cQ, cFx, cFy, cFz, nc, currQ,
+                            tempREn, fxi, fyi, fzi);
+          } else {
+            for (int s = 0; s < nc; s++) {
+              const int j = cSlot[s];
+              const double d = cDistSq[s];
+              const double qi_qj_fact = currQ * cQ[s] * num::qqFact;
               double lambdaCoulomb = 1.0;
               if constexpr (HasLambda) {
                 if (currMol == fracMol || ordMol[j] == fracMol)
                   lambdaCoulomb = fracCoul;
               }
-              en = ff.FFType::CalcCoulomb(d, currKind, ordKind[j], qi_qj_fact,
-                                          lambdaCoulomb, box);
-              vir = ff.FFType::CalcCoulombVir(d, currKind, ordKind[j],
-                                              qi_qj_fact, lambdaCoulomb, box);
+              tempREn += ff.FFType::CalcCoulomb(d, currKind, ordKind[j],
+                                                qi_qj_fact, lambdaCoulomb, box);
+              const double vir = ff.FFType::CalcCoulombVir(
+                  d, currKind, ordKind[j], qi_qj_fact, lambdaCoulomb, box);
+              cFx[s] *= vir;
+              cFy[s] *= vir;
+              cFz[s] *= vir;
+              fxi += cFx[s];
+              fyi += cFy[s];
+              fzi += cFz[s];
             }
-            tempREn += en;
-            const double fx = dxs[kk] * vir, fy = dys[kk] * vir,
-                         fz = dzs[kk] * vir;
-            fxi += fx;
-            fyi += fy;
-            fzi += fz;
-            const int nParticle = cellVec[j];
-            aForcex[nParticle] -= fx;
-            aForcey[nParticle] -= fy;
-            aForcez[nParticle] -= fz;
+          }
+          for (int s = 0; s < nc; s++) {
+            const int nParticle = cellVec[cSlot[s]];
+            aForcex[nParticle] -= cFx[s];
+            aForcey[nParticle] -= cFy[s];
+            aForcez[nParticle] -= cFz[s];
           }
         }
-        for (int t = 0; t < nv; t++) {
-          const int kk = vIdx[t];
-          const int j = base + kk;
-          const double d = distSq[kk];
-          double en, vir;
-          if constexpr (HasLambda) {
-            double lambdaVDW = 1.0;
-            if (currMol == fracMol || ordMol[j] == fracMol)
-              lambdaVDW = fracVDW;
-            en = ff.FFType::CalcEn(d, currKind, ordKind[j], lambdaVDW);
-            vir = ff.FFType::CalcVir(d, currKind, ordKind[j], lambdaVDW);
-          } else {
-            en = ff.CalcEnFullInRange(d, currKind, ordKind[j]);
-            vir = ff.CalcVirFullInRange(d, currKind, ordKind[j]);
+        bool fixed = false;
+        if constexpr (!HasLambda && FFType::kHasFixedExp) {
+          if (ff.nExpUniform)
+            fixed = MieVdwForceDispatch(ff, vDistSq, vKind, vFx, vFy, vFz, nv,
+                                        currKind, ff.nExpValue, tempLJEn, fxi,
+                                        fyi, fzi);
+        }
+        if (!fixed) {
+          for (int s = 0; s < nv; s++) {
+            const double d = vDistSq[s];
+            double en, vir;
+            if constexpr (HasLambda) {
+              const int j = vSlot[s];
+              double lambdaVDW = 1.0;
+              if (currMol == fracMol || ordMol[j] == fracMol)
+                lambdaVDW = fracVDW;
+              en = ff.FFType::CalcEn(d, currKind, vKind[s], lambdaVDW);
+              vir = ff.FFType::CalcVir(d, currKind, vKind[s], lambdaVDW);
+            } else {
+              en = ff.CalcEnFullInRange(d, currKind, vKind[s]);
+              vir = ff.CalcVirFullInRange(d, currKind, vKind[s]);
+            }
+            tempLJEn += en;
+            vFx[s] *= vir;
+            vFy[s] *= vir;
+            vFz[s] *= vir;
+            fxi += vFx[s];
+            fyi += vFy[s];
+            fzi += vFz[s];
           }
-          tempLJEn += en;
-          const double fx = dxs[kk] * vir, fy = dys[kk] * vir,
-                       fz = dzs[kk] * vir;
-          fxi += fx;
-          fyi += fy;
-          fzi += fz;
-          const int nParticle = cellVec[j];
-          aForcex[nParticle] -= fx;
-          aForcey[nParticle] -= fy;
-          aForcez[nParticle] -= fz;
+        }
+        for (int s = 0; s < nv; s++) {
+          const int nParticle = cellVec[vSlot[s]];
+          aForcex[nParticle] -= vFx[s];
+          aForcey[nParticle] -= vFy[s];
+          aForcez[nParticle] -= vFz[s];
         }
       }
     }

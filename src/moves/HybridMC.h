@@ -69,8 +69,8 @@ private:
   double dH = 0.0;
   bool trajectoryOK = true;
 
-  // settings
-  double timeStep[BOX_TOTAL]; // fs
+  // settings; the time step itself lives in moveSetRef.hmcTimeStep so that
+  // checkpoints carry the tuned value
   uint stepsMin, stepsMax;
   bool adjust, useLiquid, useGas;
   ulong equilSteps;
@@ -100,7 +100,9 @@ inline HybridMC::HybridMC(System &sys, StaticVals const &statV)
   useGas = statV.hmcGas;
   equilSteps = statV.simEventFreq.tillEquil;
   for (uint b = 0; b < BOX_TOTAL; ++b) {
-    timeStep[b] = statV.hmcTimeStep;
+    // a time step restored from a checkpoint takes precedence
+    if (!(moveSetRef.hmcTimeStep[b] > 0.0))
+      moveSetRef.hmcTimeStep[b] = statV.hmcTimeStep;
     intervalTries[b] = intervalAccepted[b] = totalTries[b] = 0;
     sumExpDH[b] = sumDH[b] = 0.0;
   }
@@ -236,7 +238,7 @@ inline uint HybridMC::Transform() {
   const uint L =
       stepsMin + (stepsMax > stepsMin ? prng.randIntExc(stepsMax - stepsMin + 1)
                                       : 0);
-  const double h = rigid::FemtosecondToInternal(timeStep[bPick]);
+  const double h = rigid::FemtosecondToInternal(moveSetRef.hmcTimeStep[bPick]);
   double u = u0;
   trajectoryOK = std::isfinite(u0);
   for (uint s = 0; s < L && trajectoryOK; ++s) {
@@ -294,7 +296,7 @@ inline void HybridMC::Accept(const uint rejectState, const ulong step) {
       const double target = 0.75;
       double f = std::pow((acc + 0.05) / (target + 0.05), 0.5);
       f = std::max(0.5, std::min(1.5, f));
-      timeStep[bPick] *= f;
+      moveSetRef.hmcTimeStep[bPick] *= f;
       intervalTries[bPick] = intervalAccepted[bPick] = 0;
     }
   }
@@ -308,7 +310,7 @@ inline void HybridMC::PrintAcceptKind() {
   std::cout << std::endl;
   printf("%-37s", "  Hybrid MC time step (fs) ");
   for (uint b = 0; b < BOX_TOTAL; b++)
-    printf("%10.5f ", timeStep[b]);
+    printf("%10.5f ", moveSetRef.hmcTimeStep[b]);
   std::cout << std::endl;
   // <exp(-beta dH)> should be 1 within its error for a correct integrator
   printf("%-37s", "  Hybrid MC <exp(-beta dH)> ");
