@@ -476,6 +476,181 @@ development on another branch) is the next step. Together they account for
 most of the roughly 8× gap between GOMC's and GROMACS's cost per force
 evaluation.
 
+### What the per-atom vectorisation attempt showed
+
+Before starting on clusters, `BoxForceTemplate` was restructured the way
+`BoxInterTemplate` is (commit dceacbb1, reverted afterwards).
+- **Pass 2:** AVX-512 compress stores copied the pairs inside the cutoff
+  into contiguous buffers (distance², the three minimum-image components,
+  and the charge or kind of j).
+- **Pass 3:** became dense, scatter-free Coulomb-table and fixed-exponent
+  LJ loops.
+- **Scatter:** a separate loop applied the j-forces.
+
+Energies matched the old kernel to rounding on OPC HMC and UA hexane GEMC.
+
+Measured on the 9950X (icpx, znver5) with `OPC_260K` and 4 threads:
+
+| | ff69a26a (scalar pass 3) | dceacbb1 (vectorised pass 3) |
+|---|---|---|
+| Instructions | 1.810 × 10¹² | 1.179 × 10¹² (−35%) |
+| IPC | 2.87 | 1.76 |
+| Cycles | 631.6 × 10⁹ | 671.6 × 10⁹ (+6%) |
+| Elapsed | 30.24 s | 31.84 s (+5%) |
+
+The 1-thread annotate put about half of the kernel's samples on two
+instruction groups:
+- **Table gathers, ≈ 23.5%:** eight `vgatherdpd` per eight pairs, one per
+  coefficient of the 64-byte energy/virial line. The LJ parameter gathers
+  added ≈ 3%.
+- **Compress stores to memory, ≈ 23%:** twelve `vcompresspd`/`vpcompressd`
+  per eight pairs.
+
+Lessons for the tiled kernel:
+1. **No compaction.** Mask the pairs outside the cutoff instead. The
+   wasted lanes cost less than compress stores.
+2. **No element-wise gathers from the Coulomb table.** Either load each
+   pair's whole line and transpose in registers, or do not use a table.
+3. **Judge on the target hardware.** Fewer instructions did not mean fewer
+   cycles. Every variant is judged by elapsed time on the AVX-512 machine.
+
+### Tiled kernel: design decisions
+
+**Scope.** The tiled kernel computes full-box short-range energy, forces
+and (later) the virial, for orthogonal boxes with no fractional molecule.
+Everything else keeps the current kernels, which also remain the
+reference:
+- non-orthogonal boxes;
+- CFCMC/MEMC λ-scaled molecules;
+- vdW forms without a fixed-exponent evaluator (Martini, Exp-6);
+- Coulomb pairs outside the real-space table's range.
+
+The dispatch happens once per call in `CalculateEnergy::BoxForce`, not per
+pair. Nothing in the kernel assumes a particular molecule or force field:
+- sites with zero charge or zero ε are ordinary lanes;
+- exclusions come from comparing molecule indices.
+
+**Clusters.**
+- **Formation:** spatial, as in GROMACS. Bin atoms into columns on an x–y
+  grid, sort each column by z, and cut it into clusters of 4 atoms.
+- **Padding:** a short column is padded with dummy atoms, which have
+  charge 0, ε 0 and an excluded molecule index.
+- **Why not molecular clusters:** molecule-based clusters (one cluster per
+  molecule) would suit 4-site water but nothing else, so they are not
+  used.
+- **Rebuild:** clusters are rebuilt from the cell-ordered arrays
+  (`BuildCellOrdered`) at each list build. Coordinates, charges, kinds and
+  molecule indices are stored in cluster order, so the kernel never
+  indexes through a permutation.
+
+**Tile shape.** i-clusters of 4 against j-clusters matched to the SIMD
+width:
+- **AVX-512:** 4 × 8, so one j-cluster fills a register of 8 doubles.
+- **AVX2:** 4 × 4.
+
+Each i-atom is broadcast against the j lanes. For each tile:
+- **Distance and cutoff:** 4 distance computations of one register each,
+  one cutoff mask per i-atom.
+- **Exclusions:** same molecule, padding, and j ≤ i on the diagonal tile.
+- **Pair list:** a half list over cluster pairs (ci ≤ cj), so each atom
+  pair is computed once.
+
+**Forces without scatter.**
+- **i-forces:** accumulate in registers across a j-cluster list.
+- **j-forces:** within a tile, the j-force register accumulates
+  lane-for-lane over the 4 i-atoms and is then added to the j-cluster's
+  forces with one contiguous vector load-add-store.
+- **Storage:** forces live in cluster order and are permuted back to atom
+  order once per evaluation, an O(N) pass.
+
+Per-thread force buffers with the current OpenMP array reduction come
+first. Smarter buffer schemes come later only if profiling asks for them.
+
+**Coulomb: transposed table, not analytical erfc.** GROMACS's CPU kernels
+evaluate the real-space Ewald term analytically. For GOMC the deciding
+issue is consistency: the energy the HMC move stores in `sysPotRef` must be
+the same function of the coordinates that `BoxInter` and the
+single-molecule moves use. Otherwise, mixing moves samples a slightly
+inconsistent Hamiltonian. The kernel therefore uses the existing
+`EwaldRealTable` coefficients:
+- each pair's line is loaded whole (one 64-byte load for the energy and
+  virial cubics);
+- an 8 × 8 in-register transpose turns 8 such lines into 8 coefficient
+  vectors.
+
+That replaces 64 gathered elements per 8 pairs with 8 full-width loads and
+about 24 shuffles. Pairs outside the table range drop the whole call to
+the reference kernel, as `tabBad` does now. An analytical erfc only makes
+sense if every kernel in GOMC switches to it together.
+
+**LJ parameters.** Lookups go per kind pair through the flattened table,
+so NBFIX keeps working. With i fixed per broadcast, each lane needs
+`kind_i + kind_j × stride`. That is a gather of 3 parameters (σ², ε·c_n,
+n/6 or ε·c_n·6), which measured ≈ 3% of the kernel in the per-atom attempt.
+That cost is accepted in version 1. A later option is a per-tile parameter
+block when a j-cluster holds a single kind.
+
+**List lifetime under HMC: rebuild at every force evaluation (version
+1).**
+- **Why rebuild every time:** a cluster-pair list built with r_list = r_c
+  and no skin is complete for the positions it was built from, so forces
+  stay an exact function of the coordinates and reversibility is not in
+  question.
+- **Cost:** about 500 clusters (OPC, 2,000 sites) give about 125,000
+  cluster pairs to test by bounding-box distance, against about 10⁶ pair
+  interactions per evaluation. That should be a few percent, to be
+  confirmed by profiling.
+- **Small boxes:** it also avoids the box-size constraint above. A
+  24.64 Å box with r_c 12 Å has no room for a useful skin, and a list
+  without a skin needs only r_c < L/2, which GOMC already requires.
+
+Skinned lists kept across steps (the validity rules in
+[The list over its lifetime](#the-list-over-its-lifetime)) become a stage
+2 optimisation for large boxes.
+
+**Testing without the target ISA.** The development VM has no AVX at all.
+So the kernel is written against a thin SIMD layer of a few dozen inline
+functions: load, broadcast, FMA, masked add, compare-to-mask, the table
+transpose, horizontal sum. The layer has three backends:
+- a scalar backend (arrays of 4 or 8 doubles), which runs anywhere;
+- AVX2;
+- AVX-512.
+
+The tile logic (cluster formation, list build, masks, force accumulation,
+the permutation back) is validated with the scalar backend against the
+current kernel on the VM. Each primitive has a unit test that compares the
+SIMD backends with the scalar one, run on the AVX-512 machine. Performance
+is measured only there.
+
+**Validation.**
+- **Debug builds:** cross-check energies and forces against the current
+  kernel on every call, as the per-growth-step candidate list does.
+- **Systems:** OPC HMC (charged, mixed zero/non-zero sites) and UA hexane
+  GEMC (uncharged).
+- **Acceptance criteria:**
+  - energies agree to rounding;
+  - the HMC trajectory agrees over 20 moves;
+  - ⟨exp(−βΔH)⟩ is unchanged.
+
+**Benchmark and decision.**
+- **Benchmark:** `OPC_260K` with `HMCSteps 50` and 20 moves, at 1 and 4
+  threads, against ff69a26a, by `perf stat` elapsed time and cycles.
+- **Decision:** the kernel stays only if it beats the current kernel at
+  both thread counts on the 9950X. A UA hexane HMC case is checked as well,
+  so the decision does not rest on water alone.
+
+**Revised staged plan.** This replaces stage 1 of the plan above. A
+per-atom Verlet list is no longer a step on the way, because the cluster
+list does its job.
+1. **Cluster list rebuilt at every evaluation** + 4 × N kernel for
+   `BoxForce`: energy and forces, scalar/AVX2/AVX-512 backends. HMC uses it.
+2. **Energy-only and virial variants** for `BoxInter` (volume moves) and
+   pressure.
+3. **Skinned lists kept across steps and moves** for large boxes;
+   reciprocal-space MTS or PME.
+4. **Later:** non-orthogonal boxes, fractional molecules in the tiled path,
+   GPU.
+
 ## Stage 2 optimisations
 
 All of these keep the move exact, because the acceptance test uses the
