@@ -121,6 +121,10 @@ TEST(SimdLayerTest, MasksAndSelect) {
       anyLt = anyLt || a[k] < b[k];
     }
     EXPECT_EQ(B::Any(B::Lt(va, vb)), anyLt);
+    unsigned bits = 0;
+    for (int k = 0; k < W; ++k)
+      bits |= (unsigned)(a[k] < b[k]) << k;
+    EXPECT_EQ(B::Bits(B::Lt(va, vb)), bits);
   }
   EXPECT_FALSE(B::Any(B::None()));
 }

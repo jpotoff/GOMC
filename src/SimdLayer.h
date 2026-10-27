@@ -126,6 +126,10 @@ struct Generic {
   static bool Any(const Mask &a) {
     return a.m[0] || a.m[1] || a.m[2] || a.m[3];
   }
+  static unsigned Bits(const Mask &a) { //!< bit k = lane k
+    return (unsigned)a.m[0] | (unsigned)a.m[1] << 1 | (unsigned)a.m[2] << 2 |
+           (unsigned)a.m[3] << 3;
+  }
   //! m ? a : b
   static Vec Select(const Mask &m, const Vec &a, const Vec &b) {
     Vec r;
@@ -206,6 +210,7 @@ struct Avx2 {
   static Mask Or(const Mask a, const Mask b) { return _mm256_or_pd(a, b); }
   static Mask None() { return _mm256_setzero_pd(); }
   static bool Any(const Mask a) { return _mm256_movemask_pd(a) != 0; }
+  static unsigned Bits(const Mask a) { return _mm256_movemask_pd(a); }
   static Vec Select(const Mask m, const Vec a, const Vec b) {
     return _mm256_blendv_pd(b, a, m);
   }
@@ -298,6 +303,7 @@ struct Avx512 {
   static Mask Or(const Mask a, const Mask b) { return a | b; }
   static Mask None() { return 0; }
   static bool Any(const Mask a) { return a != 0; }
+  static unsigned Bits(const Mask a) { return a; }
   static Vec Select(const Mask m, const Vec a, const Vec b) {
     return _mm512_mask_blend_pd(m, b, a);
   }

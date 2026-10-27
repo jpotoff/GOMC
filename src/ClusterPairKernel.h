@@ -123,9 +123,9 @@ private:
   bool Near(const int a, const int b) const {
     double d2 = 0.0;
     for (int ax = 0; ax < 3; ++ax) {
-      double d = bbCen[3 * a + ax] - bbCen[3 * b + ax];
+      double d = bbCen[ax][b] - bbCen[ax][a];
       d = std::fabs(d - boxL[ax] * std::rint(d * invL[ax]));
-      const double gap = d - (bbHalf[3 * a + ax] + bbHalf[3 * b + ax]);
+      const double gap = d - (bbHalf[ax][a] + bbHalf[ax][b]);
       if (gap > 0.0)
         d2 += gap * gap;
     }
@@ -148,14 +148,17 @@ private:
   double boxL[3] = {0.0, 0.0, 0.0}, invL[3] = {0.0, 0.0, 0.0};
   double rListSq = 0.0;
   std::vector<int> colX, colY, colStart; // colStart: first cluster per column
-  std::vector<int> colCount, order;
+  std::vector<int> colCount, order, colOfAtom;
   std::vector<double> zw;
+  // Columns near column c, ascending: nbrCols[c * maxNbr + k], k < nbrLen[c].
+  int maxNbr = 0;
+  std::vector<int> nbrCols, nbrLen;
 
   // Clusters, slot-major: slot 4*c + u.
   int nClusters = 0;
   std::vector<double> xC, yC, zC, qC, molC;
   std::vector<int> kindC, atomC, clusterCol;
-  std::vector<double> bbCen, bbHalf;
+  std::vector<double> bbCen[3], bbHalf[3]; // per axis, so ScanPairs can load W
 
   // Half list: the j-clusters of ci are jPtr[ci][0 .. jLen[ci]), held in
   // per-thread buffers.
@@ -194,92 +197,144 @@ inline void ClusterPairKernel::Build(const int n, const double *x,
   wx = L[0] / nx;
   wy = L[1] / ny;
 
-  // Bin by wrapped x-y, then sort each column by wrapped z.
+  // Neighbour columns: the x and y column offsets that can be within rList,
+  // all of them when the window covers the whole row.
+  const int kx = (int)(std::sqrt(rListSq) / wx) + 1;
+  const int ky = (int)(std::sqrt(rListSq) / wy) + 1;
+  const int spanX = std::min(nx, 2 * kx + 1), spanY = std::min(ny, 2 * ky + 1);
+  maxNbr = spanX * spanY;
+
   colCount.assign(nCols + 1, 0);
   order.resize(n);
   zw.resize(n);
-  std::vector<int> &colOf = clusterCol; // reused as per-atom scratch here
-  colOf.resize(std::max(n, 1));
-  for (int a = 0; a < n; ++a) {
-    const double xw = x[a] - L[0] * std::floor(x[a] * invL[0]);
-    const double yw = y[a] - L[1] * std::floor(y[a] * invL[1]);
-    zw[a] = z[a] - L[2] * std::floor(z[a] * invL[2]);
-    const int cx = std::min(nx - 1, std::max(0, (int)(xw / wx)));
-    const int cy = std::min(ny - 1, std::max(0, (int)(yw / wy)));
-    colOf[a] = cx + nx * cy;
-    ++colCount[colOf[a] + 1];
-  }
-  for (int c = 0; c < nCols; ++c)
-    colCount[c + 1] += colCount[c];
-  {
-    std::vector<int> fill(colCount.begin(), colCount.end() - 1);
-    for (int a = 0; a < n; ++a)
-      order[fill[colOf[a]]++] = a;
-  }
-  for (int c = 0; c < nCols; ++c)
-    std::sort(order.begin() + colCount[c], order.begin() + colCount[c + 1],
-              [&](const int a, const int b) { return zw[a] < zw[b]; });
-
-  // Cut columns into clusters, padding the last cluster of each column.
+  colOfAtom.resize(n);
   colStart.resize(nCols + 1);
   colX.resize(nCols);
   colY.resize(nCols);
-  nClusters = 0;
-  for (int c = 0; c < nCols; ++c) {
-    colStart[c] = nClusters;
-    colX[c] = c % nx;
-    colY[c] = c / nx;
-    nClusters += (colCount[c + 1] - colCount[c] + CS - 1) / CS;
-  }
-  colStart[nCols] = nClusters;
+  nbrCols.resize((size_t)nCols * maxNbr);
+  nbrLen.resize(nCols);
+#if defined _OPENMP
+#pragma omp parallel
+#endif
+  {
+    // Bin by wrapped x-y.
+#if defined _OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (int a = 0; a < n; ++a) {
+      const double xw = x[a] - L[0] * std::floor(x[a] * invL[0]);
+      const double yw = y[a] - L[1] * std::floor(y[a] * invL[1]);
+      zw[a] = z[a] - L[2] * std::floor(z[a] * invL[2]);
+      const int cx = std::min(nx - 1, std::max(0, (int)(xw / wx)));
+      const int cy = std::min(ny - 1, std::max(0, (int)(yw / wy)));
+      colOfAtom[a] = cx + nx * cy;
+    }
 
-  const int ns = CS * nClusters;
-  xC.resize(ns);
-  yC.resize(ns);
-  zC.resize(ns);
-  qC.resize(ns);
-  molC.resize(ns);
-  kindC.resize(ns);
-  atomC.resize(ns);
-  bbCen.resize(3 * nClusters);
-  bbHalf.resize(3 * nClusters);
-  std::vector<int> cCol(nClusters);
-  for (int c = 0; c < nCols; ++c) {
-    for (int ci = colStart[c]; ci < colStart[c + 1]; ++ci) {
-      cCol[ci] = c;
-      const int first = colCount[c] + CS * (ci - colStart[c]);
-      const int last = std::min(first + CS, colCount[c + 1]);
-      double lo[3] = {1e300, 1e300, 1e300}, hi[3] = {-1e300, -1e300, -1e300};
-      for (int u = 0; u < CS; ++u) {
-        const int s4 = CS * ci + u;
-        const bool real = first + u < last;
-        // Padding copies the cluster's first atom's position, so every
-        // distance stays finite; it is masked out by molC = -1.
-        const int a = order[real ? first + u : first];
-        xC[s4] = x[a];
-        yC[s4] = y[a];
-        zC[s4] = z[a];
-        qC[s4] = real ? q[a] : 0.0;
-        molC[s4] = real ? (double)mol[a] : -1.0;
-        kindC[s4] = real ? kind[a] : 0;
-        atomC[s4] = real ? atom[a] : -1;
-        if (real) {
-          const double w[3] = {x[a] - L[0] * std::floor(x[a] * invL[0]),
-                               y[a] - L[1] * std::floor(y[a] * invL[1]),
-                               zw[a]};
-          for (int ax = 0; ax < 3; ++ax) {
-            lo[ax] = std::min(lo[ax], w[ax]);
-            hi[ax] = std::max(hi[ax], w[ax]);
-          }
-        }
+    // Counting sort into columns, and the cluster count of each column.
+#if defined _OPENMP
+#pragma omp single
+#endif
+    {
+      for (int a = 0; a < n; ++a)
+        ++colCount[colOfAtom[a] + 1];
+      for (int c = 0; c < nCols; ++c)
+        colCount[c + 1] += colCount[c];
+      std::vector<int> fill(colCount.begin(), colCount.end() - 1);
+      for (int a = 0; a < n; ++a)
+        order[fill[colOfAtom[a]]++] = a;
+      nClusters = 0;
+      for (int c = 0; c < nCols; ++c) {
+        colStart[c] = nClusters;
+        colX[c] = c % nx;
+        colY[c] = c / nx;
+        nClusters += (colCount[c + 1] - colCount[c] + CS - 1) / CS;
       }
+      colStart[nCols] = nClusters;
+      const int ns = CS * nClusters;
+      xC.resize(ns);
+      yC.resize(ns);
+      zC.resize(ns);
+      qC.resize(ns);
+      molC.resize(ns);
+      kindC.resize(ns);
+      atomC.resize(ns);
+      clusterCol.resize(nClusters);
       for (int ax = 0; ax < 3; ++ax) {
-        bbCen[3 * ci + ax] = 0.5 * (lo[ax] + hi[ax]);
-        bbHalf[3 * ci + ax] = 0.5 * (hi[ax] - lo[ax]);
+        bbCen[ax].resize(nClusters);
+        bbHalf[ax].resize(nClusters);
       }
     }
+
+    // Sort each column by wrapped z and cut it into clusters, padding the
+    // last cluster of the column.
+#if defined _OPENMP
+#pragma omp for schedule(dynamic, 8)
+#endif
+    for (int c = 0; c < nCols; ++c) {
+      std::sort(order.begin() + colCount[c], order.begin() + colCount[c + 1],
+                [&](const int a, const int b) { return zw[a] < zw[b]; });
+      for (int ci = colStart[c]; ci < colStart[c + 1]; ++ci) {
+        clusterCol[ci] = c;
+        const int first = colCount[c] + CS * (ci - colStart[c]);
+        const int last = std::min(first + CS, colCount[c + 1]);
+        double lo[3] = {1e300, 1e300, 1e300},
+               hi[3] = {-1e300, -1e300, -1e300};
+        for (int u = 0; u < CS; ++u) {
+          const int s4 = CS * ci + u;
+          const bool real = first + u < last;
+          // Padding copies the cluster's first atom's position, so every
+          // distance stays finite; it is masked out by molC = -1.
+          const int a = order[real ? first + u : first];
+          xC[s4] = x[a];
+          yC[s4] = y[a];
+          zC[s4] = z[a];
+          qC[s4] = real ? q[a] : 0.0;
+          molC[s4] = real ? (double)mol[a] : -1.0;
+          kindC[s4] = real ? kind[a] : 0;
+          atomC[s4] = real ? atom[a] : -1;
+          if (real) {
+            const double w[3] = {x[a] - L[0] * std::floor(x[a] * invL[0]),
+                                 y[a] - L[1] * std::floor(y[a] * invL[1]),
+                                 zw[a]};
+            for (int ax = 0; ax < 3; ++ax) {
+              lo[ax] = std::min(lo[ax], w[ax]);
+              hi[ax] = std::max(hi[ax], w[ax]);
+            }
+          }
+        }
+        for (int ax = 0; ax < 3; ++ax) {
+          bbCen[ax][ci] = 0.5 * (lo[ax] + hi[ax]);
+          bbHalf[ax][ci] = 0.5 * (hi[ax] - lo[ax]);
+        }
+      }
+    }
+
+    // Columns near each column, ascending so the j-lists keep the order of
+    // a scan over all columns.
+#if defined _OPENMP
+#pragma omp for schedule(static)
+#endif
+    for (int c = 0; c < nCols; ++c) {
+      auto within = [](const int d, const int n, const int k) {
+        const int ad = std::abs(d);
+        return std::min(ad, n - ad) <= k;
+      };
+      int *const out = nbrCols.data() + (size_t)c * maxNbr;
+      int len = 0;
+      for (int cy = 0; cy < ny; ++cy) {
+        if (!within(cy - colY[c], ny, ky))
+          continue;
+        for (int cx = 0; cx < nx; ++cx) {
+          const int cn = cx + nx * cy;
+          if (within(cx - colX[c], nx, kx) && ColumnsNear(c, cn))
+            out[len++] = cn;
+        }
+      }
+      nbrLen[c] = len;
+    }
   }
-  clusterCol.swap(cCol);
+
+  const int ns = CS * nClusters;
 
   // Pair list, one pass. Each thread appends to its own buffer, which only
   // grows, and records where each of its i-clusters' j-lists starts; the
@@ -329,11 +384,39 @@ inline void ClusterPairKernel::Build(const int n, const double *x,
 
 inline void ClusterPairKernel::ScanPairs(const int ci,
                                          std::vector<int> &out) const {
+  // The bounding-box test of Near, W j-clusters at a time; the clusters of a
+  // column are contiguous.
+  typedef simd::Native B;
+  typedef B::Vec V;
+  constexpr int W = B::W;
+  const V zero = B::Set1(0.0), lim = B::Set1(rListSq);
+  V cI[3], hI[3], Lv[3], iLv[3];
+  for (int ax = 0; ax < 3; ++ax) {
+    cI[ax] = B::Set1(bbCen[ax][ci]);
+    hI[ax] = B::Set1(bbHalf[ax][ci]);
+    Lv[ax] = B::Set1(boxL[ax]);
+    iLv[ax] = B::Set1(invL[ax]);
+  }
   const int coli = clusterCol[ci];
-  for (int c = 0; c < nCols; ++c) {
-    if (!ColumnsNear(coli, c))
-      continue;
-    for (int cj = std::max(colStart[c], ci); cj < colStart[c + 1]; ++cj)
+  const int *const nb = nbrCols.data() + (size_t)coli * maxNbr;
+  for (int k = 0; k < nbrLen[coli]; ++k) {
+    const int c = nb[k];
+    const int end = colStart[c + 1];
+    int cj = std::max(colStart[c], ci);
+    for (; cj + W <= end; cj += W) {
+      V d2 = zero;
+      for (int ax = 0; ax < 3; ++ax) {
+        V d = B::Sub(B::Load(bbCen[ax].data() + cj), cI[ax]);
+        d = B::Sub(d, B::Mul(Lv[ax], B::Rint(B::Mul(d, iLv[ax]))));
+        d = B::Select(B::Lt(d, zero), B::Sub(zero, d), d);
+        V gap = B::Sub(d, B::Add(hI[ax], B::Load(bbHalf[ax].data() + cj)));
+        gap = B::Select(B::Lt(zero, gap), gap, zero);
+        d2 = B::Add(d2, B::Mul(gap, gap));
+      }
+      for (unsigned bits = B::Bits(B::Lt(d2, lim)); bits; bits &= bits - 1)
+        out.push_back(cj + __builtin_ctz(bits));
+    }
+    for (; cj < end; ++cj)
       if (Near(ci, cj))
         out.push_back(cj);
   }
