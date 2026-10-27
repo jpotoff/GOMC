@@ -40,8 +40,9 @@ std::vector<double> Lanes(const B::Vec &a) {
   return v;
 }
 
-//! Lane k of a mask, read through Select.
-std::vector<bool> Lanes(const B::Mask &m) {
+//! Lane k of a mask, read through Select. (Not an overload of Lanes: with
+//! AVX2, Vec and Mask are the same type.)
+std::vector<bool> MaskLanes(const B::Mask &m) {
   const std::vector<double> v =
       Lanes(B::Select(m, B::Set1(1.0), B::Set1(0.0)));
   std::vector<bool> r(W);
@@ -101,12 +102,16 @@ TEST(SimdLayerTest, MasksAndSelect) {
     std::vector<double> b = Random(g, W, -1.0, 1.0);
     b[0] = a[0]; // exercise equality
     const B::Vec va = B::Load(a.data()), vb = B::Load(b.data());
-    const std::vector<bool> lt = Lanes(B::Lt(va, vb)), le = Lanes(B::Le(va, vb)),
-                            ge = Lanes(B::Ge(va, vb)), ne = Lanes(B::Ne(va, vb));
-    const std::vector<bool> andm = Lanes(B::And(B::Lt(va, vb), B::Ne(va, vb)));
-    const std::vector<bool> orm = Lanes(B::Or(B::Lt(va, vb), B::Ge(va, vb)));
+    const std::vector<bool> lt = MaskLanes(B::Lt(va, vb)),
+                            le = MaskLanes(B::Le(va, vb)),
+                            ge = MaskLanes(B::Ge(va, vb)),
+                            ne = MaskLanes(B::Ne(va, vb));
+    const std::vector<bool> andm =
+        MaskLanes(B::And(B::Lt(va, vb), B::Ne(va, vb)));
+    const std::vector<bool> orm =
+        MaskLanes(B::Or(B::Lt(va, vb), B::Ge(va, vb)));
     const std::vector<bool> andnot =
-        Lanes(B::AndNot(B::Le(va, vb), B::Lt(va, vb)));
+        MaskLanes(B::AndNot(B::Le(va, vb), B::Lt(va, vb)));
     const std::vector<double> sel = Lanes(B::Select(B::Lt(va, vb), va, vb));
     bool anyLt = false;
     for (int k = 0; k < W; ++k) {

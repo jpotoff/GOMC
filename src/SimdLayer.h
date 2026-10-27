@@ -44,6 +44,17 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <immintrin.h>
 #endif
 
+// Makes the compiler treat x as rewritten in memory, so values stored to it
+// are read back with loads. TableEnVir stores its 8 row offsets and wants
+// them reloaded as plain integer loads; left alone, compilers forward the
+// store and pull each lane out of the vector register instead (vpextrd plus
+// a sign extension per lane), which cost about 18% of the kernel on Zen 5.
+#if defined(__GNUC__) || defined(__clang__)
+#define SIMD_RELOAD(x) __asm__("" : "+m"(x))
+#else
+#define SIMD_RELOAD(x) ((void)0)
+#endif
+
 namespace simd {
 
 // ------------------------------------------------------------- generic ----
@@ -230,10 +241,12 @@ struct Avx2 {
   static void TableEnVir(const double *c, const Vec t, Vec &en, Vec &vir) {
     const __m128i i4 = _mm256_cvttpd_epi32(t);
     const Vec f = _mm256_sub_pd(t, _mm256_cvtepi32_pd(i4));
+    // Offsets in doubles, read back through memory (SIMD_RELOAD).
     alignas(16) int ix[4];
-    _mm_store_si128((__m128i *)ix, i4);
-    const double *p0 = c + 8 * ix[0], *p1 = c + 8 * ix[1],
-                 *p2 = c + 8 * ix[2], *p3 = c + 8 * ix[3];
+    _mm_store_si128((__m128i *)ix, _mm_slli_epi32(i4, 3));
+    SIMD_RELOAD(ix);
+    const double *p0 = c + ix[0], *p1 = c + ix[1], *p2 = c + ix[2],
+                 *p3 = c + ix[3];
     // 4x4 transposes of the energy halves and the virial halves.
     Vec cf[8];
     for (int h = 0; h < 2; ++h) {
@@ -321,12 +334,14 @@ struct Avx512 {
   static void TableEnVir(const double *c, const Vec t, Vec &en, Vec &vir) {
     const __m256i i8 = _mm512_cvttpd_epi32(t);
     const Vec f = _mm512_sub_pd(t, _mm512_cvtepi32_pd(i8));
+    // Offsets in doubles, read back through memory (SIMD_RELOAD).
     alignas(32) int ix[8];
-    _mm256_store_si256((__m256i *)ix, i8);
+    _mm256_store_si256((__m256i *)ix, _mm256_slli_epi32(i8, 3));
+    SIMD_RELOAD(ix);
     // Row k is lane k's whole line: coefficients 0-3 energy, 4-7 virial.
     Vec r[8];
     for (int k = 0; k < 8; ++k)
-      r[k] = _mm512_loadu_pd(c + 8 * ix[k]);
+      r[k] = _mm512_loadu_pd(c + ix[k]);
     // 8x8 transpose: unpack pairs of rows, then two rounds of 128-bit lane
     // shuffles. 0x88 takes 128-bit lanes (0, 2) of each source, 0xDD (1, 3).
     const Vec t0 = _mm512_unpacklo_pd(r[0], r[1]);
