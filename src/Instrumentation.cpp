@@ -27,6 +27,10 @@ const double LNACC_LO = -50.0, LNACC_HI = 10.0;
 const double LNW_LO = -60.0, LNW_HI = 20.0;
 const double BETAU_LO = -60.0, BETAU_HI = 60.0;
 const double WORK_LO = -20.0, WORK_HI = 60.0;
+// [atom_split]: a trial with beta*u above DEAD_KT is dead (weight < e^-20);
+// per-atom energy means clip each value to [-ACLIP, ACLIP] so that overlaps
+// (energies of 1e10 kT and more) do not swamp them
+const double DEAD_KT = 20.0, ACLIP = 100.0;
 
 const char *const REASON_NAMES[N_REASON] = {
     "accepted",     "metropolis",   "overlap_first", "overlap_later",
@@ -322,6 +326,7 @@ void Collector::MoveDone(uint move, uint box, uint kind, uint rejectState,
         sp.sBE += dB * dE;
       }
     }
+    s.atomSplit.Merge(newMol->InstrRecord().atomSplit);
     for (const StageRec &st : ns) {
       StageStats &ss = s.stage[st.stage];
       ++ss.n;
@@ -589,6 +594,50 @@ void Collector::Write(ulong step) {
               it.first.box, kindName(it.first.kind), (int)it.first.nested,
               ps.n, mt, ps.tDD / ps.n - mt * mt);
     }
+
+    fprintf(f,
+            "\n[atom_split]\n# growth-step trials (DCLinkedHedron, new "
+            "configuration) split by placed atom: heavy (C or united-atom "
+            "site) vs H; beta*u, inter = inter + real, intra = 1-5+; a trial "
+            "is dead when beta*u > %.0f\n"
+            "# move box kind nested sets trials heavy_per_trial H_per_trial "
+            "dead_frac dead_heavy_frac dead_noHinter_frac "
+            "kill_heavy_inter kill_heavy_intra kill_H_inter kill_H_intra "
+            "u_inter_heavy u_intra_heavy u_inter_H u_intra_H "
+            "atom_over_heavy atom_over_H win_inter_heavy win_intra_heavy "
+            "win_inter_H win_intra_H ln_all ln_heavy ln_noHinter ln_noHintra "
+            "sets_dead sets_dead_heavy\n"
+            "# kill_*: fraction of dead trials whose largest single-atom "
+            "beta*u is that class and term; u_* and win_*: mean per atom over "
+            "all trials and over selected trials, each value clipped to +-%.0f; "
+            "atom_over_*: fraction of atoms with own beta*u > %.0f; ln_*: mean "
+            "over sets of ln(mean exp(-beta*u)) counting all atoms, heavy only, "
+            "all but H inter, all but H intra, each trial beta*u capped at %.0f; sets_dead*: fraction of sets "
+            "with every trial dead\n",
+            DEAD_KT, ACLIP, DEAD_KT, ACLIP);
+    for (const auto &it : moves) {
+      const AtomSplitAcc &a = it.second.atomSplit;
+      if (a.sets == 0)
+        continue;
+      double T = (double)a.trials, S = (double)a.sets, D = std::max(1.0, (double)a.dead);
+      auto per = [](double s, ulong n) { return n ? s / n : 0.0; };
+      fprintf(f,
+              "%s %u %s %d %lu %lu %.3f %.3f %.4f %.4f %.4f %.4f %.4f %.4f "
+              "%.4f %.3f %.3f %.3f %.3f %.4f %.4f %.3f %.3f %.3f %.3f %.3f "
+              "%.3f %.3f %.3f %.4f %.4f\n",
+              moveName(it.first.move).c_str(), it.first.box,
+              kindName(it.first.kind), (int)it.first.nested, a.sets, a.trials,
+              a.n[0] / T, a.n[1] / T, a.dead / T, a.deadHeavy / T,
+              a.deadNoHInter / T, a.killer[0][0] / D, a.killer[0][1] / D,
+              a.killer[1][0] / D, a.killer[1][1] / D, per(a.sInter[0], a.n[0]),
+              per(a.sIntra[0], a.n[0]), per(a.sInter[1], a.n[1]),
+              per(a.sIntra[1], a.n[1]), per(a.over[0], a.n[0]),
+              per(a.over[1], a.n[1]), per(a.sWinInter[0], a.nWin[0]),
+              per(a.sWinIntra[0], a.nWin[0]), per(a.sWinInter[1], a.nWin[1]),
+              per(a.sWinIntra[1], a.nWin[1]), a.lnAll / S, a.lnHeavy / S,
+              a.lnNoHInter / S, a.lnNoHIntra / S, a.setsAllDead / S,
+              a.setsAllDeadHeavy / S);
+    }
   }
 
   if (On(NEMTMC)) {
@@ -733,6 +782,106 @@ void RecordPairs(cbmc::TrialMol &mol, uint atom,
     pe[c] += p.lj;
     pe[c + 1] += p.coul;
   }
+}
+
+void AtomSplitAcc::Merge(const AtomSplitAcc &o) {
+  sets += o.sets;
+  trials += o.trials;
+  dead += o.dead;
+  deadHeavy += o.deadHeavy;
+  deadNoHInter += o.deadNoHInter;
+  for (int c = 0; c < N_ACLASS; ++c) {
+    killer[c][0] += o.killer[c][0];
+    killer[c][1] += o.killer[c][1];
+    n[c] += o.n[c];
+    over[c] += o.over[c];
+    sInter[c] += o.sInter[c];
+    sIntra[c] += o.sIntra[c];
+    nWin[c] += o.nWin[c];
+    sWinInter[c] += o.sWinInter[c];
+    sWinIntra[c] += o.sWinIntra[c];
+  }
+  lnAll += o.lnAll;
+  lnHeavy += o.lnHeavy;
+  lnNoHInter += o.lnNoHInter;
+  lnNoHIntra += o.lnNoHIntra;
+  setsAllDead += o.setsAllDead;
+  setsAllDeadHeavy += o.setsAllDeadHeavy;
+}
+
+void RecordAtomSplit(cbmc::TrialMol &mol, const uint *atoms, uint nAtoms,
+                     uint nTrials, const double *inter, const double *intra,
+                     uint winner) {
+  Collector &col = Collector::Get();
+  if (!col.On(WEIGHTS) || nTrials == 0 || nAtoms == 0)
+    return;
+  const double beta = col.Beta();
+  const Collector::Topo &t = col.Topology(mol);
+  AtomSplitAcc &a = mol.InstrRecord().atomSplit;
+  auto clip = [](double x) { return std::max(-ACLIP, std::min(ACLIP, x)); };
+  // per-trial beta*u: all, heavy only, without H inter, without H intra
+  std::vector<double> uAll(nTrials), uHeavy(nTrials), uNoHI(nTrials),
+      uNoHN(nTrials);
+  ++a.sets;
+  a.trials += nTrials;
+  for (uint j = 0; j < nTrials; ++j) {
+    double all = 0.0, heavy = 0.0, hInter = 0.0, hIntra = 0.0, worst = -HUGE_VAL;
+    int wc = 0, wterm = 0;
+    for (uint k = 0; k < nAtoms; ++k) {
+      int c = t.elem[atoms[k]] == 'H' ? 1 : 0;
+      double ui = beta * inter[k * nTrials + j];
+      double un = beta * intra[k * nTrials + j];
+      all += ui + un;
+      if (c == 0)
+        heavy += ui + un;
+      else {
+        hInter += ui;
+        hIntra += un;
+      }
+      ++a.n[c];
+      a.sInter[c] += clip(ui);
+      a.sIntra[c] += clip(un);
+      a.over[c] += (ui + un) > DEAD_KT;
+      if (j == winner) {
+        ++a.nWin[c];
+        a.sWinInter[c] += clip(ui);
+        a.sWinIntra[c] += clip(un);
+      }
+      if (ui + un > worst) {
+        worst = ui + un;
+        wc = c;
+        wterm = un > ui ? 1 : 0;
+      }
+    }
+    uAll[j] = all;
+    uHeavy[j] = heavy;
+    uNoHI[j] = all - hInter;
+    uNoHN[j] = all - hIntra;
+    if (all > DEAD_KT) {
+      ++a.dead;
+      ++a.killer[wc][wterm];
+      a.deadHeavy += heavy > DEAD_KT;
+      a.deadNoHInter += uNoHI[j] > DEAD_KT;
+    }
+  }
+  // ln(mean exp(-u)) by log-sum-exp, each u capped at ACLIP: a set whose
+  // trials all overlap would otherwise add ~1e6 and swamp the mean over sets
+  auto lnMeanExp = [nTrials](const std::vector<double> &u, bool &allDead) {
+    double m = *std::min_element(u.begin(), u.end());
+    allDead = m > DEAD_KT;
+    m = std::min(m, ACLIP);
+    double s = 0.0;
+    for (double x : u)
+      s += std::exp(-(std::min(x, ACLIP) - m));
+    return -m + std::log(s / nTrials);
+  };
+  bool d, dh, unused;
+  a.lnAll += lnMeanExp(uAll, d);
+  a.lnHeavy += lnMeanExp(uHeavy, dh);
+  a.lnNoHInter += lnMeanExp(uNoHI, unused);
+  a.lnNoHIntra += lnMeanExp(uNoHN, unused);
+  a.setsAllDead += d;
+  a.setsAllDeadHeavy += dh;
 }
 
 void RecordBondedPart(cbmc::TrialMol &mol, double lnBonded) {

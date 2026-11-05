@@ -98,12 +98,39 @@ struct PairE {
 // other) x term (LJ, Coulomb)
 enum { N_SEP = 3, N_PTYPE = 4, N_PAIRCLASS = N_SEP * N_PTYPE * 2 };
 
+// Per-atom split of the trial energies of growth steps (DCLinkedHedron, new
+// configuration). Atoms are hydrogen (class 1, type name starting with H) or
+// heavy (class 0, everything else, including united-atom sites). Energies are
+// beta*u, intermolecular = inter + real, intramolecular = 1-5+ nonbonded. A
+// trial is dead when its beta*u exceeds DEAD_KT (instrumentation.md).
+enum { N_ACLASS = 2 };
+struct AtomSplitAcc {
+  ulong sets = 0, trials = 0;
+  ulong dead = 0;         // dead trials
+  ulong deadHeavy = 0;    // dead on the heavy atoms' energy alone
+  ulong deadNoHInter = 0; // still dead without the H intermolecular energy
+  // dead trials by the atom with the largest beta*u: class x (inter, intra)
+  ulong killer[N_ACLASS][2] = {};
+  ulong n[N_ACLASS] = {};    // atom-trials
+  ulong over[N_ACLASS] = {}; // atom-trials whose own beta*u > DEAD_KT
+  // sums of beta*u per atom-trial, each clipped to [-ACLIP, ACLIP]
+  double sInter[N_ACLASS] = {}, sIntra[N_ACLASS] = {};
+  ulong nWin[N_ACLASS] = {}; // the same for the selected trial's atoms
+  double sWinInter[N_ACLASS] = {}, sWinIntra[N_ACLASS] = {};
+  // sums over sets of ln(mean_trials exp(-beta*u)) counting all atoms, heavy
+  // atoms only, all but the H intermolecular energy, all but the H 1-5+ energy
+  double lnAll = 0.0, lnHeavy = 0.0, lnNoHInter = 0.0, lnNoHIntra = 0.0;
+  ulong setsAllDead = 0, setsAllDeadHeavy = 0;
+  void Merge(const AtomSplitAcc &o);
+};
+
 // Per-trial-molecule record, carried by cbmc::TrialMol.
 struct TrialRecord {
   int failStage = -1; // first stage with all weights zero, -1 if none
   bool failOverlap = false;
   std::vector<StageRec> stages;
   double pairE[N_PAIRCLASS] = {}; // 1-5+ energy by class over the growth
+  AtomSplitAcc atomSplit;
 };
 
 // Fixed-width histogram; values outside [lo, hi) go into the end bins.
@@ -165,6 +192,7 @@ struct MoveStats {
   std::vector<PosStats> pos;
   SplitStats split;
   PairStats pairs;
+  AtomSplitAcc atomSplit;
   std::vector<unsigned char> posStage; // stage type seen at each position
 };
 
@@ -184,6 +212,7 @@ public:
                  const std::vector<std::string> &kindNames,
                  const std::vector<double> &lambdaVDW);
   bool On(unsigned cats) const { return enabled && (categories & cats); }
+  double Beta() const { return beta; }
   // Stage records are only needed for rejection and weight diagnostics.
   bool StagesOn() const { return On(REJECTION | WEIGHTS); }
 
@@ -260,6 +289,12 @@ void RecordStageFactor(cbmc::TrialMol &mol, Stage stage, const double *w,
 // record, classified by separation, atom types and term
 void RecordPairs(cbmc::TrialMol &mol, uint atom,
                  const std::vector<PairE> &pairs);
+// Record the per-atom energies of one growth step's trials on mol.
+// atoms[a]: the a-th atom placed by the step; inter/intra: energies (K, not
+// yet multiplied by beta) at [a * nTrials + trial]; winner: selected trial.
+void RecordAtomSplit(cbmc::TrialMol &mol, const uint *atoms, uint nAtoms,
+                     uint nTrials, const double *inter, const double *intra,
+                     uint winner);
 // Attach ln(mean bonded importance weight) to the stage just recorded on mol
 void RecordBondedPart(cbmc::TrialMol &mol, double lnBonded);
 // Record one stage of the old configuration (mean trial weight only; the old
