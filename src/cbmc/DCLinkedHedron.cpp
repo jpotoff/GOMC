@@ -199,6 +199,15 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
     winner = prng.PickWeighted(ljWeights, nLJTrials, stepWeight);
   }
   GOMC_INSTR(instr::RecordBondedPart(newMol, std::log(instrB / nLJTrials));)
+#ifdef GOMC_INSTRUMENT
+  if (instrInter.size() == hed.NumBond() * nLJTrials) {
+    uint atoms[MAX_BONDS];
+    for (uint b = 0; b < hed.NumBond(); ++b)
+      atoms[b] = hed.Bonded(b);
+    instr::RecordAtomSplit(newMol, atoms, hed.NumBond(), nLJTrials,
+                           instrInter.data(), instrIntra.data(), winner);
+  }
+#endif
   RestoreBranch(winner);
 #ifdef GOMC_INSTRUMENT
   if (instr::Collector::Get().On(instr::WEIGHTS)) {
@@ -698,12 +707,34 @@ double DCLinkedHedron::EvalLJ(TrialMol &mol, uint molIndex) {
   // all trials sit around the focus atom: one candidate list serves them
   data->calc.BeginLocalCandidates(mol.AtomPosition(hed.Focus()), positions,
                                   hed.NumBond(), nLJTrials, mol.GetBox());
+#ifdef GOMC_INSTRUMENT
+  // both calls add into the trial arrays, so each atom's share is the change
+  const bool split = instr::Collector::Get().On(instr::WEIGHTS);
+  if (split) {
+    instrInter.assign(hed.NumBond() * nLJTrials, 0.0);
+    instrIntra.assign(hed.NumBond() * nLJTrials, 0.0);
+  }
+#endif
   for (uint b = 0; b < hed.NumBond(); ++b) {
+#ifdef GOMC_INSTRUMENT
+    if (split)
+      for (uint lj = 0; lj < nLJTrials; ++lj) {
+        instrInter[b * nLJTrials + lj] = -(inter[lj] + real[lj]);
+        instrIntra[b * nLJTrials + lj] = -nonbonded[lj];
+      }
+#endif
     data->calc.ParticleInter(inter, real, positions[b], overlap, hed.Bonded(b),
                              molIndex, mol.GetBox(), nLJTrials);
 
     data->calc.ParticleNonbonded(nonbonded, mol, positions[b], hed.Bonded(b),
                                  mol.GetBox(), nLJTrials);
+#ifdef GOMC_INSTRUMENT
+    if (split)
+      for (uint lj = 0; lj < nLJTrials; ++lj) {
+        instrInter[b * nLJTrials + lj] += inter[lj] + real[lj];
+        instrIntra[b * nLJTrials + lj] += nonbonded[lj];
+      }
+#endif
   }
   data->calc.EndLocalCandidates();
   double stepWeight = 0;

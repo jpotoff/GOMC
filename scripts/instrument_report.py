@@ -65,6 +65,7 @@ def report_moves(sec, show_all):
     for r in sec.get('stages', []):
         stages.setdefault(tuple(r[:4]), {})[r[4]] = r
     widom = {tuple(r[:4]): r for r in sec.get('widom', [])}
+    asplit = {tuple(r[:4]): r for r in sec.get('atom_split', [])}
     positions = {}
     for r in sec.get('stage_position', []):
         positions.setdefault(tuple(r[:4]), []).append(r)
@@ -176,6 +177,42 @@ def report_moves(sec, show_all):
                                 'first branches are poorly sampled; check the '
                                 'trial counts and branch sampler of those '
                                 'steps')
+        if key in asplit:
+            a = list(map(float, asplit[key][4:]))
+            (sets, trials, nh_heavy, nh_h, dead, dead_heavy, dead_nohi,
+             k_hi, k_hn, k_Hi, k_Hn, u_hi, u_hn, u_Hi, u_Hn, ov_h, ov_H,
+             w_hi, w_hn, w_Hi, w_Hn, ln_all, ln_heavy, ln_nohi, ln_nohn,
+             sd, sdh) = a
+            print(f'  growth-step atoms per trial: {nh_heavy:.2f} heavy, '
+                  f'{nh_h:.2f} H')
+            print(f'    dead trials (beta*u > 20): {100 * dead:.1f}%; dead on '
+                  f'heavy atoms alone {100 * dead_heavy:.1f}%; dead without H '
+                  f'intermolecular {100 * dead_nohi:.1f}%')
+            print(f'    largest single-atom term of dead trials: heavy inter '
+                  f'{100 * k_hi:.0f}%, heavy 1-5+ {100 * k_hn:.0f}%, H inter '
+                  f'{100 * k_Hi:.0f}%, H 1-5+ {100 * k_Hn:.0f}%')
+            print(f'    mean beta*u per atom (clipped +-100), all trials: '
+                  f'heavy {u_hi:.2f} inter / {u_hn:.2f} 1-5+, H {u_Hi:.2f} '
+                  f'inter / {u_Hn:.2f} 1-5+; selected trials: heavy '
+                  f'{w_hi:.2f} / {w_hn:.2f}, H {w_Hi:.2f} / {w_Hn:.2f}')
+            print(f'    atoms individually above 20 kT: heavy '
+                  f'{100 * ov_h:.1f}%, H {100 * ov_H:.1f}%')
+            print(f'    per-step ln(mean exp(-beta*u)): all {ln_all:.2f}, '
+                  f'heavy only {ln_heavy:.2f}, without H inter {ln_nohi:.2f}, '
+                  f'without H 1-5+ {ln_nohn:.2f}; sets with every trial dead '
+                  f'{100 * sd:.1f}% (heavy only {100 * sdh:.1f}%)')
+            if nh_h > 0 and dead > 0.1:
+                heavy_share = dead_heavy / dead
+                if heavy_share > 0.67:
+                    diag.append(f'{100 * heavy_share:.0f}% of dead growth '
+                                'trials are dead on the heavy atoms alone: the '
+                                'backbone placement limits growth; the H atoms '
+                                f'add the rest (sets with every trial dead '
+                                f'{100 * sdh:.0f}% -> {100 * sd:.0f}%)')
+                else:
+                    diag.append(f'only {100 * heavy_share:.0f}% of dead growth '
+                                'trials are dead on the heavy atoms alone: the '
+                                'joint fit of the H atoms limits growth')
         if key in widom:
             w = widom[key]
             ess = float(w[6])

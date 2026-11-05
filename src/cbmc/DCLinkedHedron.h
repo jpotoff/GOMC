@@ -107,6 +107,11 @@ private:
   std::vector<DCLinkedHedron *> children;
   std::vector<double> laV, laSel, laTor, laE14, laNB; // scratch
   XYZArray laPos[MAX_BONDS];
+#ifdef GOMC_INSTRUMENT
+  // per-atom trial energies from the last EvalLJ, [bond * nTrials + trial]:
+  // intermolecular (inter + real) and intramolecular 1-5+ ([atom_split])
+  std::vector<double> instrInter, instrIntra;
+#endif
 };
 } // namespace cbmc
 #endif /*DCLINKEDHEDRON_H*/
