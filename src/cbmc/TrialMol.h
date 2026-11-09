@@ -6,6 +6,10 @@ A copy of the MIT License can be found in License.txt with this program or at
 #ifndef TRIALMOL_H
 #define TRIALMOL_H
 
+#include <algorithm>
+#include <utility>
+#include <vector>
+
 #include "BasicTypes.h"
 #include "EnergyTypes.h"
 #include "GeomLib.h"
@@ -99,6 +103,7 @@ public:
     en.Zero();
     bonds.Unset();
     overlap = false;
+    counted14.clear();
   }
 
   //! Confirms that atom at index i has been built (used for oldMols)
@@ -106,7 +111,27 @@ public:
 
   //! Marks atom i as not built (undoes a tentative placement in recoil
   //! growth; the coordinates are left as they are)
-  void RemoveAtom(uint i) { atomBuilt[i] = false; }
+  void RemoveAtom(uint i) {
+    atomBuilt[i] = false;
+    counted14.erase(std::remove_if(counted14.begin(), counted14.end(),
+                                   [i](const std::pair<uint, uint> &p) {
+                                     return p.first == i || p.second == i;
+                                   }),
+                    counted14.end());
+  }
+
+  //! 1-4 pairs whose nonbonded energy has been added during this growth. In
+  //! rings a 1-4 pair can be joined by more than one dihedral (C1-C4 in a
+  //! six-membered ring); its energy must be counted once, as in the full
+  //! energy calculation, not once per dihedral.
+  bool Counted14(uint a, uint b) const {
+    std::pair<uint, uint> p(std::min(a, b), std::max(a, b));
+    return std::find(counted14.begin(), counted14.end(), p) != counted14.end();
+  }
+  void MarkCounted14(uint a, uint b) {
+    if (!Counted14(a, b))
+      counted14.emplace_back(std::min(a, b), std::max(a, b));
+  }
 
   //! Sets an orthonormal basis for coordinate conversion.
   /*!\param p1 Index of particle new additions will be bonded to
@@ -260,6 +285,7 @@ private:
   bool comInCav, comFix, rotateBB;
   bool overlap;
   bool *atomBuilt;
+  std::vector<std::pair<uint, uint>> counted14;
   // To check the status of built bonds
   Bonds bonds;
 #ifdef GOMC_INSTRUMENT

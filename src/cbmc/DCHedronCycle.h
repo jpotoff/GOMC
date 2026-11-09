@@ -5,6 +5,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #ifndef DCHEDRONCYCLE_H
 #define DCHEDRONCYCLE_H
+#include "BranchSampler.h"
 #include "CBMC.h"
 #include "DCComponent.h"
 #include "TransformMatrix.h"
@@ -16,6 +17,16 @@ class MolKind;
 namespace cbmc {
 class DCData;
 
+// Places the atoms bonded to a ring atom (focus), given the previously
+// placed atom prev. Angles that belong to the ring body, or that are fixed in
+// the force field, are taken from the molecule's existing geometry (bCoords);
+// all other angles are drawn by BranchSampler, as in DCHedron. nAngleTrials
+// geometries are drawn and one is selected with probability proportional to
+// its importance weight times the 1-3 Boltzmann factor; the summed weight is
+// this step's Rosenbluth factor. For the old configuration it is formed from
+// the actual branch plus nAngleTrials - 1 generated ones. The constrained
+// angles contribute the same factor to the new and old weights (both are
+// built from the same ring geometry), so they are left out of the weight.
 class DCHedronCycle {
 public:
   DCHedronCycle(DCData *data, const mol_setup::MolKind &kind,
@@ -29,24 +40,25 @@ public:
   uint Bonded(uint i) const { return bonded[i]; }
   double Theta(uint i) const { return theta[i]; }
   double Phi(uint i) const { return phi[i]; }
-  double GetWeight();
-  double GetEnergy() { return bendEnergy; }
-  double GetNonBondedEn() { return oneThree; }
-  uint NumBond() { return nBonds; }
-  uint Focus() { return focus; }
-  uint Prev() { return prev; }
+  double GetWeight() const { return weight; }
+  double GetEnergy() const { return bendEnergy; }
+  double GetNonBondedEn() const { return oneThree; }
+  uint NumBond() const { return nBonds; }
+  uint Focus() const { return focus; }
+  uint Prev() const { return prev; }
 
   // need to go to private
   uint bonded[MAX_BONDS];
 
 private:
-  void GenerateAnglesNew(TrialMol &newMol, uint molIndex, uint kind,
-                         uint nTrials, uint bType);
-  void GenerateAnglesOld(TrialMol &oldMol, uint molIndex, uint kind,
-                         uint nTrials, uint bType);
-  void FreeAnglesNew(TrialMol &newMol, uint molIndex, uint nTrials);
-  void FreeAnglesOld(TrialMol &oldMol, uint molIndex, uint nTrials);
-  void ConstrainedAngles(TrialMol &newMol, uint molIndex, uint nTrials);
+  void BranchFailure(TrialMol &mol) const;
+  // Read the values of the constrained angles, and the mirror solution of
+  // each constrained pair, from the existing geometry
+  void SetConstraints(TrialMol &mol);
+  void SampleTrials(TrialMol &mol, uint molIndex, bool useOld, uint nTrials);
+  void BranchEnergy(TrialMol &mol, uint molIndex, const double *th,
+                    const double *ph, bool useOld, double &bend,
+                    double &nb13);
   // to calculate the angle in the ring from bCoords or tCoords a0-a1-a2
   double CalcTheta(TrialMol &mol, const uint a0, const uint a1, const uint a2);
   //! Sets an orthonormal basis for coordinate conversion.
@@ -72,11 +84,11 @@ private:
   uint angleKinds[MAX_BONDS][MAX_BONDS];
   bool angleInRing[MAX_BONDS][MAX_BONDS];
   double theta[MAX_BONDS];
-  double thetaWeight[MAX_BONDS];
   double phi[MAX_BONDS];
-  double phiWeight[MAX_BONDS];
+  double weight;
   double bendEnergy, oneThree;
   double anchorBond, anchorBondOld;
+  BranchSampler sampler;
   RotationMatrix growthToWorld;
   RotationMatrix worldToGrowth;
 };

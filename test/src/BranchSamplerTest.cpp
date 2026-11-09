@@ -12,8 +12,9 @@ Metropolis random walk of the bond directions on the unit sphere, whose
 target is simply exp(-beta U) with respect to the uniform sphere measure.
 
 The cases cover tetrahedral, trigonal planar, linear, trigonal bipyramidal and
-octahedral centers, soft and asymmetric angles, the Martini cosine form, and
-fixed bond angles.
+octahedral centers, soft and asymmetric angles, the Martini cosine form,
+fixed bond angles, and ring atoms whose prev-focus-b angle is constrained to
+a value set by the caller (as DCHedronCycle does from the ring geometry).
 *******************************************************************************/
 
 #include <cmath>
@@ -118,14 +119,19 @@ double Energy(const FFAngles &ang, const Branch &br, const double *th,
 }
 
 // Reference: Metropolis random walk of the bond directions on the sphere
-std::vector<std::vector<double>> Reference(const FFAngles &ang,
-                                           const Branch &br, double beta,
-                                           size_t nSamples, unsigned seed) {
+// conTheta[b], if finite, holds the prev-focus-b angle of atom b fixed: b then
+// moves only on its cone, by a symmetric step in phi.
+std::vector<std::vector<double>>
+Reference(const FFAngles &ang, const Branch &br, double beta, size_t nSamples,
+          unsigned seed, const std::vector<double> &conTheta = {}) {
   Rng rng(seed);
   std::normal_distribution<double> gauss(0.0, 1.0);
   double th[MAX_BONDS], ph[MAX_BONDS];
+  auto fixedTheta = [&](uint b) {
+    return b < conTheta.size() && std::isfinite(conTheta[b]);
+  };
   for (uint b = 0; b < br.n; ++b) {
-    th[b] = ang.Angle(br.kinds[b][b]);
+    th[b] = fixedTheta(b) ? conTheta[b] : ang.Angle(br.kinds[b][b]);
     ph[b] = 2.0 * M_PI * b / br.n;
   }
   double e = Energy(ang, br, th, ph);
@@ -135,13 +141,17 @@ std::vector<std::vector<double>> Reference(const FFAngles &ang,
   for (size_t s = 0; s < equil + nSamples * sweepsPerSample; ++s) {
     for (uint b = 0; b < br.n; ++b) {
       // perturb the unit vector isotropically and renormalize (symmetric)
-      double x = sin(th[b]) * cos(ph[b]) + step * gauss(rng.gen);
-      double y = sin(th[b]) * sin(ph[b]) + step * gauss(rng.gen);
-      double z = cos(th[b]) + step * gauss(rng.gen);
-      double r = sqrt(x * x + y * y + z * z);
       double oldT = th[b], oldP = ph[b];
-      th[b] = acos(std::max(-1.0, std::min(1.0, z / r)));
-      ph[b] = atan2(y, x);
+      if (fixedTheta(b)) {
+        ph[b] += 3.0 * step * gauss(rng.gen);
+      } else {
+        double x = sin(th[b]) * cos(ph[b]) + step * gauss(rng.gen);
+        double y = sin(th[b]) * sin(ph[b]) + step * gauss(rng.gen);
+        double z = cos(th[b]) + step * gauss(rng.gen);
+        double r = sqrt(x * x + y * y + z * z);
+        th[b] = acos(std::max(-1.0, std::min(1.0, z / r)));
+        ph[b] = atan2(y, x);
+      }
       double eNew = Energy(ang, br, th, ph);
       if (rng() < exp(-beta * (eNew - e))) {
         e = eNew;
@@ -161,10 +171,18 @@ std::vector<std::vector<double>> SamplerChain(const FFAngles &ang,
                                               const Branch &br, double beta,
                                               uint nTrials, size_t nSamples,
                                               unsigned seed,
-                                              double &acceptance) {
+                                              double &acceptance,
+                                              const std::vector<double>
+                                                  &conTheta = {}) {
   Rng rng(seed);
   BranchSampler sampler;
-  sampler.Init(br.n, br.kinds, &ang, nullptr);
+  bool cons[MAX_BONDS][MAX_BONDS] = {};
+  for (uint b = 0; b < br.n && b < conTheta.size(); ++b)
+    cons[b][b] = std::isfinite(conTheta[b]);
+  sampler.Init(br.n, br.kinds, &ang, nullptr, cons);
+  for (uint b = 0; b < br.n; ++b)
+    if (cons[b][b])
+      sampler.SetConstraint(b, b, conTheta[b]);
   double th[MAX_BONDS], ph[MAX_BONDS], tt[MAX_BONDS], tp[MAX_BONDS];
   double nt[MAX_BONDS], np[MAX_BONDS];
   EXPECT_TRUE(sampler.Sample(rng, beta, th, ph));
@@ -203,14 +221,15 @@ std::vector<std::vector<double>> SamplerChain(const FFAngles &ang,
 template <class AngleType = FFAngles>
 void CheckBranch(const char *name, const std::vector<double> &k,
                  const std::vector<double> &t0, const Branch &br,
-                 uint nTrials = 4, size_t nSamples = 60000) {
+                 uint nTrials = 4, size_t nSamples = 60000,
+                 const std::vector<double> &conTheta = {}) {
   TestAngles<AngleType> ang;
   ang.Set(k, t0, std::vector<bool>(k.size(), false));
   const double beta = 1.0; // energies in units of kT
   double acc = 0.0;
-  Moments ref = Summarize(Reference(ang, br, beta, nSamples, 11));
-  Moments got =
-      Summarize(SamplerChain(ang, br, beta, nTrials, nSamples, 23, acc));
+  Moments ref = Summarize(Reference(ang, br, beta, nSamples, 11, conTheta));
+  Moments got = Summarize(
+      SamplerChain(ang, br, beta, nTrials, nSamples, 23, acc, conTheta));
   std::cout << "[ " << name << " ] N = " << nTrials
             << ", chain acceptance = " << acc << "\n";
   for (size_t j = 0; j < ref.mean.size(); ++j) {
@@ -336,5 +355,48 @@ TEST(BranchSamplerTest, AllFixed) {
         EXPECT_NEAR(BranchSampler::AngleBetween(th[b], ph[b], th[c], ph[c]),
                     tet * M_PI / 180.0, 1e-6);
     EXPECT_DOUBLE_EQ(sampler.Weight(1.0, th, ph), 1.0);
+  }
+}
+
+// Ring atom: the ring neighbor's prev-focus-b angle is constrained to the
+// ring geometry (here 111.4 deg, not the force field's 109.5), the two
+// hydrogens are free. Stiff angles as in all-atom force fields (beta K ~ 60
+// per rad^2). The ring neighbor is first, then in the middle of the list.
+TEST(BranchSamplerTest, RingConstrainedTheta) {
+  const double nan = std::nan("");
+  const double ring = 111.4 * M_PI / 180.0;
+  // kinds: 0 C-C-C / C-C-H 109.65, 1 H-C-H 108.0
+  Branch br = MakeBranch(3, {{0}, {0, 0}, {0, 1, 0}});
+  CheckBranch("ring neighbor first", {30.0, 12.0}, {109.65, 108.0}, br, 4,
+              60000, {ring, nan, nan});
+  Branch br2 = MakeBranch(3, {{0}, {0, 0}, {1, 0, 0}});
+  CheckBranch("ring neighbor second", {30.0, 12.0}, {109.65, 108.0}, br2, 4,
+              60000, {nan, ring, nan});
+}
+
+// Constrained pair angle (two ring neighbors around an exocyclic prev): the
+// pair angle is held at the caller's value and the twist takes the caller's
+// sign, so the ring keeps its handedness.
+TEST(BranchSamplerTest, RingConstrainedPairSign) {
+  TestAngles<FFAngles> ang;
+  ang.Set({30.0, 12.0}, {109.65, 108.0}, {false, false});
+  Branch br = MakeBranch(3, {{0}, {0, 0}, {0, 0, 0}});
+  bool cons[MAX_BONDS][MAX_BONDS] = {};
+  cons[1][0] = cons[0][1] = true;
+  const double pair = 111.4 * M_PI / 180.0;
+  for (double sign : {1.0, -1.0}) {
+    BranchSampler sampler;
+    sampler.Init(br.n, br.kinds, &ang, nullptr, cons);
+    sampler.SetConstraint(1, 0, pair, sign);
+    Rng rng(sign > 0 ? 3 : 4);
+    double th[MAX_BONDS], ph[MAX_BONDS];
+    for (int i = 0; i < 5000; ++i) {
+      ASSERT_TRUE(sampler.Sample(rng, 1.0, th, ph));
+      EXPECT_NEAR(BranchSampler::AngleBetween(th[1], ph[1], th[0], ph[0]),
+                  pair, 1e-9);
+      EXPECT_GT(sign * sin(ph[1] - ph[0]), 0.0);
+      double w = sampler.Weight(1.0, th, ph);
+      EXPECT_TRUE(std::isfinite(w) && w > 0.0);
+    }
   }
 }

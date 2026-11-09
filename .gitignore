@@ -35,6 +35,8 @@
 bin
 bin_MPI
 bin_instrument
+bin_test
+Testing
 lib/cub
 .vscode
 .idea

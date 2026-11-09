@@ -245,6 +245,7 @@ void DCLinkedCycle::BuildNew(TrialMol &newMol, uint molIndex) {
     newMol.AddBonds(hed.Bonded(b), hed.Focus());
   }
 
+  MarkCounted14(newMol);
   // In ring, we will miss the dihedral for existed bonds
   // Calculate the dihedral and 1-4 interaction for existed bonds
   for (uint b = 0; b < hed.NumBond(); ++b) {
@@ -364,7 +365,8 @@ void DCLinkedCycle::BuildOld(TrialMol &oldMol, uint molIndex) {
       }
 
       for (uint p = 0; p < nPrevBonds; ++p) {
-        if (oldMol.OneFour()) {
+        if (oldMol.OneFour() &&
+            !oldMol.Counted14(prevBonded[p], hed.Bonded(b))) {
           double distSq =
               oldMol.DistSq(bondedC, oldMol.AtomPosition(prevBonded[p]));
           nonbonded_1_4[tor] += data->calc.IntraEnergy_1_4(
@@ -392,6 +394,7 @@ void DCLinkedCycle::BuildOld(TrialMol &oldMol, uint molIndex) {
     oldMol.AddBonds(hed.Bonded(b), hed.Focus());
   }
 
+  MarkCounted14(oldMol);
   // In ring, we will miss the dihedral for existed bonds
   // Calculate the dihedral and 1-4 interaction for existed bonds
   for (uint b = 0; b < hed.NumBond(); ++b) {
@@ -487,7 +490,7 @@ void DCLinkedCycle::ChooseTorsion(TrialMol &mol, uint molIndex,
       }
 
       for (uint p = 0; p < nPrevBonds; ++p) {
-        if (mol.OneFour()) {
+        if (mol.OneFour() && !mol.Counted14(prevBonded[p], hed.Bonded(b))) {
           double distSq = mol.DistSq(bondedC, mol.AtomPosition(prevBonded[p]));
           nonbonded_1_4[tor] += data->calc.IntraEnergy_1_4(
               distSq, prevBonded[p], hed.Bonded(b), molIndex);
@@ -503,6 +506,17 @@ void DCLinkedCycle::ChooseTorsion(TrialMol &mol, uint molIndex,
   }
 }
 
+// The torsion step added the 1-4 energy of every (prevBonded, bonded) pair
+// not counted earlier in this growth; record them so a second dihedral
+// joining the same pair (the other way around a ring) does not add it again.
+void DCLinkedCycle::MarkCounted14(TrialMol &mol) const {
+  if (!mol.OneFour())
+    return;
+  for (uint b = 0; b < hed.NumBond(); ++b)
+    for (uint p = 0; p < nPrevBonds; ++p)
+      mol.MarkCounted14(prevBonded[p], hed.Bonded(b));
+}
+
 void DCLinkedCycle::CaclIntraEnergy(TrialMol &mol, const uint bIdx,
                                     const uint molIndex) {
   double dihEnergy = 0.0;
@@ -514,11 +528,12 @@ void DCLinkedCycle::CaclIntraEnergy(TrialMol &mol, const uint bIdx,
     if (mol.AtomExists(dih[d].a0) && mol.AtomExists(dih[d].a3)) {
       double phi = mol.GetPhi(dih[d].a0, dih[d].a1, dih[d].a2, dih[d].a3);
       dihEnergy += data->ff.dihedrals.Calc(dih[d].kind, phi);
-      if (mol.OneFour()) {
+      if (mol.OneFour() && !mol.Counted14(dih[d].a0, dih[d].a3)) {
         double distSq = mol.DistSq(mol.AtomPosition(dih[d].a0),
                                    mol.AtomPosition(dih[d].a3));
         nonBondedEn +=
             data->calc.IntraEnergy_1_4(distSq, dih[d].a0, dih[d].a3, molIndex);
+        mol.MarkCounted14(dih[d].a0, dih[d].a3);
       }
     }
   }

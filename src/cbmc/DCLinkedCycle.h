@@ -36,6 +36,7 @@ private:
   // Calculate the dihedral using bCoords
   double CalcDih(TrialMol &mol, uint a0, uint a1, uint a2, uint a3);
   void CaclIntraEnergy(TrialMol &mol, const uint bIdx, const uint molIndex);
+  void MarkCounted14(TrialMol &mol) const;
 
   DCData *data;
   DCHedronCycle hed;

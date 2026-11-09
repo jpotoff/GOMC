@@ -60,8 +60,22 @@ struct BendTable {
 // Weight() on the actual geometry), which keeps the move exact.
 class BranchSampler {
 public:
+  // constrained, if given, marks angles whose values are set by the caller
+  // with SetConstraint() before each use, e.g. bond angles of a ring taken
+  // from its existing geometry: [b][b] for the prev-focus-b angle and [b][c]
+  // for the c-focus-b angle. Angles fixed in the force field are always
+  // constrained, to their equilibrium value with a positive twist.
   void Init(uint nBonds, const uint angleKinds[MAX_BONDS][MAX_BONDS],
-            const FFAngles *angles, std::vector<BendTable> *tables);
+            const FFAngles *angles, std::vector<BendTable> *tables,
+            const bool constrained[MAX_BONDS][MAX_BONDS] = nullptr);
+
+  bool Constrained(uint b, uint c) const { return cons[b][c]; }
+  // Value of a constrained angle. For a pair (b, c), c < b, sign selects the
+  // mirror solution: phi[b] - phi[c] takes the sign of sign.
+  void SetConstraint(uint b, uint c, double value, double sign = 1.0) {
+    consVal[b][c] = value;
+    consSign[b][c] = sign < 0.0 ? -1.0 : 1.0;
+  }
 
   // Draws one trial geometry. Returns false if no geometry satisfying the
   // rejection tests was found, which indicates inconsistent angle parameters.
@@ -98,7 +112,7 @@ private:
   double WeightFrom(double beta, const double *th, const double *ph,
                     const DrawState *st);
   const BendTable &Table(uint kind, double beta);
-  template <class RNG> double SampleTheta(RNG &rng, uint kind, double beta);
+  template <class RNG> double SampleTheta(RNG &rng, uint b, double beta);
   template <class RNG> double Normal(RNG &rng);
   template <class RNG>
   double TruncNormal(RNG &rng, double mu, double sigma, double lo, double hi,
@@ -119,6 +133,10 @@ private:
 
   uint nBonds = 0;
   uint kinds[MAX_BONDS][MAX_BONDS];
+  // constrained angles and their current values and twist signs
+  bool cons[MAX_BONDS][MAX_BONDS];
+  double consVal[MAX_BONDS][MAX_BONDS];
+  double consSign[MAX_BONDS][MAX_BONDS];
   const FFAngles *ang = nullptr;
   std::vector<BendTable> *tables = nullptr;
   std::vector<BendTable> ownTables;
@@ -146,14 +164,20 @@ const double kSignFloor = 1e-12;  // keeps both mirror solutions possible
 inline void BranchSampler::Init(uint n,
                                 const uint angleKinds[MAX_BONDS][MAX_BONDS],
                                 const FFAngles *angles,
-                                std::vector<BendTable> *tbl) {
+                                std::vector<BendTable> *tbl,
+                                const bool constrained[MAX_BONDS][MAX_BONDS]) {
   using namespace branch_detail;
   nBonds = n;
   ang = angles;
   tables = tbl ? tbl : &ownTables;
   for (uint i = 0; i < n; ++i)
-    for (uint j = 0; j < n; ++j)
+    for (uint j = 0; j < n; ++j) {
       kinds[i][j] = angleKinds[i][j];
+      bool fixed = ang->AngleFixed(kinds[i][j]);
+      cons[i][j] = fixed || (constrained && constrained[i][j]);
+      consVal[i][j] = ang->Angle(kinds[i][j]);
+      consSign[i][j] = 1.0;
+    }
 
   for (uint b = 0; b < n; ++b) {
     fixedPair[b] = false;
@@ -161,7 +185,7 @@ inline void BranchSampler::Init(uint n,
     double best = 0.0;
     for (uint c = 0; c < b; ++c) {
       uint k = kinds[b][c];
-      if (ang->AngleFixed(k)) {
+      if (cons[b][c]) {
         fixedPair[b] = true;
         continue;
       }
@@ -222,10 +246,11 @@ inline const BendTable &BranchSampler::Table(uint kind, double beta) {
 
 // Exact sample of theta from p(theta) ~ sin(theta) exp(-beta U(theta))
 template <class RNG>
-inline double BranchSampler::SampleTheta(RNG &rng, uint kind, double beta) {
+inline double BranchSampler::SampleTheta(RNG &rng, uint b, double beta) {
   using namespace branch_detail;
-  if (ang->AngleFixed(kind))
-    return ang->Angle(kind);
+  if (cons[b][b])
+    return consVal[b][b];
+  const uint kind = kinds[b][b];
   const BendTable &t = Table(kind, beta);
   while (true) {
     double r = rng() * t.cumMax.back();
@@ -294,7 +319,7 @@ inline double BranchSampler::RestFactor(uint b, double beta, const double *th,
   double en = 0.0;
   for (uint c = 0; c < b; ++c) {
     uint k = kinds[b][c];
-    if (ang->AngleFixed(k) || (skipRef && (int)c == ref[b]))
+    if (cons[b][c] || (skipRef && (int)c == ref[b]))
       continue;
     en += ang->Calc(k, AngleBetween(th[b], phi, th[c], ph[c])) -
           Table(k, beta).uMin;
@@ -349,15 +374,20 @@ inline bool BranchSampler::Sample(RNG &rng, double beta, double *th,
   for (unsigned long tries = 0; tries < kMaxTries; ++tries) {
     bool accepted = true;
     for (uint b = 0; b < nBonds && accepted; ++b) {
-      th[b] = SampleTheta(rng, kinds[b][b], beta);
+      th[b] = SampleTheta(rng, b, beta);
       if (b == 0) {
         ph[0] = 0.0;
         continue;
       }
       bool gaussian = false;
       if (fixedPair[b]) {
-        if (!SolveFixedPhi(b, th, ph))
-          return false;
+        // the sampled thetas may admit no twist that meets the constraint:
+        // reject the draw (the target is restricted to feasible geometries);
+        // persistent failure means inconsistent angles and ends in false
+        if (!SolveFixedPhi(b, th, ph)) {
+          accepted = false;
+          continue;
+        }
       } else if (UseGaussian(b, beta)) {
         gaussian = true;
         const uint c = ref[b];
@@ -425,16 +455,15 @@ inline double BranchSampler::WeightFrom(double beta, const double *th,
 inline bool BranchSampler::SolveFixedPhi(uint b, const double *th,
                                          double *ph) {
   for (uint c = 0; c < b; ++c) {
-    uint k = kinds[b][c];
-    if (!ang->AngleFixed(k))
+    if (!cons[b][c])
       continue;
     double cosTerm = cos(th[b]) * cos(th[c]);
     double sinTerm = sin(th[b]) * sin(th[c]);
-    double var = (cos(ang->Angle(k)) - cosTerm) / sinTerm;
+    double var = (cos(consVal[b][c]) - cosTerm) / sinTerm;
     // To fix the numerical problem for flat molecule
     var = (var > 1.0 && var < 1.1 ? 1.0 : var);
     var = (var < -1.0 && var > -1.1 ? -1.0 : var);
-    ph[b] = acos(var) + ph[c];
+    ph[b] = consSign[b][c] * acos(var) + ph[c];
     if (std::isnan(ph[b])) {
       failedFixed = b;
       return false;

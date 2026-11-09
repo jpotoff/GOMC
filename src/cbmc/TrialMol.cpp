@@ -48,7 +48,8 @@ TrialMol::TrialMol(const TrialMol &other)
     : kind(other.kind), axes(other.axes), box(other.box),
       tCoords(other.tCoords), cavMatrix(other.cavMatrix),
       bCoords(other.bCoords), en(other.en), totalWeight(other.totalWeight),
-      basisPoint(other.basisPoint), bonds(other.bonds) {
+      basisPoint(other.basisPoint), counted14(other.counted14),
+      bonds(other.bonds) {
 #ifdef GOMC_INSTRUMENT
   instrRecord = other.instrRecord;
 #endif
@@ -81,6 +82,7 @@ void swap(TrialMol &a, TrialMol &b) {
   swap(a.en, b.en);
   swap(a.totalWeight, b.totalWeight);
   swap(a.atomBuilt, b.atomBuilt);
+  swap(a.counted14, b.counted14);
   swap(a.growthToWorld, b.growthToWorld);
   swap(a.worldToGrowth, b.worldToGrowth);
   swap(a.bonds, b.bonds);
