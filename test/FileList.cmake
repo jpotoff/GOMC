@@ -10,6 +10,7 @@ set(TestSources
     test/src/EwaldRealTableTest.cpp
     test/src/ForcefieldAnalyticTest.cpp
     test/src/BranchSamplerTest.cpp
+    test/src/TopoDistanceTest.cpp
     test/src/RecoilGrowthTest.cpp
     test/src/LookAheadCBMCTest.cpp
     test/src/TestEwaldMoves.cpp

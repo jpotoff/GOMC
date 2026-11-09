@@ -103,7 +103,7 @@ public:
     en.Zero();
     bonds.Unset();
     overlap = false;
-    counted14.clear();
+    countedPairs.clear();
   }
 
   //! Confirms that atom at index i has been built (used for oldMols)
@@ -113,24 +113,26 @@ public:
   //! growth; the coordinates are left as they are)
   void RemoveAtom(uint i) {
     atomBuilt[i] = false;
-    counted14.erase(std::remove_if(counted14.begin(), counted14.end(),
+    countedPairs.erase(std::remove_if(countedPairs.begin(), countedPairs.end(),
                                    [i](const std::pair<uint, uint> &p) {
                                      return p.first == i || p.second == i;
                                    }),
-                    counted14.end());
+                    countedPairs.end());
   }
 
-  //! 1-4 pairs whose nonbonded energy has been added during this growth. In
-  //! rings a 1-4 pair can be joined by more than one dihedral (C1-C4 in a
-  //! six-membered ring); its energy must be counted once, as in the full
-  //! energy calculation, not once per dihedral.
-  bool Counted14(uint a, uint b) const {
+  //! 1-3 and 1-4 pairs whose nonbonded energy has been added during this
+  //! growth. In rings a pair can be reached by more than one angle or
+  //! dihedral (C1-C4 in a six-membered ring, C1-C3 in a four-membered ring);
+  //! its energy must be counted once, as in the full energy calculation, not
+  //! once per angle or dihedral.
+  bool CountedPair(uint a, uint b) const {
     std::pair<uint, uint> p(std::min(a, b), std::max(a, b));
-    return std::find(counted14.begin(), counted14.end(), p) != counted14.end();
+    return std::find(countedPairs.begin(), countedPairs.end(), p) !=
+           countedPairs.end();
   }
-  void MarkCounted14(uint a, uint b) {
-    if (!Counted14(a, b))
-      counted14.emplace_back(std::min(a, b), std::max(a, b));
+  void MarkCountedPair(uint a, uint b) {
+    if (!CountedPair(a, b))
+      countedPairs.emplace_back(std::min(a, b), std::max(a, b));
   }
 
   //! Sets an orthonormal basis for coordinate conversion.
@@ -201,6 +203,7 @@ public:
   const MoleculeKind &GetKind() const { return *kind; }
 
   bool OneFour() const { return kind->oneFour; }
+  bool OneThree() const { return kind->oneThree; }
 
   //! Returns reference to coordinates of TrialMol.
   const XYZArray &GetCoords() const { return tCoords; }
@@ -285,7 +288,7 @@ private:
   bool comInCav, comFix, rotateBB;
   bool overlap;
   bool *atomBuilt;
-  std::vector<std::pair<uint, uint>> counted14;
+  std::vector<std::pair<uint, uint>> countedPairs;
   // To check the status of built bonds
   Bonds bonds;
 #ifdef GOMC_INSTRUMENT

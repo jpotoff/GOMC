@@ -31,134 +31,129 @@ Nonbond::~Nonbond() {
   delete[] part2;
 }
 
+namespace {
+// Breadth-first search from atom a over the bonds, up to three bonds.
+// dist[x] is the shortest path from a, or TopoDistance::kFar if beyond.
+void NearAtoms(const std::vector<std::vector<uint>> &adj, uint a,
+               std::vector<uint> &dist, std::vector<uint> &visited) {
+  for (uint v : visited)
+    dist[v] = TopoDistance::kFar;
+  visited.clear();
+  dist[a] = 0;
+  visited.push_back(a);
+  for (size_t head = 0; head < visited.size(); ++head) {
+    uint u = visited[head];
+    if (dist[u] + 1 >= TopoDistance::kFar)
+      continue;
+    for (uint w : adj[u]) {
+      if (dist[w] == TopoDistance::kFar) {
+        dist[w] = dist[u] + 1;
+        visited.push_back(w);
+      }
+    }
+  }
+}
+
+std::vector<std::vector<uint>> Adjacency(const mol_setup::MolKind &molData) {
+  std::vector<std::vector<uint>> adj(molData.atoms.size());
+  for (const mol_setup::Bond &b : molData.bonds) {
+    adj[b.a0].push_back(b.a1);
+    adj[b.a1].push_back(b.a0);
+  }
+  return adj;
+}
+
+// All pairs i < j whose shortest path satisfies keep(distance), ordered by i
+// and then j, as the angle/dihedral based lists were
+template <class Keep>
+void PairsByDistance(const mol_setup::MolKind &molData, Keep keep,
+                     std::vector<uint> &part1Vec, std::vector<uint> &part2Vec) {
+  const uint numAtoms = molData.atoms.size();
+  std::vector<std::vector<uint>> adj = Adjacency(molData);
+  std::vector<uint> dist(numAtoms, TopoDistance::kFar), visited;
+  for (uint i = 0; i < numAtoms; ++i) {
+    NearAtoms(adj, i, dist, visited);
+    for (uint j = i + 1; j < numAtoms; ++j) {
+      if (keep(dist[j])) {
+        part1Vec.push_back(i);
+        part2Vec.push_back(j);
+      }
+    }
+  }
+}
+
+void StorePairs(const std::vector<uint> &part1Vec,
+                const std::vector<uint> &part2Vec, uint *&part1, uint *&part2,
+                uint &count) {
+  count = part1Vec.size();
+  part1 = new uint[count];
+  part2 = new uint[count];
+  std::copy(part1Vec.begin(), part1Vec.end(), part1);
+  std::copy(part2Vec.begin(), part2Vec.end(), part2);
+}
+} // namespace
+
+void TopoDistance::Init(const mol_setup::MolKind &molData) {
+  const uint numAtoms = molData.atoms.size();
+  std::vector<std::vector<uint>> adj = Adjacency(molData);
+  std::vector<uint> dist(numAtoms, kFar), visited;
+  near.assign(numAtoms, {});
+  for (uint a = 0; a < numAtoms; ++a) {
+    NearAtoms(adj, a, dist, visited);
+    for (uint v : visited)
+      near[a].emplace_back(v, dist[v]);
+  }
+}
+
+uint TopoDistance::Dist(uint a, uint b) const {
+  for (const std::pair<uint, uint> &p : near[a])
+    if (p.first == b)
+      return p.second;
+  return kFar;
+}
+
+uint TopoDistance::Between(const mol_setup::MolKind &molData, uint a, uint b) {
+  std::vector<std::vector<uint>> adj = Adjacency(molData);
+  std::vector<uint> dist(molData.atoms.size(), kFar), visited;
+  NearAtoms(adj, a, dist, visited);
+  return dist[b];
+}
+
+// 1-5 and more: pairs four or more bonds apart (or not connected)
 void Nonbond::Init(const mol_setup::MolKind &molData) {
-  unsigned int numAtoms = molData.atoms.size();
   // no nonbonded atoms
-  if (numAtoms < 5) {
+  if (molData.atoms.size() < 5) {
     return;
   }
-  std::vector<unsigned int> part1Vec;
-  std::vector<unsigned int> part2Vec;
-  // because vector<bool> is weird
-  std::vector<char> nonBondedAtoms(numAtoms);
-  // find all the atoms that do not appear in an angle or dihedral
-  // with the target atom (not checking bonds because either it's
-  // diatomic or all bonds are part of angles
-  // Also, ignore any index less than i to avoid double counting
-  for (unsigned int i = 0; i < numAtoms; ++i) {
-    nonBondedAtoms.assign(i, 0);
-    nonBondedAtoms.insert(nonBondedAtoms.end(), numAtoms - i, 1);
-    for (unsigned int j = 0; j < molData.angles.size(); ++j) {
-      const mol_setup::Angle &ang = molData.angles[j];
-      if (ang.a0 == i || ang.a1 == i || ang.a2 == i) {
-        nonBondedAtoms[ang.a0] = 0;
-        nonBondedAtoms[ang.a1] = 0;
-        nonBondedAtoms[ang.a2] = 0;
-      }
-    }
-    for (unsigned int j = 0; j < molData.dihedrals.size(); ++j) {
-      const mol_setup::Dihedral &dih = molData.dihedrals[j];
-      if (dih.a0 == i || dih.a1 == i || dih.a2 == i || dih.a3 == i) {
-        nonBondedAtoms[dih.a0] = 0;
-        nonBondedAtoms[dih.a1] = 0;
-        nonBondedAtoms[dih.a2] = 0;
-        nonBondedAtoms[dih.a3] = 0;
-      }
-    }
-    // starting at i+1 to ignore double counting
-    for (unsigned int j = i + 1; j < nonBondedAtoms.size(); ++j) {
-      if (nonBondedAtoms[j] == 1) {
-        part1Vec.push_back(i);
-        part2Vec.push_back(j);
-      }
-    }
-  }
-  count = part1Vec.size();
-  part1 = new uint[count];
-  part2 = new uint[count];
-  std::copy(part1Vec.begin(), part1Vec.end(), part1);
-  std::copy(part2Vec.begin(), part2Vec.end(), part2);
+  std::vector<uint> part1Vec, part2Vec;
+  PairsByDistance(
+      molData, [](uint d) { return d >= TopoDistance::kFar; }, part1Vec,
+      part2Vec);
+  StorePairs(part1Vec, part2Vec, part1, part2, count);
 }
 
+// 1-4: pairs whose shortest path is three bonds
 void Nonbond_1_4::Init(const mol_setup::MolKind &molData) {
-  unsigned int numAtoms = molData.atoms.size();
   // no nonbonded atoms
-  if (numAtoms < 4) {
+  if (molData.atoms.size() < 4) {
     return;
   }
-  std::vector<unsigned int> part1Vec;
-  std::vector<unsigned int> part2Vec;
-  // because vector<bool> is weird
-  std::vector<char> nonBondedAtoms(numAtoms);
-  // find all the atoms that do not appear in an angle
-  // with the target atom (not checking bonds because either it's
-  // diatomic or all bonds are part of angles
-  // Also, ignore any index less than i to avoid double counting
-  for (unsigned int i = 0; i < numAtoms; ++i) {
-    nonBondedAtoms.assign(i, 0);
-    nonBondedAtoms.insert(nonBondedAtoms.end(), numAtoms - i, 0);
-    for (unsigned int j = 0; j < molData.dihedrals.size(); ++j) {
-      const mol_setup::Dihedral &dih = molData.dihedrals[j];
-      if (dih.a0 == i || dih.a3 == i) {
-        nonBondedAtoms[dih.a0] = 1;
-        nonBondedAtoms[dih.a3] = 1;
-      }
-    }
-
-    // starting at i+1 to ignore double counting
-    for (unsigned int j = i + 1; j < nonBondedAtoms.size(); ++j) {
-      if (nonBondedAtoms[j] == 1) {
-        part1Vec.push_back(i);
-        part2Vec.push_back(j);
-      }
-    }
-  }
-  count = part1Vec.size();
-  part1 = new uint[count];
-  part2 = new uint[count];
-  std::copy(part1Vec.begin(), part1Vec.end(), part1);
-  std::copy(part2Vec.begin(), part2Vec.end(), part2);
+  std::vector<uint> part1Vec, part2Vec;
+  PairsByDistance(
+      molData, [](uint d) { return d == 3; }, part1Vec, part2Vec);
+  StorePairs(part1Vec, part2Vec, part1, part2, count);
 }
 
+// 1-3: pairs whose shortest path is two bonds
 void Nonbond_1_3::Init(const mol_setup::MolKind &molData) {
-  unsigned int numAtoms = molData.atoms.size();
   // no nonbonded atoms
-  if (numAtoms < 3) {
+  if (molData.atoms.size() < 3) {
     return;
   }
-  std::vector<unsigned int> part1Vec;
-  std::vector<unsigned int> part2Vec;
-  // because vector<bool> is weird
-  std::vector<char> nonBondedAtoms(numAtoms);
-  // find all the atoms that form angle
-  // with the target atom (not checking bonds because either it's
-  // diatomic or all bonds are part of angles
-  // Also, ignore any index less than i to avoid double counting
-  for (unsigned int i = 0; i < numAtoms; ++i) {
-    nonBondedAtoms.assign(i, 0);
-    nonBondedAtoms.insert(nonBondedAtoms.end(), numAtoms - i, 0);
-
-    for (unsigned int j = 0; j < molData.angles.size(); ++j) {
-      const mol_setup::Angle &ang = molData.angles[j];
-      if (ang.a0 == i || ang.a2 == i) {
-        nonBondedAtoms[ang.a0] = 1;
-        nonBondedAtoms[ang.a2] = 1;
-      }
-    }
-
-    // starting at i+1 to ignore double counting
-    for (unsigned int j = i + 1; j < nonBondedAtoms.size(); ++j) {
-      if (nonBondedAtoms[j] == 1) {
-        part1Vec.push_back(i);
-        part2Vec.push_back(j);
-      }
-    }
-  }
-  count = part1Vec.size();
-  part1 = new uint[count];
-  part2 = new uint[count];
-  std::copy(part1Vec.begin(), part1Vec.end(), part1);
-  std::copy(part2Vec.begin(), part2Vec.end(), part2);
+  std::vector<uint> part1Vec, part2Vec;
+  PairsByDistance(
+      molData, [](uint d) { return d == 2; }, part1Vec, part2Vec);
+  StorePairs(part1Vec, part2Vec, part1, part2, count);
 }
 
 void EwaldNonbond::Init(const mol_setup::MolKind &molData) {

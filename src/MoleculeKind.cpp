@@ -5,6 +5,8 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #include "MoleculeKind.h"
 
+#include <set>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib> //for exit
@@ -21,6 +23,31 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "PDBConst.h" //For resname length.
 #include "PRNG.h"
 #include "Setup.h"
+
+// Pairs are classed by their shortest bond path (see TopoDistance). Report
+// the angle and dihedral end pairs whose class differs from what the angle or
+// dihedral alone would suggest, which happens in rings of up to five atoms.
+void MoleculeKind::ReportRingPairClasses(const mol_setup::MolKind &molData) {
+  TopoDistance topo;
+  topo.Init(molData);
+  std::set<std::pair<uint, uint>> angEnds, dihEnds;
+  for (const mol_setup::Angle &a : molData.angles)
+    if (topo.Dist(a.a0, a.a2) != 2)
+      angEnds.emplace(std::min(a.a0, a.a2), std::max(a.a0, a.a2));
+  for (const mol_setup::Dihedral &d : molData.dihedrals)
+    if (topo.Dist(d.a0, d.a3) != 3)
+      dihEnds.emplace(std::min(d.a0, d.a3), std::max(d.a0, d.a3));
+  // the kind is set up once per box; report it once
+  static std::set<std::string> reported;
+  if ((angEnds.empty() && dihEnds.empty()) ||
+      !reported.insert(molData.moleculeName).second)
+    return;
+  std::cout << "Info: Molecule kind " << molData.moleculeName << ": "
+            << dihEnds.size() << " dihedral end pair(s) and " << angEnds.size()
+            << " angle end pair(s) are closer by another bond path (small "
+            << "ring); their nonbonded interaction follows the shortest path "
+            << "(1-2 or 1-3), not the 1-4 rule.\n";
+}
 
 void MoleculeKind::Init(uint &l_kindIndex, std::string const &l_name,
                         Setup const &setup, Forcefield const &forcefield,
@@ -77,6 +104,8 @@ void MoleculeKind::Init(uint &l_kindIndex, std::string const &l_name,
   if (forcefield.OneFour) {
     nonBonded_1_4.Init(molData);
     oneFour = true;
+    // with 1-4 interactions off these pairs are excluded either way
+    ReportRingPairClasses(molData);
   }
   if (forcefield.OneN) {
     nonBonded.Init(molData);

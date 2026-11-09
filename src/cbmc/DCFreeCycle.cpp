@@ -173,6 +173,7 @@ void DCFreeCycle::BuildNew(TrialMol &newMol, uint molIndex) {
 
   newMol.AddAtom(hed.Prev(), positions[hed.NumBond()][winner]);
   newMol.AddBonds(hed.Prev(), hed.Focus());
+  hed.MarkCounted13(newMol);
   newMol.UpdateOverlap(overlap[winner]);
   newMol.AddEnergy(Energy(hed.GetEnergy() + bondEnergy, hed.GetNonBondedEn(),
                           inter[winner], real[winner], 0.0, 0.0, 0.0));
@@ -254,6 +255,7 @@ void DCFreeCycle::BuildOld(TrialMol &oldMol, uint molIndex) {
 
   oldMol.ConfirmOldAtom(hed.Prev());
   oldMol.AddBonds(hed.Prev(), hed.Focus());
+  hed.MarkCounted13(oldMol);
   oldMol.UpdateOverlap(overlap[0]);
   oldMol.AddEnergy(Energy(hed.GetEnergy() + bondEnergy, hed.GetNonBondedEn(),
                           inter[0], real[0], 0.0, 0.0, 0.0));

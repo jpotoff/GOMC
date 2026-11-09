@@ -201,12 +201,15 @@ void DCHedronCycle::BranchEnergy(TrialMol &mol, uint molIndex,
   for (uint b = 0; b < nBonds; ++b) {
     bend += ang.Calc(angleKinds[b][b], th[b]);
     double distSq = mol.AngleDist(aLen, bLen[b], th[b]);
-    nb13 += data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
+    if (!mol.CountedPair(prev, bonded[b]))
+      nb13 += data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
     for (uint c = 0; c < b; ++c) {
       double bfcTheta = BranchSampler::AngleBetween(th[b], ph[b], th[c], ph[c]);
       bend += ang.Calc(angleKinds[b][c], bfcTheta);
       distSq = mol.AngleDist(bLen[b], bLen[c], bfcTheta);
-      nb13 += data->calc.IntraEnergy_1_3(distSq, bonded[b], bonded[c], molIndex);
+      if (!mol.CountedPair(bonded[b], bonded[c]))
+        nb13 +=
+            data->calc.IntraEnergy_1_3(distSq, bonded[b], bonded[c], molIndex);
     }
   }
 }
@@ -256,14 +259,17 @@ void DCHedronCycle::IncorporateOld(TrialMol &oldMol, uint molIndex) {
     oldMol.OldThetaAndPhi(bonded[b], focus, theta[b], phi[b]);
     bendEnergy += ff.angles->Calc(angleKinds[b][b], theta[b]);
     double distSq = oldMol.OldDistSq(prev, bonded[b]);
-    oneThree += data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
+    if (!oldMol.CountedPair(prev, bonded[b]))
+      oneThree +=
+          data->calc.IntraEnergy_1_3(distSq, prev, bonded[b], molIndex);
     for (uint c = 0; c < b; ++c) {
       double bfcTheta =
           BranchSampler::AngleBetween(theta[b], phi[b], theta[c], phi[c]);
       bendEnergy += ff.angles->Calc(angleKinds[b][c], bfcTheta);
       distSq = oldMol.OldDistSq(bonded[c], bonded[b]);
-      oneThree +=
-          data->calc.IntraEnergy_1_3(distSq, bonded[c], bonded[b], molIndex);
+      if (!oldMol.CountedPair(bonded[c], bonded[b]))
+        oneThree +=
+            data->calc.IntraEnergy_1_3(distSq, bonded[c], bonded[b], molIndex);
     }
   }
 }
@@ -284,6 +290,18 @@ void DCHedronCycle::ConstrainedAnglesOld(uint nTrials, TrialMol &oldMol,
       BranchFailure(oldMol);
     BranchEnergy(oldMol, molIndex, th, ph, true, bend, nb13);
     weight += ws * exp(-beta * nb13);
+  }
+}
+
+// Record the 1-3 pairs this step added, so that a pair reached by a second
+// angle (C1-C3 in a four-membered ring) is not counted again
+void DCHedronCycle::MarkCounted13(TrialMol &mol) const {
+  if (!mol.OneThree())
+    return;
+  for (uint b = 0; b < nBonds; ++b) {
+    mol.MarkCountedPair(prev, bonded[b]);
+    for (uint c = 0; c < b; ++c)
+      mol.MarkCountedPair(bonded[b], bonded[c]);
   }
 }
 

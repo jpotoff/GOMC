@@ -44,6 +44,9 @@ private:
   uint prevBonded[MAX_BONDS];
   // kind[bonded][previous]
   uint dihKinds[MAX_BONDS][MAX_BONDS];
+  // is14[b][p]: bonded b and prevBonded p are a true 1-4 pair (shortest
+  // bond path of three bonds), so their nonbonded 1-4 energy is counted
+  bool is14[MAX_BONDS][MAX_BONDS];
   // Used in finding the atom bonded to prev and focus and both are in the ring
   int prevBondedRing, focBondedRing;
   // Calculate torsion difference to match ring dihedral
@@ -61,6 +64,8 @@ private:
   bool bondedInRing[MAX_BONDS];
 
   std::vector<std::vector<mol_setup::Dihedral>> bondedFocusDih;
+  // whether the ends of each dihedral in bondedFocusDih are a true 1-4 pair
+  std::vector<std::vector<bool>> bondedFocusDih14;
   std::vector<bool> bExist;
 };
 } // namespace cbmc

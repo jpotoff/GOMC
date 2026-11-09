@@ -8,6 +8,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 
 #include <assert.h>
 
+#include <utility>
 #include <vector>
 
 #include "BasicTypes.h"
@@ -27,6 +28,27 @@ class Bond;
 class FFBase;
 } // namespace ff_setup
 class FFSetup;
+
+// Topological (shortest bond path) distance between the atoms of a molecule,
+// up to three bonds. Pairs are classed by it: 1 bonded, 2 a 1-3 pair, 3 a 1-4
+// pair, more (or not connected) a 1-5+ pair. A pair's class is set by its
+// shortest path only, so in a ring a pair joined by both an angle and a
+// dihedral (C1-C3 in cyclopentane) is a 1-3 pair, and the bonded ends of a
+// dihedral in a four-membered ring are a bonded pair, as in other molecular
+// simulation codes.
+class TopoDistance {
+public:
+  static const uint kFar = 4; // four or more bonds apart, or not connected
+  void Init(const mol_setup::MolKind &molData);
+  //! Shortest path in bonds between a and b: 0 if a == b, kFar if above 3
+  uint Dist(uint a, uint b) const;
+  //! Shortest path between a and b computed directly from the bonds
+  static uint Between(const mol_setup::MolKind &molData, uint a, uint b);
+
+private:
+  // near[a]: (atom, distance) for every atom within three bonds of a
+  std::vector<std::vector<std::pair<uint, uint>>> near;
+};
 
 // for 1-5 and more interaction
 struct Nonbond {

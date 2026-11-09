@@ -124,6 +124,9 @@ public:
 
   bool operator==(const MoleculeKind &other);
 
+  // Reports angle/dihedral end pairs reclassified by the shortest bond path
+  void ReportRingPairClasses(const mol_setup::MolKind &molData);
+
   SortedNonbond sortedNB, sortedNB_1_4, sortedNB_1_3, sortedEwaldNB;
 
   // these are used for total energy calculations, see Geometry.h/cpp

@@ -46,6 +46,8 @@ public:
   uint NumBond() const { return nBonds; }
   uint Focus() const { return focus; }
   uint Prev() const { return prev; }
+  //! Record this step's 1-3 pairs as counted (after the step is placed)
+  void MarkCounted13(TrialMol &mol) const;
 
   // need to go to private
   uint bonded[MAX_BONDS];
