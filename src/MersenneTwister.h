@@ -139,6 +139,11 @@ public:
 
   // Re-seeding functions with same behavior as initializers
   void seed(const uint32 oneSeed);
+  // seed(oneSeed) without printing it; for generators reseeded per move
+  void seedQuiet(const uint32 oneSeed) {
+    initialize(oneSeed);
+    reload();
+  }
   void seed(uint32 *const bigSeed, const uint32 seedLength = N);
   void seed();
 

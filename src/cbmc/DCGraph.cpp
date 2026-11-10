@@ -229,7 +229,7 @@ void DCGraph::Init(System &sys, const Forcefield &ff, const MoleculeKind &kind,
     for (int t = 1; t < T; ++t) {
       SMCWorker w;
       w.prng = new PRNG(sys.molLookupRef);
-      w.gen = new MTRand(1u); // reseeded from data.prng at every growth
+      w.gen = new MTRand(); // seeded quietly from data.prng at every growth
       w.prng->Init(w.gen);
       w.graph = new DCGraph(sys, ff, kind, set, w.prng);
       smcWorkers.push_back(w);
@@ -556,7 +556,7 @@ bool DCGraph::BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
     for (DCLinkedHedron *h : seq)
       h->CacheOldBonds(oldMol);
     if (t > 0)
-      smcWorkers[t - 1].gen->seed(data.prng.randInt(0xFFFFFFFFu));
+      smcWorkers[t - 1].gen->seedQuiet(data.prng.randInt(0xFFFFFFFFu));
     ctx[t].data = &gr.data;
     ctx[t].start = gr.nodes[current].starting;
     ctx[t].seq = &seq;
