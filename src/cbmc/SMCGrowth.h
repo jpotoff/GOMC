@@ -6,6 +6,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #ifndef SMCGROWTH_H
 #define SMCGROWTH_H
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
@@ -166,11 +167,21 @@ private:
           break;
         }
         ++nResample;
-        next = parts; // particles need not be default-constructible
         // with conditional SMC, particle 0 keeps its own lineage
         uint first = conditional ? 1 : 0;
+        anc.resize(N);
+        for (uint n = 0; n < first; ++n)
+          anc[n] = n;
         for (uint n = first; n < N; ++n)
-          next[n] = parts[Draw(cum, rng)];
+          anc[n] = Draw(cum, rng);
+        // Particles are exchangeable, so their order is free: sorting puts
+        // the copies of each parent next to each other, which lets the
+        // particle reuse per-parent work (GOMC's neighbour candidate list).
+        std::sort(anc.begin() + first, anc.end());
+        next = parts; // particles need not be default-constructible
+        for (uint n = first; n < N; ++n)
+          if (anc[n] != n)
+            next[n] = parts[anc[n]];
         parts.swap(next);
         L.assign(N, 0.0);
       }
@@ -182,6 +193,7 @@ private:
   double tau;
   std::vector<Particle> parts, next;
   std::vector<double> L, p, cum;
+  std::vector<uint> anc;
   uint chosen = 0, nResample = 0, nDeadSteps = 0;
 };
 

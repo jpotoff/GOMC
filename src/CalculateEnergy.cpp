@@ -389,10 +389,12 @@ int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
 //
 // Cost: one cell-list walk (or one pass over the packed box) per growth step,
 // against one per trial atom in the plain cell path. Steps with fewer trial
-// atoms than localMinTrials (default 3) skip it, as the walk would not pay
-// for itself. SMC growth sets it to 1 (SetLocalMinTrials): with one trial per
-// particle the plain cell path costs about twice the list on UA octane, while
-// look-ahead CBMC is 10-20% slower at 1 than at 3.
+// atoms than localMinTrials (kLocalMinTrialsDefault = 3) skip it, as the walk
+// would not pay for itself. SMC growth sets it to 1 (SetLocalMinTrials): with
+// one trial per particle the plain cell path costs 2-3x the list on dense UA
+// octane (43.9 A box, Rcut 10), while look-ahead CBMC is 10-20% slower at 1
+// than at 3. Below the default, a box whose stencil covers it never builds a
+// list (see BeginLocalCandidates).
 //
 namespace {
 // Slack on the reach, for rounding in the cell index and distance arithmetic
@@ -404,7 +406,13 @@ void CalculateEnergy::BeginLocalCandidates(const XYZ &center,
                                            const uint nArrays, const uint n,
                                            const uint box) const {
   localActive = false;
-  if (box >= BOXES_WITH_U_NB || nArrays * n < localMinTrials)
+  const uint nPos = nArrays * n;
+  if (box >= BOXES_WITH_U_NB || nPos < localMinTrials)
+    return;
+  // Below the default threshold the list only pays when it replaces a
+  // cell-list walk. When the stencil covers the box, the plain path is one
+  // vectorised pass over the cached box pack, and the list would add one.
+  if (nPos < kLocalMinTrialsDefault && StencilCoversBox(box))
     return;
   double reachSq = 0.0;
   for (uint a = 0; a < nArrays; ++a)
@@ -412,6 +420,19 @@ void CalculateEnergy::BeginLocalCandidates(const XYZ &center,
       reachSq = std::max(
           reachSq, currentAxes.MinImage(pos[a][t] - center, box).LengthSq());
   const double reach = std::sqrt(reachSq) + kLocalMargin;
+  // Reuse the last list when it was built around the same point and reaches
+  // at least as far: its atom set and order are then exactly what a rebuild
+  // would give at its own reach, which covers these trials. SMC particles
+  // that share a parent grow from the same focus atom one after another.
+  if (localValid && localBox == box && localVersion == cellList.Version() &&
+      reach * reach <= localReachSq) {
+    const XYZ c = currentAxes.WrapPBC(center, box);
+    if (c.x == localCenter.x && c.y == localCenter.y &&
+        c.z == localCenter.z) {
+      localActive = true;
+      return;
+    }
+  }
   if (currentAxes.orthogonal[box])
     BuildLocalCandidates<BoxDimensions>(center, reach, box, currentAxes);
   else
@@ -424,6 +445,7 @@ template <typename BoxType>
 void CalculateEnergy::BuildLocalCandidates(const XYZ &center,
                                            const double reach, const uint box,
                                            const BoxType &boxAxes) const {
+  localValid = false; // overwritten below
   const int cap = (int)currentCoords.Count();
   if ((int)localX.size() < cap) {
     localX.resize(cap);
@@ -499,6 +521,7 @@ void CalculateEnergy::BuildLocalCandidates(const XYZ &center,
   localCenter = c;
   localReachSq = reach * reach;
   localActive = true;
+  localValid = true;
 }
 
 template <typename BoxType>

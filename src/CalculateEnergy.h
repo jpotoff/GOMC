@@ -460,7 +460,9 @@ private:
   mutable std::vector<double> localX, localY, localZ, localCharge;
   mutable std::vector<int> localKind, localMol;
   mutable bool localActive = false;
-  mutable uint localMinTrials = 3;
+  mutable bool localValid = false; // list arrays hold a complete list
+  static constexpr uint kLocalMinTrialsDefault = 3;
+  mutable uint localMinTrials = kLocalMinTrialsDefault;
   mutable uint localBox = 0;
   mutable unsigned localVersion = 0;
   mutable int localCount = 0;
