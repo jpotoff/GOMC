@@ -489,6 +489,8 @@ bool DCGraph::BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
   const uint first0 = data.nLJTrialsFirst, nth0 = data.nLJTrialsNth;
   const uint k = data.smcTrials;
   data.nLJTrialsFirst = data.nLJTrialsNth = k;
+  // particles have few trials per step; the candidate list still pays
+  const uint minTrials0 = data.calc.SetLocalMinTrials(1);
   GraphGrowth g;
   g.data = &data;
   g.start = nodes[current].starting;
@@ -511,6 +513,7 @@ bool DCGraph::BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
 
   data.nLJTrialsFirst = first0;
   data.nLJTrialsNth = nth0;
+  data.calc.SetLocalMinTrials(minTrials0);
   return true;
 }
 
@@ -540,6 +543,7 @@ bool DCGraph::ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
     h->CacheOldBonds(oldMol);
 
   const uint first0 = data.nLJTrialsFirst, nth0 = data.nLJTrialsNth;
+  const uint minTrials0 = data.calc.SetLocalMinTrials(1);
   GraphGrowth g;
   g.data = &data;
   g.start = nodes[current].starting;
@@ -561,6 +565,7 @@ bool DCGraph::ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
   }
   data.nLJTrialsFirst = first0;
   data.nLJTrialsNth = nth0;
+  data.calc.SetLocalMinTrials(minTrials0);
   return true;
 }
 #endif

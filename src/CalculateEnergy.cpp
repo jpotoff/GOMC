@@ -389,10 +389,12 @@ int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
 //
 // Cost: one cell-list walk (or one pass over the packed box) per growth step,
 // against one per trial atom in the plain cell path. Steps with fewer trial
-// atoms than kLocalMinTrials skip it, as the walk would not pay for itself.
+// atoms than localMinTrials (default 3) skip it, as the walk would not pay
+// for itself. SMC growth sets it to 1 (SetLocalMinTrials): with one trial per
+// particle the plain cell path costs about twice the list on UA octane, while
+// look-ahead CBMC is 10-20% slower at 1 than at 3.
 //
 namespace {
-constexpr uint kLocalMinTrials = 3;
 // Slack on the reach, for rounding in the cell index and distance arithmetic
 constexpr double kLocalMargin = 0.01;
 } // namespace
@@ -402,7 +404,7 @@ void CalculateEnergy::BeginLocalCandidates(const XYZ &center,
                                            const uint nArrays, const uint n,
                                            const uint box) const {
   localActive = false;
-  if (box >= BOXES_WITH_U_NB || nArrays * n < kLocalMinTrials)
+  if (box >= BOXES_WITH_U_NB || nArrays * n < localMinTrials)
     return;
   double reachSq = 0.0;
   for (uint a = 0; a < nArrays; ++a)

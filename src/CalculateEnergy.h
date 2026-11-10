@@ -137,6 +137,13 @@ public:
                             const uint nArrays, const uint n,
                             const uint box) const;
   void EndLocalCandidates() const { localActive = false; }
+  //! Smallest number of trial positions (arrays x trials) for which
+  //! BeginLocalCandidates builds a list; returns the previous value.
+  uint SetLocalMinTrials(uint n) const {
+    uint old = localMinTrials;
+    localMinTrials = n;
+    return old;
+  }
 
   //! Calculates change in the ENergyTC from adding numChange atoms of a kind
   //! @param box Index of box under consideration
@@ -453,6 +460,7 @@ private:
   mutable std::vector<double> localX, localY, localZ, localCharge;
   mutable std::vector<int> localKind, localMol;
   mutable bool localActive = false;
+  mutable uint localMinTrials = 3;
   mutable uint localBox = 0;
   mutable unsigned localVersion = 0;
   mutable int localCount = 0;
