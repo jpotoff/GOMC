@@ -166,6 +166,7 @@ set(headers
    src/cbmc/DCGraph.h
    src/cbmc/DCHedron.h
    src/cbmc/RecoilGrowth.h
+   src/cbmc/SMCGrowth.h
    src/cbmc/DCHedronCycle.h
    src/cbmc/DCLinear.h
    src/cbmc/DCLinkedCycle.h

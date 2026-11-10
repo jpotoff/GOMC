@@ -10,6 +10,13 @@ A copy of the MIT License can be found in License.txt with this program or at
 
 #include "MoveBase.h"
 #include "TrialMol.h"
+#ifdef GOMC_INSTRUMENT
+#include <cstdio>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+#include <vector>
+#endif
 
 // #define DEBUG_MOVES
 
@@ -31,6 +38,22 @@ public:
   virtual void PrintAcceptKind();
 
 private:
+#ifdef GOMC_INSTRUMENT
+  // SMC probe (cbmc::CBMC::ProbeSMC), off unless GOMC_SMC_PROBE is set:
+  //   GOMC_SMC_PROBE="N:k,N:k,..."  settings (N = 1 is standard CBMC)
+  //   GOMC_SMC_PROBE_EVERY=n        probe every n-th transfer attempt (1)
+  //   GOMC_SMC_PROBE_BOX=b          box probed (0)
+  //   GOMC_SMC_PROBE_OUT=file       output (smc_probe.dat)
+  // A probe takes a random molecule of the box out of the cell list, then
+  // for each setting writes ln Z_hat_new (SMC insertion into the box),
+  // ln Z_hat_old (conditional SMC weighing of that molecule) and seconds.
+  void SMCProbe();
+  std::vector<cbmc::CBMC::SMCProbeSetting> probeSettings;
+  uint probeEvery = 0, probeBox = 0;
+  ulong probeCalls = 0, probeCount = 0;
+  FILE *probeOut = nullptr;
+  bool probeInit = false;
+#endif
   double GetCoeff() const;
   uint GetBoxPairAndMol(const double subDraw, const double movPerc);
   MolPick molPick;
@@ -95,8 +118,70 @@ inline uint MoleculeTransfer::Prep(const double subDraw, const double movPerc) {
   return state;
 }
 
+#ifdef GOMC_INSTRUMENT
+inline void MoleculeTransfer::SMCProbe() {
+  if (!probeInit) {
+    probeInit = true;
+    const char *spec = std::getenv("GOMC_SMC_PROBE");
+    if (spec == nullptr || *spec == '\0')
+      return;
+    std::stringstream ss(spec);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+      cbmc::CBMC::SMCProbeSetting st;
+      if (std::sscanf(item.c_str(), "%u:%u", &st.N, &st.k) == 2 && st.N > 0 &&
+          st.k > 0)
+        probeSettings.push_back(st);
+    }
+    const char *e = std::getenv("GOMC_SMC_PROBE_EVERY");
+    probeEvery = (e != nullptr && std::atoi(e) > 0) ? std::atoi(e) : 1;
+    e = std::getenv("GOMC_SMC_PROBE_BOX");
+    probeBox = (e != nullptr) ? std::atoi(e) : 0;
+    e = std::getenv("GOMC_SMC_PROBE_OUT");
+    probeOut = std::fopen(e != nullptr ? e : "smc_probe.dat", "w");
+    if (probeOut == nullptr || probeSettings.empty() || probeBox >= BOX_TOTAL) {
+      std::cout << "Error: bad GOMC_SMC_PROBE settings or output file.\n";
+      exit(EXIT_FAILURE);
+    }
+    std::fprintf(probeOut, "# SMC probe, box %u; per setting N:k the columns "
+                           "lnZnew lnZold seconds\n# probe mol", probeBox);
+    for (const auto &st : probeSettings)
+      std::fprintf(probeOut, " %u:%u", st.N, st.k);
+    std::fprintf(probeOut, "\n");
+    std::cout << "SMC probe on: " << probeSettings.size()
+              << " settings, every " << probeEvery << " transfer attempts, box "
+              << probeBox << "\n";
+  }
+  if (probeOut == nullptr || ++probeCalls % probeEvery != 0)
+    return;
+  uint m, mk;
+  if (prng.PickMol(m, mk, probeBox) != mv::fail_state::NO_FAIL)
+    return;
+  uint start = 0, len = 0;
+  molRef.GetRangeStartLength(start, len, m);
+  cbmc::TrialMol pNew(molRef.kinds[mk], boxDimRef, probeBox);
+  cbmc::TrialMol pOld(molRef.kinds[mk], boxDimRef, probeBox);
+  pOld.SetCoords(coordCurrRef, start);
+  cellList.RemoveMol(m, probeBox, coordCurrRef);
+  std::vector<double> out;
+  bool ok = molRef.kinds[mk].Builder()->ProbeSMC(pOld, pNew, m, probeSettings,
+                                                  out);
+  cellList.AddMol(m, probeBox, coordCurrRef);
+  if (!ok)
+    return;
+  std::fprintf(probeOut, "%lu %u", ++probeCount, m);
+  for (double x : out)
+    std::fprintf(probeOut, " %.6g", x);
+  std::fprintf(probeOut, "\n");
+  std::fflush(probeOut);
+}
+#endif
+
 inline uint MoleculeTransfer::Transform() {
   GOMC_EVENT_START(1, GomcProfileEvent::TRANS_SWAP);
+#ifdef GOMC_INSTRUMENT
+  SMCProbe();
+#endif
   cellList.RemoveMol(molIndex, sourceBox, coordCurrRef);
   molRef.kinds[kindIndex].Build(oldMol, newMol, molIndex);
   overlap = newMol.HasOverlap();

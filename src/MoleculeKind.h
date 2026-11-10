@@ -69,6 +69,10 @@ public:
   void Init(uint &l_kindIndex, std::string const &l_name, Setup const &setup,
             Forcefield const &forcefield, System &sys);
 
+#ifdef GOMC_INSTRUMENT
+  cbmc::CBMC *Builder() { return builder; }
+#endif
+
   // Invoke CBMC, oldMol and newMol will be modified
   void Build(cbmc::TrialMol &oldMol, cbmc::TrialMol &newMol,
              const uint molIndex) {

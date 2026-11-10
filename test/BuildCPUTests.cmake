@@ -42,6 +42,8 @@ function(add_ensemble_test name ENSEMBLE_ID ENSEMBLE_LABEL)
              COMMAND ${name} --gtest_filter=TopoDistanceTest.*)
     add_test(NAME RecoilGrowthTest_${ENSEMBLE_LABEL}
              COMMAND ${name} --gtest_filter=RecoilGrowthTest.*)
+    add_test(NAME SMCGrowthTest_${ENSEMBLE_LABEL}
+             COMMAND ${name} --gtest_filter=SMCGrowthTest.*)
     add_test(NAME LookAheadCBMCTest_${ENSEMBLE_LABEL}
              COMMAND ${name} --gtest_filter=LookAheadCBMCTest.*)
 

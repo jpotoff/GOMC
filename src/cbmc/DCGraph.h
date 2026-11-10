@@ -23,6 +23,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 namespace cbmc {
 
 class DCComponent;
+class DCLinkedHedron;
 
 class DCGraph : public CBMC {
 public:
@@ -46,11 +47,25 @@ public:
   void BuildGrowOld(TrialMol &oldMol, uint molIndex);
   // used in TargetedSwap
   void BuildGrowInCav(TrialMol &oldMol, TrialMol &newMol, uint molIndex);
+#ifdef GOMC_INSTRUMENT
+  bool ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
+                const std::vector<SMCProbeSetting> &settings,
+                std::vector<double> &out);
+#endif
   ~DCGraph();
 
 private:
   // Find the two nodes that are forming dihedral or angle and initialize it.
   void InitCrankShaft(const mol_setup::MolKind &kind);
+  // Random fringe walk from node `current` (as in BuildEdges), collecting
+  // the edge steps in order; every edge is a DCLinkedHedron
+  void WalkEdges(uint current, std::vector<DCLinkedHedron *> &seq);
+  // Build by population (SMC) growth (CBMC_SMC); false if the molecules
+  // carry cavity/COM constraints, in which case Build falls back to CBMC
+  bool BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex);
+  // true if every edge is a DCLinkedHedron (SMC growth and the probe need it)
+  bool smcCapable;
+  std::vector<DCLinkedHedron *> smcSeq;
   // recoil growth engine and the current edge sequence (DCGraph.cpp); null
   // unless CBMC_Recoil is on
   struct RecoilState;

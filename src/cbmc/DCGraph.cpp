@@ -6,6 +6,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "DCGraph.h"
 
 #include <cassert>
+#include <chrono>
+#include <cmath>
+#include <limits>
 #include <map>
 #include <memory>
 
@@ -16,6 +19,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "DCLinkedHedron.h"
 #include "DCRotateCOM.h"
 #include "RecoilGrowth.h"
+#include "SMCGrowth.h"
 
 namespace cbmc {
 
@@ -188,6 +192,14 @@ DCGraph::DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
   }
 
   InitCrankShaft(setupKind);
+  smcCapable = true;
+  for (const Node &nd : nodes)
+    for (const Edge &e : nd.edges)
+      if (dynamic_cast<DCLinkedHedron *>(e.component) == nullptr)
+        smcCapable = false;
+  if (data.smc && !smcCapable)
+    std::cout << "Warning: CBMC_SMC is not supported for molecule kind "
+              << kind.name << "; it is grown by standard CBMC.\n";
   recoil = data.recoil
                ? new RecoilState(data.recoilTrials, data.recoilLength)
                : nullptr;
@@ -291,6 +303,8 @@ void DCGraph::CrankShaft(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
 }
 
 void DCGraph::Build(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
+  if (data.smc && smcCapable && BuildSMC(oldMol, newMol, molIndex))
+    return;
   // Randomly pick a node to call DCFreeHedron on it
   uint current = data.prng.randIntExc(nodes.size());
   visited.assign(nodes.size(), false);
@@ -315,22 +329,7 @@ void DCGraph::BuildEdgesRecoil(TrialMol &oldMol, TrialMol &newMol,
   // the same random fringe walk as BuildEdges, collecting the steps; every
   // edge is a DCLinkedHedron (see the constructor)
   std::vector<DCLinkedHedron *> &seq = recoil->seq;
-  seq.clear();
-  fringe = nodes[current].edges;
-  while (!fringe.empty()) {
-    uint pick = data.prng.randIntExc(fringe.size());
-    seq.push_back(static_cast<DCLinkedHedron *>(fringe[pick].component));
-    current = fringe[pick].destination;
-    fringe[pick] = fringe.back();
-    fringe.pop_back();
-    visited[current] = true;
-    for (uint i = 0; i < nodes[current].edges.size(); ++i) {
-      Edge &e = nodes[current].edges[i];
-      if (!visited[e.destination]) {
-        fringe.push_back(e);
-      }
-    }
-  }
+  WalkEdges(current, seq);
 
   RecoilGrowth<EdgeSteps, PRNG> &rg = recoil->rg;
   GOMC_INSTR(rg.KeepSteps(instr::Collector::Get().StagesOn());)
@@ -353,6 +352,218 @@ void DCGraph::BuildEdgesRecoil(TrialMol &oldMol, TrialMol &newMol,
     seq[i]->Commit(oldMol, rg.Chosen(i));
   oldMol.MultWeight(wo);
 }
+
+void DCGraph::WalkEdges(uint current, std::vector<DCLinkedHedron *> &seq) {
+  seq.clear();
+  fringe = nodes[current].edges;
+  while (!fringe.empty()) {
+    uint pick = data.prng.randIntExc(fringe.size());
+    seq.push_back(static_cast<DCLinkedHedron *>(fringe[pick].component));
+    current = fringe[pick].destination;
+    fringe[pick] = fringe.back();
+    fringe.pop_back();
+    visited[current] = true;
+    for (uint i = 0; i < nodes[current].edges.size(); ++i) {
+      Edge &e = nodes[current].edges[i];
+      if (!visited[e.destination]) {
+        fringe.push_back(e);
+      }
+    }
+  }
+}
+
+namespace {
+// Shared state of one SMC growth (DCGraph::BuildSMC and ProbeSMC)
+struct GraphGrowth {
+  DCData *data;
+  DCComponent *start;
+  const std::vector<DCLinkedHedron *> *seq;
+  uint molIndex, k;
+  std::vector<DCLinkedHedron::StepTrial> buf;
+};
+
+// One SMC particle: a partial molecule grown by standard CBMC with k trials
+// per step. Step 0 is the start node's DCFreeHedron (first atom and its
+// bonded atoms, with nLJTrialsFirst = nLJTrialsNth = k); step s > 0 is edge
+// step s - 1.
+class GraphParticle {
+public:
+  GraphParticle(GraphGrowth &g, const TrialMol &m) : g(&g), mol(m) {
+    mol.UpdateOverlap(m.HasOverlap());
+  }
+  GraphParticle(const GraphParticle &o) : g(o.g), mol(o.mol) {
+    mol.UpdateOverlap(o.mol.HasOverlap());
+  }
+  GraphParticle &operator=(const GraphParticle &o) {
+    g = o.g;
+    mol = o.mol;
+    mol.UpdateOverlap(o.mol.HasOverlap());
+    return *this;
+  }
+
+  uint NumSteps() const { return g->seq->size() + 1; }
+  const TrialMol &Mol() const { return mol; }
+  double Extend(uint step, bool reference) {
+    if (step == 0) {
+      mol.SetWeight(1.0);
+      if (reference) {
+        g->start->PrepareOld(mol, g->molIndex);
+        g->start->BuildOld(mol, g->molIndex);
+      } else {
+        g->start->PrepareNew(mol, g->molIndex);
+        g->start->BuildNew(mol, g->molIndex);
+      }
+      double W = mol.GetWeight();
+      mol.SetWeight(1.0);
+      return W;
+    }
+    DCLinkedHedron *h = (*g->seq)[step - 1];
+    const uint k = g->k;
+    DCLinkedHedron::StepTrial *t = g->buf.data();
+    if (reference) {
+      h->ActualTrial(mol, g->molIndex, t[0]);
+      if (k > 1)
+        h->GenerateTrials(mol, g->molIndex, k - 1, true, t + 1);
+    } else {
+      h->GenerateTrials(mol, g->molIndex, k, false, t);
+    }
+    double sum = 0.0;
+    for (uint j = 0; j < k; ++j)
+      sum += t[j].w;
+    if (!(sum > 0.0))
+      return 0.0;
+    uint pick = 0;
+    if (!reference) {
+      double x = g->data->prng() * sum, c = 0.0;
+      for (pick = 0; pick < k - 1; ++pick) {
+        c += t[pick].w;
+        if (x < c)
+          break;
+      }
+      while (t[pick].w <= 0.0 && pick > 0) // guard round-off
+        --pick;
+    }
+    const DCLinkedHedron::StepTrial &tr = t[pick];
+    for (uint b = 0; b < h->NumBonded(); ++b) {
+      uint a = h->BondedAtom(b);
+      if (tr.actual)
+        mol.ConfirmOldAtom(a);
+      else
+        mol.AddAtom(a, tr.pos[b]);
+    }
+    h->Commit(mol, tr);
+    return sum / k;
+  }
+
+private:
+  GraphGrowth *g;
+  TrialMol mol;
+};
+
+// Copy a grown particle's molecule into a move's TrialMol (whose box and
+// kind it shares); TrialMol assignment drops the overlap flag
+void TakeParticle(TrialMol &dst, const TrialMol &src) {
+  dst = src;
+  dst.UpdateOverlap(src.HasOverlap());
+}
+} // namespace
+
+// Population (SMC) growth for Build (CBMC_SMC; see SMCGrowth.h). N particles
+// of k trials per step (CBMC_First = CBMC_Nth = k for the start node) grow
+// the new molecule, and one is chosen; conditional SMC with the same settings
+// weighs the old one. Each molecule's weight is its Z_hat, so the usual
+// acceptance W_new / W_old applies unchanged. The edge order is shared, as in
+// Build. The look-ahead (CBMC_LookAhead) is not used.
+bool DCGraph::BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
+  if (newMol.HasCav() || newMol.COMFix() || newMol.RotateBB() ||
+      oldMol.HasCav() || oldMol.COMFix() || oldMol.RotateBB())
+    return false;
+  uint current = data.prng.randIntExc(nodes.size());
+  visited.assign(nodes.size(), false);
+  visited[current] = true;
+  std::vector<DCLinkedHedron *> &seq = smcSeq;
+  WalkEdges(current, seq);
+  for (DCLinkedHedron *h : seq)
+    h->CacheOldBonds(oldMol);
+
+  const uint first0 = data.nLJTrialsFirst, nth0 = data.nLJTrialsNth;
+  const uint k = data.smcTrials;
+  data.nLJTrialsFirst = data.nLJTrialsNth = k;
+  GraphGrowth g;
+  g.data = &data;
+  g.start = nodes[current].starting;
+  g.seq = &seq;
+  g.molIndex = molIndex;
+  g.k = k;
+  g.buf.resize(k);
+  SMCGrowth<GraphParticle, PRNG> smc(data.smcParticles, 2.0);
+
+  double ln = smc.GrowNew(GraphParticle(g, newMol), data.prng);
+  if (ln > -std::numeric_limits<double>::infinity()) {
+    TakeParticle(newMol, smc.Chosen().Mol());
+    newMol.SetWeight(std::exp(ln));
+  } else {
+    newMol.SetWeight(0.0); // rejected by the move's weight check
+  }
+  double lo = smc.WeighOld(GraphParticle(g, oldMol), data.prng);
+  TakeParticle(oldMol, smc.Chosen().Mol());
+  oldMol.SetWeight(std::exp(lo));
+
+  data.nLJTrialsFirst = first0;
+  data.nLJTrialsNth = nth0;
+  return true;
+}
+
+#ifdef GOMC_INSTRUMENT
+
+// SMC probe: for each (N, k) setting, out receives ln Z_hat_new,
+// ln Z_hat_old and the wall time in seconds of the pair. Grow a new molecule into newMol's box
+// by SMC with N particles of k trials each (resampling every step) and weigh
+// oldMol's configuration by conditional SMC with the same settings. The
+// caller removes oldMol's molecule from the cell list first, so both see the
+// same environment and the true Rosenbluth normalisation Z is the same for
+// both: ln Z_hat_new - ln Z_hat_old is pure estimator error. N = 1 is
+// standard CBMC with k trials at every step (CBMC_First = CBMC_Nth = k).
+// All settings use the same start node and edge order. Nothing is committed
+// to the system; trial counts are restored afterwards.
+bool DCGraph::ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
+                       const std::vector<SMCProbeSetting> &settings,
+                       std::vector<double> &out) {
+  if (!smcCapable)
+    return false;
+  uint current = data.prng.randIntExc(nodes.size());
+  visited.assign(nodes.size(), false);
+  visited[current] = true;
+  std::vector<DCLinkedHedron *> seq;
+  WalkEdges(current, seq);
+  for (DCLinkedHedron *h : seq)
+    h->CacheOldBonds(oldMol);
+
+  const uint first0 = data.nLJTrialsFirst, nth0 = data.nLJTrialsNth;
+  GraphGrowth g;
+  g.data = &data;
+  g.start = nodes[current].starting;
+  g.seq = &seq;
+  g.molIndex = molIndex;
+  out.clear();
+  for (const SMCProbeSetting &st : settings) {
+    g.k = st.k;
+    g.buf.resize(st.k);
+    data.EnsureLJCapacity(st.k);
+    data.nLJTrialsFirst = data.nLJTrialsNth = st.k;
+    SMCGrowth<GraphParticle, PRNG> smc(st.N, 2.0);
+    auto t0 = std::chrono::steady_clock::now();
+    out.push_back(smc.GrowNew(GraphParticle(g, newMol), data.prng));
+    out.push_back(smc.WeighOld(GraphParticle(g, oldMol), data.prng));
+    out.push_back(std::chrono::duration<double>(
+                      std::chrono::steady_clock::now() - t0)
+                      .count());
+  }
+  data.nLJTrialsFirst = first0;
+  data.nLJTrialsNth = nth0;
+  return true;
+}
+#endif
 
 void DCGraph::BuildEdges(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
                          const uint cur) {

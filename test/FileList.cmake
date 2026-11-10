@@ -12,6 +12,7 @@ set(TestSources
     test/src/BranchSamplerTest.cpp
     test/src/TopoDistanceTest.cpp
     test/src/RecoilGrowthTest.cpp
+    test/src/SMCGrowthTest.cpp
     test/src/LookAheadCBMCTest.cpp
     test/src/TestEwaldMoves.cpp
     test/src/TestMultiBoxEwald.cpp
@@ -192,6 +193,7 @@ set(GOMCHeaders
    src/cbmc/DCGraph.h
    src/cbmc/DCHedron.h
    src/cbmc/RecoilGrowth.h
+   src/cbmc/SMCGrowth.h
    src/cbmc/DCHedronCycle.h
    src/cbmc/DCLinear.h
    src/cbmc/DCOnSphere.h

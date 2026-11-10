@@ -12,6 +12,8 @@ A copy of the MIT License can be found in License.txt with this program or at
  *
  */
 
+#include <vector>
+
 #include "BasicTypes.h"
 #include "Forcefield.h"
 
@@ -53,6 +55,22 @@ public:
   // grow the molecule with starting seed within subVolume
   virtual void BuildGrowInCav(TrialMol &oldMol, TrialMol &newMol,
                               uint molIndex) = 0;
+
+#ifdef GOMC_INSTRUMENT
+  // SMC probe (instrumentation, see DCGraph::ProbeSMC). For each (N, k)
+  // setting, out receives ln Z_hat of an SMC insertion into newMol's box,
+  // ln Z_hat of a conditional SMC weighing of oldMol and the wall time of
+  // the pair in seconds, in that order. Returns
+  // false if this builder does not support it.
+  struct SMCProbeSetting {
+    uint N, k;
+  };
+  virtual bool ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
+                        const std::vector<SMCProbeSetting> &settings,
+                        std::vector<double> &out) {
+    return false;
+  }
+#endif
 
   virtual ~CBMC() {}
 };

@@ -240,10 +240,17 @@ struct GrowRecoil {
   double threshold;    // kT; trials with lower energy are always open
 };
 
+// Population (SMC) growth for CBMC insertion/deletion (src/cbmc/SMCGrowth.h)
+struct GrowSMC {
+  bool enable;
+  uint particles, trials; // particles N, trials per particle per step k
+};
+
 struct CBMC {
   GrowNonbond nonbonded;
   GrowBond bonded;
   GrowRecoil recoil;
+  GrowSMC smc;
   uint lookAhead;    // look-ahead samples per LJ trial (0 = off)
   uint lookAheadDih; // torsion samples per look-ahead step (0 = CBMC_Dih)
   // branch-angle trials per look-ahead step (default 1; 0 = equilibrium

@@ -37,12 +37,16 @@ public:
 
   const uint nAngleTrials;
   const uint nDihTrials;
-  const uint nLJTrialsFirst;
-  const uint nLJTrialsNth;
+  // Not const only so SMC growth (DCGraph) can set them to the per-particle
+  // trial count for one growth; see EnsureLJCapacity.
+  uint nLJTrialsFirst;
+  uint nLJTrialsNth;
   // recoil growth (RecoilGrowth.h) for DCGraph::Build
   const bool recoil;
   const uint recoilLength, recoilTrials;
   const double recoilThreshold; // kT; trials below it are always open
+  const bool smc;                       // CBMC_SMC
+  const uint smcParticles, smcTrials;
   // one-step look-ahead in DCLinkedHedron: samples per LJ trial (0 = off),
   // torsion samples per look-ahead step, and branch-angle trials per
   // look-ahead step (0 = equilibrium angles)
@@ -76,6 +80,27 @@ public:
 
   // Bond angle sampling tables, indexed by angle kind, built on demand
   std::vector<BendTable> bendTables;
+
+  // Grow the per-LJ-trial scratch arrays to hold at least n trials (the
+  // contents are not kept). The DCRotateCOM (T) arrays are not touched.
+  void EnsureLJCapacity(uint n) {
+    if (n <= ljCapacity)
+      return;
+    for (uint i = 0; i < MAX_BONDS; ++i)
+      multiPositions[i] = XYZArray(n);
+    double **arrs[] = {&inter, &real, &bonded, &oneFour, &nonbonded,
+                       &ljWeights};
+    for (double **a : arrs) {
+      delete[] *a;
+      *a = new double[n];
+    }
+    delete[] overlap;
+    overlap = new bool[n];
+    ljCapacity = n;
+  }
+
+private:
+  uint ljCapacity;
 };
 
 inline DCData::DCData(System &sys, const Forcefield &forcefield,
@@ -91,6 +116,9 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
       recoilLength(set.config.sys.cbmcTrials.recoil.length),
       recoilTrials(set.config.sys.cbmcTrials.recoil.trials),
       recoilThreshold(set.config.sys.cbmcTrials.recoil.threshold),
+      smc(set.config.sys.cbmcTrials.smc.enable),
+      smcParticles(set.config.sys.cbmcTrials.smc.particles),
+      smcTrials(set.config.sys.cbmcTrials.smc.trials),
       lookAhead(set.config.sys.cbmcTrials.lookAhead),
       lookAheadDih(set.config.sys.cbmcTrials.lookAheadDih > 0
                        ? set.config.sys.cbmcTrials.lookAheadDih
@@ -104,6 +132,8 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
   // recoil growth evaluates its trials in the same buffers
   if (recoil && recoilTrials > maxLJTrials)
     maxLJTrials = recoilTrials;
+  if (smc && smcTrials > maxLJTrials)
+    maxLJTrials = smcTrials;
 
   totalTrials = nLJTrialsFirst * nLJTrialsNth;
   if (totalTrials == 0)
@@ -119,6 +149,7 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
   nonbonded = new double[maxLJTrials];
   ljWeights = new double[maxLJTrials];
   overlap = new bool[maxLJTrials];
+  ljCapacity = maxLJTrials;
 
   interT = new double[totalTrials];
   realT = new double[totalTrials];

@@ -144,6 +144,9 @@ ConfigSetup::ConfigSetup(void) {
   sys.cbmcTrials.recoil.length = 2;
   sys.cbmcTrials.recoil.trials = 4;
   sys.cbmcTrials.recoil.threshold = 0.0;
+  sys.cbmcTrials.smc.enable = false;
+  sys.cbmcTrials.smc.particles = 300;
+  sys.cbmcTrials.smc.trials = 1;
   sys.cbmcTrials.lookAhead = 2;
   sys.cbmcTrials.lookAheadDih = 0;
   // one branch-angle trial per look-ahead step: on all-atom hexane it costs
@@ -1354,6 +1357,18 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       sys.cbmcTrials.recoil.enable = checkBool(line[1]);
       printf("%-40s %-s \n", "Info: CBMC recoil growth",
              sys.cbmcTrials.recoil.enable ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "CBMC_SMC")) {
+      sys.cbmcTrials.smc.enable = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: CBMC SMC (population) growth",
+             sys.cbmcTrials.smc.enable ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "CBMC_SMCParticles")) {
+      sys.cbmcTrials.smc.particles = stringtoi(line[1]);
+      printf("%-40s %-4d \n", "Info: CBMC SMC particles",
+             sys.cbmcTrials.smc.particles);
+    } else if (CheckString(line[0], "CBMC_SMCTrials")) {
+      sys.cbmcTrials.smc.trials = stringtoi(line[1]);
+      printf("%-40s %-4d \n", "Info: CBMC SMC trials per particle",
+             sys.cbmcTrials.smc.trials);
     } else if (CheckString(line[0], "CBMC_RecoilLength")) {
       sys.cbmcTrials.recoil.length = stringtoi(line[1]);
       printf("%-40s %-4d \n", "Info: CBMC recoil length",
@@ -2315,6 +2330,28 @@ void ConfigSetup::verifyInputs(void) {
       std::cout << "ERROR: CBMC_RecoilTrials must be at least 1!\n";
       exit(EXIT_FAILURE);
     }
+  }
+  if (sys.cbmcTrials.smc.enable) {
+    if (sys.cbmcTrials.smc.particles < 1 || sys.cbmcTrials.smc.trials < 1) {
+      std::cout << "ERROR: CBMC_SMCParticles and CBMC_SMCTrials must be at "
+                   "least 1!\n";
+      exit(EXIT_FAILURE);
+    }
+    if (sys.cbmcTrials.recoil.enable) {
+      std::cout << "ERROR: CBMC_SMC and CBMC_Recoil cannot both be active!\n";
+      exit(EXIT_FAILURE);
+    }
+    // SMC replaces parts of the standard CBMC settings for whole-molecule
+    // growth; say so, since nothing else in the output would.
+    printf("%-40s %-s \n", "Info: CBMC SMC growth applies to",
+           "swap and intra-swap of acyclic molecules");
+    printf("%-40s %-4d (CBMC_First/CBMC_Nth ignored there)\n",
+           "Info: CBMC SMC LJ trials, every step", sys.cbmcTrials.smc.trials);
+    if (sys.cbmcTrials.lookAhead > 0)
+      printf("%-40s %-s \n", "Info: CBMC look-ahead under SMC",
+             "not used for SMC growth");
+    printf("%-40s %-s \n", "Info: CBMC SMC fallback",
+           "rings, MEMC/cavity, regrowth, crankshaft use standard CBMC");
   }
   if (sys.memcVal.enable || sys.intraMemcVal.enable) {
     if ((sys.memcVal.MEMC1 && sys.memcVal.MEMC2) ||
