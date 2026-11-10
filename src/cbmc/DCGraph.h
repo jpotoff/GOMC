@@ -5,6 +5,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #ifndef DCGRAPH_H
 #define DCGRAPH_H
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -64,8 +65,24 @@ private:
   // carry cavity/COM constraints, in which case Build falls back to CBMC
   bool BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex);
   // true if every edge is a DCLinkedHedron (SMC growth and the probe need it)
+  // An SMC worker: a copy of this graph with its own components, scratch
+  // (DCData) and generator, used by one extra OpenMP thread to extend SMC
+  // particles in parallel. Workers have no workers of their own.
+  DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
+          const Setup &set, PRNG *rng);
+  void Init(System &sys, const Forcefield &ff, const MoleculeKind &kind,
+            const Setup &set, bool worker);
+  struct SMCWorker {
+    DCGraph *graph;
+    PRNG *prng; // owns gen
+    MTRand *gen;
+  };
   bool smcCapable;
   std::vector<DCLinkedHedron *> smcSeq;
+  std::vector<SMCWorker> smcWorkers;            // threads 1, 2, ...
+  std::vector<DCLinkedHedron *> flatEdges;      // edges, node by node
+  std::map<const DCComponent *, uint> edgeFlat; // edge -> flatEdges index
+  std::vector<std::vector<DCLinkedHedron *>> smcSeqT; // per thread
   // recoil growth engine and the current edge sequence (DCGraph.cpp); null
   // unless CBMC_Recoil is on
   struct RecoilState;

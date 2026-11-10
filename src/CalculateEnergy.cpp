@@ -13,6 +13,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <cassert>
 #include <cmath>
 #include <memory>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #include "BasicTypes.h" //uint
 #include "BoxDimensions.h"
@@ -134,6 +137,11 @@ CalculateEnergy::CalculateEnergy(StaticVals &stat, System &sys)
       molLookup(stat.molLookup),
 #endif
       currentAxes(sys.boxDimRef), cellList(sys.cellList) {
+#ifdef _OPENMP
+  localLists.resize(std::max(1, omp_get_max_threads()));
+#else
+  localLists.resize(1);
+#endif
 }
 
 void CalculateEnergy::Init(System &sys) {
@@ -324,6 +332,11 @@ int CalculateEnergy::BuildBoxPacked(XYZArray const &coords,
   const bool cacheable = (&coords == &currentCoords);
   if (cacheable && boxPackValid && boxPackBox == box &&
       boxPackVersion == cellList.Version()) {
+#if !defined(NDEBUG) && defined(_OPENMP)
+    // the check rebuilds the pack, which threads growing in parallel share
+    if (omp_in_parallel())
+      return boxPackCount;
+#endif
 #ifndef NDEBUG
     // Compare contents, not just the count: a coordinate change with no
     // cell-list mutation would leave the count intact and the positions stale,
@@ -401,11 +414,31 @@ namespace {
 constexpr double kLocalMargin = 0.01;
 } // namespace
 
+// The calling thread's list. Called outside any nested region (ParticleInter
+// takes its pointers before its own parallel loop), so the thread number of
+// the outermost team names the slot: SMC particles grown in parallel each
+// get their own, and serial code gets slot 0.
+CalculateEnergy::LocalList &CalculateEnergy::Local() const {
+#ifdef _OPENMP
+  const int slot = omp_get_level() > 0 ? omp_get_ancestor_thread_num(1) : 0;
+  assert(slot >= 0 && slot < (int)localLists.size());
+  return localLists[slot];
+#else
+  return localLists[0];
+#endif
+}
+
+void CalculateEnergy::PrepareParallelParticleInter(const uint box) const {
+  if (box < BOXES_WITH_U_NB && StencilCoversBox(box))
+    BuildBoxPacked(currentCoords, box);
+}
+
 void CalculateEnergy::BeginLocalCandidates(const XYZ &center,
                                            XYZArray const *pos,
                                            const uint nArrays, const uint n,
                                            const uint box) const {
-  localActive = false;
+  LocalList &ll = Local();
+  ll.localActive = false;
   const uint nPos = nArrays * n;
   if (box >= BOXES_WITH_U_NB || nPos < localMinTrials)
     return;
@@ -424,12 +457,12 @@ void CalculateEnergy::BeginLocalCandidates(const XYZ &center,
   // at least as far: its atom set and order are then exactly what a rebuild
   // would give at its own reach, which covers these trials. SMC particles
   // that share a parent grow from the same focus atom one after another.
-  if (localValid && localBox == box && localVersion == cellList.Version() &&
-      reach * reach <= localReachSq) {
+  if (ll.localValid && ll.localBox == box && ll.localVersion == cellList.Version() &&
+      reach * reach <= ll.localReachSq) {
     const XYZ c = currentAxes.WrapPBC(center, box);
-    if (c.x == localCenter.x && c.y == localCenter.y &&
-        c.z == localCenter.z) {
-      localActive = true;
+    if (c.x == ll.localCenter.x && c.y == ll.localCenter.y &&
+        c.z == ll.localCenter.z) {
+      ll.localActive = true;
       return;
     }
   }
@@ -445,15 +478,16 @@ template <typename BoxType>
 void CalculateEnergy::BuildLocalCandidates(const XYZ &center,
                                            const double reach, const uint box,
                                            const BoxType &boxAxes) const {
-  localValid = false; // overwritten below
+  LocalList &ll = Local();
+  ll.localValid = false; // overwritten below
   const int cap = (int)currentCoords.Count();
-  if ((int)localX.size() < cap) {
-    localX.resize(cap);
-    localY.resize(cap);
-    localZ.resize(cap);
-    localCharge.resize(cap);
-    localKind.resize(cap);
-    localMol.resize(cap);
+  if ((int)ll.localX.size() < cap) {
+    ll.localX.resize(cap);
+    ll.localY.resize(cap);
+    ll.localZ.resize(cap);
+    ll.localCharge.resize(cap);
+    ll.localKind.resize(cap);
+    ll.localMol.resize(cap);
   }
   const XYZ c = currentAxes.WrapPBC(center, box);
   const double radius = std::sqrt(boxAxes.rCutSq[box]) + reach;
@@ -476,22 +510,22 @@ void CalculateEnergy::BuildLocalCandidates(const XYZ &center,
   } else {
     const bool walked =
         cellList.ForEachNear(c, radius, box, [&](const int p) {
-          localX[nSrc] = currentCoords.x[p];
-          localY[nSrc] = currentCoords.y[p];
-          localZ[nSrc] = currentCoords.z[p];
-          localCharge[nSrc] = particleCharge[p];
-          localKind[nSrc] = particleKind[p];
-          localMol[nSrc] = particleMol[p];
+          ll.localX[nSrc] = currentCoords.x[p];
+          ll.localY[nSrc] = currentCoords.y[p];
+          ll.localZ[nSrc] = currentCoords.z[p];
+          ll.localCharge[nSrc] = particleCharge[p];
+          ll.localKind[nSrc] = particleKind[p];
+          ll.localMol[nSrc] = particleMol[p];
           ++nSrc;
         });
     if (!walked)
       return; // non-orthogonal grid: keep the plain path
-    sX = localX.data();
-    sY = localY.data();
-    sZ = localZ.data();
-    sQ = localCharge.data();
-    sKind = localKind.data();
-    sMol = localMol.data();
+    sX = ll.localX.data();
+    sY = ll.localY.data();
+    sZ = ll.localZ.data();
+    sQ = ll.localCharge.data();
+    sKind = ll.localKind.data();
+    sMol = ll.localMol.data();
   }
 
   // Keep the atoms within radius of the center. Writes never overtake reads,
@@ -506,33 +540,34 @@ void CalculateEnergy::BuildLocalCandidates(const XYZ &center,
       if (!(distSq[k] < radiusSq))
         continue;
       const int j = base + k;
-      localX[n] = sX[j];
-      localY[n] = sY[j];
-      localZ[n] = sZ[j];
-      localCharge[n] = sQ[j];
-      localKind[n] = sKind[j];
-      localMol[n] = sMol[j];
+      ll.localX[n] = sX[j];
+      ll.localY[n] = sY[j];
+      ll.localZ[n] = sZ[j];
+      ll.localCharge[n] = sQ[j];
+      ll.localKind[n] = sKind[j];
+      ll.localMol[n] = sMol[j];
       ++n;
     }
   }
-  localCount = n;
-  localBox = box;
-  localVersion = cellList.Version();
-  localCenter = c;
-  localReachSq = reach * reach;
-  localActive = true;
-  localValid = true;
+  ll.localCount = n;
+  ll.localBox = box;
+  ll.localVersion = cellList.Version();
+  ll.localCenter = c;
+  ll.localReachSq = reach * reach;
+  ll.localActive = true;
+  ll.localValid = true;
 }
 
 template <typename BoxType>
 bool CalculateEnergy::LocalCandidatesCover(XYZArray const &trialPos,
                                            const uint trials, const uint box,
                                            const BoxType &boxAxes) const {
-  if (!localActive || localBox != box || localVersion != cellList.Version())
+  LocalList &ll = Local();
+  if (!ll.localActive || ll.localBox != box || ll.localVersion != cellList.Version())
     return false;
   for (uint t = 0; t < trials; ++t)
-    if (boxAxes.MinImage(trialPos[t] - localCenter, box).LengthSq() >
-        localReachSq)
+    if (boxAxes.MinImage(trialPos[t] - ll.localCenter, box).LengthSq() >
+        ll.localReachSq)
       return false;
   return true;
 }
@@ -1944,6 +1979,7 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
                                             const uint molIndex, const uint box,
                                             const uint trials,
                                             const BoxType &boxAxes) const {
+  LocalList &ll = Local();
   if (box >= BOXES_WITH_U_NB)
     return;
 
@@ -1974,14 +2010,14 @@ void CalculateEnergy::ParticleInterTemplate(const FFType &ff, double *en,
   const bool useLocal = LocalCandidatesCover(trialPos, trials, box, boxAxes);
   if (useLocal || StencilCoversBox(box)) {
     const int nPacked =
-        useLocal ? localCount : BuildBoxPacked(currentCoords, box);
-    const double *const pX = useLocal ? localX.data() : boxPackX.data();
-    const double *const pY = useLocal ? localY.data() : boxPackY.data();
-    const double *const pZ = useLocal ? localZ.data() : boxPackZ.data();
+        useLocal ? ll.localCount : BuildBoxPacked(currentCoords, box);
+    const double *const pX = useLocal ? ll.localX.data() : boxPackX.data();
+    const double *const pY = useLocal ? ll.localY.data() : boxPackY.data();
+    const double *const pZ = useLocal ? ll.localZ.data() : boxPackZ.data();
     const double *const pQ =
-        useLocal ? localCharge.data() : boxPackCharge.data();
-    const int *const pKind = useLocal ? localKind.data() : boxPackKind.data();
-    const int *const pMol = useLocal ? localMol.data() : boxPackMol.data();
+        useLocal ? ll.localCharge.data() : boxPackCharge.data();
+    const int *const pKind = useLocal ? ll.localKind.data() : boxPackKind.data();
+    const int *const pMol = useLocal ? ll.localMol.data() : boxPackMol.data();
     const double rCutSqBox = boxAxes.rCutSq[box];
     const double rCutLowSq = forcefield.rCutLowSq;
     // Per-kernel cutoffs and the table window, as in BoxInterTemplate: pass 2
@@ -2705,6 +2741,7 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
                                     XYZArray const &trialPos, bool *overlap,
                                     const uint partIndex, const uint molIndex,
                                     const uint box, const uint trials) const {
+  LocalList &ll = Local();
   // `electrostatic` as a template parameter, as in BoxInterTemplate. Hoisting
   // it into a local was tried first and was not enough: inside the OpenMP
   // outlined region the firstprivate copy gets spilled and re-loaded anyway,
@@ -2714,7 +2751,7 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
   // With a candidate list active, redo the call on the plain path and compare
   // below. Only the summation order differs, so energies agree to rounding
   // and the overlap flags exactly.
-  const bool checkLocal = localActive && localBox == box;
+  const bool checkLocal = ll.localActive && ll.localBox == box;
   std::vector<double> enRef, realRef;
   std::vector<char> overlapRef;
   if (checkLocal) {
@@ -2751,10 +2788,10 @@ void CalculateEnergy::ParticleInter(double *en, double *real,
   if (checkLocal) {
     std::unique_ptr<bool[]> ovRef(new bool[trials]);
     std::copy(overlapRef.begin(), overlapRef.end(), ovRef.get());
-    localActive = false;
+    ll.localActive = false;
     ParticleInter(enRef.data(), realRef.data(), trialPos, ovRef.get(),
                   partIndex, molIndex, box, trials);
-    localActive = true;
+    ll.localActive = true;
     auto close = [](const double a, const double b) {
       return a == b ||
              std::abs(a - b) <= 1e-9 * std::max(1.0, std::abs(a) + std::abs(b));

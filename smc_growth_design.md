@@ -115,6 +115,22 @@ the earlier part of the chain.
 - **Bond lengths.** The extra trials of the reference particle use the old
   molecule's bond lengths, as GOMC's CBMC old weighing does. New particles
   use equilibrium lengths. The two are identical when bonds are rigid.
+- **Threads.** With `+pN`, each step's particles are extended on N OpenMP
+  threads.
+  - Each extra thread has a worker copy of the molecule's `DCGraph`, with
+    its own components, `DCData` scratch and generator. A worker generator
+    is reseeded from the main one at every growth.
+  - The schedule is static, so a run is reproducible for a fixed thread
+    count. With one thread, no extra random numbers are drawn and
+    trajectories are identical to the serial code.
+  - The energy code keeps one local candidate list per thread. The packed
+    box is built before the parallel loop.
+  - Resampling and the copying of particles stay serial.
+  - Instrumented builds stay serial.
+- **Neighbour lists.** For k = 1 a step has 1-2 trial positions, below the
+  default threshold for building a local candidate list. SMC lowers the
+  threshold to 1, except when the cell stencil covers the box. Copies of
+  one parent are grown next to each other and reuse one list.
 - **Weights:** they are handed to the move as exp(ln Ẑ), as GOMC's other
   growth methods do. On AA C16 in the liquid ln Ẑ ≈ −12, far from underflow.
 

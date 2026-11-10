@@ -24,7 +24,10 @@ namespace cbmc {
 // bothered to write accessors
 class DCData {
 public:
-  explicit DCData(System &sys, const Forcefield &forcefield, const Setup &set);
+  // rng: the generator to draw from; System's when null. SMC worker graphs
+  // (one per extra OpenMP thread) each pass their own.
+  DCData(System &sys, const Forcefield &forcefield, const Setup &set,
+         PRNG *rng = nullptr);
   ~DCData();
 
   const CalculateEnergy &calc;
@@ -104,10 +107,11 @@ private:
 };
 
 inline DCData::DCData(System &sys, const Forcefield &forcefield,
-                      const Setup &set)
+                      const Setup &set, PRNG *rng)
     :
 
-      calc(sys.calcEnergy), ff(forcefield), axes(sys.boxDimRef), prng(sys.prng),
+      calc(sys.calcEnergy), ff(forcefield), axes(sys.boxDimRef),
+      prng(rng ? *rng : sys.prng),
       nAngleTrials(set.config.sys.cbmcTrials.bonded.ang),
       nDihTrials(set.config.sys.cbmcTrials.bonded.dih),
       nLJTrialsFirst(set.config.sys.cbmcTrials.nonbonded.first),

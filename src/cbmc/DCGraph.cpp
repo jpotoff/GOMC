@@ -20,6 +20,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "DCRotateCOM.h"
 #include "RecoilGrowth.h"
 #include "SMCGrowth.h"
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace cbmc {
 
@@ -112,6 +115,17 @@ struct DCGraph::RecoilState {
 DCGraph::DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
                  const Setup &set)
     : data(sys, ff, set) {
+  Init(sys, ff, kind, set, false);
+}
+
+DCGraph::DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
+                 const Setup &set, PRNG *rng)
+    : data(sys, ff, set, rng) {
+  Init(sys, ff, kind, set, true);
+}
+
+void DCGraph::Init(System &sys, const Forcefield &ff, const MoleculeKind &kind,
+                   const Setup &set, bool worker) {
   using namespace mol_setup;
   MolMap::const_iterator it = set.mol.kindMap.find(kind.uniqueName);
   assert(it != set.mol.kindMap.end());
@@ -200,6 +214,33 @@ DCGraph::DCGraph(System &sys, const Forcefield &ff, const MoleculeKind &kind,
   if (data.smc && !smcCapable)
     std::cout << "Warning: CBMC_SMC is not supported for molecule kind "
               << kind.name << "; it is grown by standard CBMC.\n";
+  for (const Node &nd : nodes)
+    for (const Edge &e : nd.edges) {
+      edgeFlat[e.component] = flatEdges.size();
+      flatEdges.push_back(dynamic_cast<DCLinkedHedron *>(e.component));
+    }
+#if defined(_OPENMP) && !defined(GOMC_INSTRUMENT)
+  // One worker graph per extra thread, so SMC particles can be extended in
+  // parallel. Each is built from the same setup, so its nodes and edges match
+  // this graph's one for one (flatEdges), with its own scratch and generator.
+  // Instrumented builds stay serial: the collector is not thread safe.
+  if (data.smc && smcCapable && !worker) {
+    const int T = omp_get_max_threads();
+    for (int t = 1; t < T; ++t) {
+      SMCWorker w;
+      w.prng = new PRNG(sys.molLookupRef);
+      w.gen = new MTRand(1u); // reseeded from data.prng at every growth
+      w.prng->Init(w.gen);
+      w.graph = new DCGraph(sys, ff, kind, set, w.prng);
+      smcWorkers.push_back(w);
+    }
+  }
+#else
+  (void)sys;
+  (void)ff;
+  (void)set;
+  (void)worker;
+#endif
   recoil = data.recoil
                ? new RecoilState(data.recoilTrials, data.recoilLength)
                : nullptr;
@@ -386,9 +427,14 @@ struct GraphGrowth {
 // per step. Step 0 is the start node's DCFreeHedron (first atom and its
 // bonded atoms, with nLJTrialsFirst = nLJTrialsNth = k); step s > 0 is edge
 // step s - 1.
+//
+// With several threads (SMCGrowth::SetThreads), g holds one GraphGrowth per
+// thread, each on its own graph (the main one or a worker), and a particle
+// extends with the calling thread's.
 class GraphParticle {
 public:
-  GraphParticle(GraphGrowth &g, const TrialMol &m) : g(&g), mol(m) {
+  GraphParticle(std::vector<GraphGrowth> &g, const TrialMol &m)
+      : g(&g), mol(m) {
     mol.UpdateOverlap(m.HasOverlap());
   }
   GraphParticle(const GraphParticle &o) : g(o.g), mol(o.mol) {
@@ -401,9 +447,20 @@ public:
     return *this;
   }
 
-  uint NumSteps() const { return g->seq->size() + 1; }
+  uint NumSteps() const { return (*g)[0].seq->size() + 1; }
   const TrialMol &Mol() const { return mol; }
   double Extend(uint step, bool reference) {
+#ifdef _OPENMP
+    GraphGrowth *gg = &(*g)[omp_get_thread_num()];
+#else
+    GraphGrowth *gg = &(*g)[0];
+#endif
+    return Extend(*gg, step, reference);
+  }
+
+private:
+  double Extend(GraphGrowth &gr, uint step, bool reference) {
+    GraphGrowth *g = &gr; // shadows the member below
     if (step == 0) {
       mol.SetWeight(1.0);
       if (reference) {
@@ -455,8 +512,7 @@ public:
     return sum / k;
   }
 
-private:
-  GraphGrowth *g;
+  std::vector<GraphGrowth> *g;
   TrialMol mol;
 };
 
@@ -481,38 +537,61 @@ bool DCGraph::BuildSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex) {
   uint current = data.prng.randIntExc(nodes.size());
   visited.assign(nodes.size(), false);
   visited[current] = true;
-  std::vector<DCLinkedHedron *> &seq = smcSeq;
-  WalkEdges(current, seq);
-  for (DCLinkedHedron *h : seq)
-    h->CacheOldBonds(oldMol);
+  WalkEdges(current, smcSeq);
+
+  // Thread t grows with graph t: this one for t = 0, worker t - 1 otherwise,
+  // on the same start node and edge order. Workers draw from their own
+  // generators, reseeded here from data.prng, so a run is reproducible for a
+  // fixed thread count (and with one thread uses no extra random numbers).
+  const uint T = 1 + smcWorkers.size();
+  const uint k = data.smcTrials;
+  smcSeqT.resize(T);
+  std::vector<GraphGrowth> ctx(T);
+  for (uint t = 0; t < T; ++t) {
+    DCGraph &gr = t == 0 ? *this : *smcWorkers[t - 1].graph;
+    std::vector<DCLinkedHedron *> &seq = smcSeqT[t];
+    seq.resize(smcSeq.size());
+    for (size_t i = 0; i < smcSeq.size(); ++i)
+      seq[i] = gr.flatEdges[edgeFlat[smcSeq[i]]];
+    for (DCLinkedHedron *h : seq)
+      h->CacheOldBonds(oldMol);
+    if (t > 0)
+      smcWorkers[t - 1].gen->seed(data.prng.randInt(0xFFFFFFFFu));
+    ctx[t].data = &gr.data;
+    ctx[t].start = gr.nodes[current].starting;
+    ctx[t].seq = &seq;
+    ctx[t].molIndex = molIndex;
+    ctx[t].k = k;
+    ctx[t].buf.resize(k);
+  }
 
   const uint first0 = data.nLJTrialsFirst, nth0 = data.nLJTrialsNth;
-  const uint k = data.smcTrials;
-  data.nLJTrialsFirst = data.nLJTrialsNth = k;
+  for (GraphGrowth &c : ctx)
+    c.data->nLJTrialsFirst = c.data->nLJTrialsNth = k;
   // particles have few trials per step; the candidate list still pays
   const uint minTrials0 = data.calc.SetLocalMinTrials(1);
-  GraphGrowth g;
-  g.data = &data;
-  g.start = nodes[current].starting;
-  g.seq = &seq;
-  g.molIndex = molIndex;
-  g.k = k;
-  g.buf.resize(k);
   SMCGrowth<GraphParticle, PRNG> smc(data.smcParticles, 2.0);
+  smc.SetThreads(T);
 
-  double ln = smc.GrowNew(GraphParticle(g, newMol), data.prng);
+  if (T > 1)
+    data.calc.PrepareParallelParticleInter(newMol.GetBox());
+  double ln = smc.GrowNew(GraphParticle(ctx, newMol), data.prng);
   if (ln > -std::numeric_limits<double>::infinity()) {
     TakeParticle(newMol, smc.Chosen().Mol());
     newMol.SetWeight(std::exp(ln));
   } else {
     newMol.SetWeight(0.0); // rejected by the move's weight check
   }
-  double lo = smc.WeighOld(GraphParticle(g, oldMol), data.prng);
+  if (T > 1)
+    data.calc.PrepareParallelParticleInter(oldMol.GetBox());
+  double lo = smc.WeighOld(GraphParticle(ctx, oldMol), data.prng);
   TakeParticle(oldMol, smc.Chosen().Mol());
   oldMol.SetWeight(std::exp(lo));
 
-  data.nLJTrialsFirst = first0;
-  data.nLJTrialsNth = nth0;
+  for (GraphGrowth &c : ctx) {
+    c.data->nLJTrialsFirst = first0;
+    c.data->nLJTrialsNth = nth0;
+  }
   data.calc.SetLocalMinTrials(minTrials0);
   return true;
 }
@@ -544,7 +623,8 @@ bool DCGraph::ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
 
   const uint first0 = data.nLJTrialsFirst, nth0 = data.nLJTrialsNth;
   const uint minTrials0 = data.calc.SetLocalMinTrials(1);
-  GraphGrowth g;
+  std::vector<GraphGrowth> ctx(1); // serial
+  GraphGrowth &g = ctx[0];
   g.data = &data;
   g.start = nodes[current].starting;
   g.seq = &seq;
@@ -557,8 +637,8 @@ bool DCGraph::ProbeSMC(TrialMol &oldMol, TrialMol &newMol, uint molIndex,
     data.nLJTrialsFirst = data.nLJTrialsNth = st.k;
     SMCGrowth<GraphParticle, PRNG> smc(st.N, 2.0);
     auto t0 = std::chrono::steady_clock::now();
-    out.push_back(smc.GrowNew(GraphParticle(g, newMol), data.prng));
-    out.push_back(smc.WeighOld(GraphParticle(g, oldMol), data.prng));
+    out.push_back(smc.GrowNew(GraphParticle(ctx, newMol), data.prng));
+    out.push_back(smc.WeighOld(GraphParticle(ctx, oldMol), data.prng));
     out.push_back(std::chrono::duration<double>(
                       std::chrono::steady_clock::now() - t0)
                       .count());
@@ -958,6 +1038,10 @@ void DCGraph::BuildGrowInCav(TrialMol &oldMol, TrialMol &newMol,
 }
 
 DCGraph::~DCGraph() {
+  for (SMCWorker &w : smcWorkers) {
+    delete w.graph;
+    delete w.prng; // and its generator
+  }
   delete idExchange;
   delete recoil;
   for (uint v = 0; v < nodes.size(); ++v) {

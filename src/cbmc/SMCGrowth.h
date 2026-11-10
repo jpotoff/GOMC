@@ -10,6 +10,9 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <cmath>
 #include <limits>
 #include <vector>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #include "BasicTypes.h"
 
@@ -74,6 +77,14 @@ public:
     return Run(proto, rng, true);
   }
 
+  // Extend the particles of a step on this many OpenMP threads (static
+  // schedule, so particle n always runs on the same thread and the result is
+  // reproducible for a fixed thread count). The particles must then be safe
+  // to extend concurrently: each uses its own thread's scratch and random
+  // numbers (omp_get_thread_num()); the engine's own draws (resampling, the
+  // final choice) stay on the calling thread and `rng`.
+  void SetThreads(uint t) { threads = t < 1 ? 1 : t; }
+
   const Particle &Chosen() const { return parts[chosen]; }
   uint Particles() const { return N; }
   // Diagnostics for the last run.
@@ -137,17 +148,30 @@ private:
     double logZ = 0.0;
 
     for (uint step = 0; step < nSteps; ++step) {
-      for (uint n = 0; n < N; ++n) {
+      // returns 1 if the particle died at this step
+      auto extend = [&](uint n) -> uint {
         if (L[n] == NegInf())
-          continue; // dead particle: never resampled again until reset
+          return 0; // dead particle: never resampled again until reset
         double W = parts[n].Extend(step, conditional && n == 0);
         if (!(W > 0.0)) {
           L[n] = NegInf();
-          ++nDeadSteps;
-          continue;
+          return 1;
         }
         L[n] += std::log(W);
+        return 0;
+      };
+      uint dead = 0;
+      if (threads > 1) {
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(threads) schedule(static) reduction(+ : dead)
+#endif
+        for (int n = 0; n < (int)N; ++n)
+          dead += extend((uint)n);
+      } else {
+        for (uint n = 0; n < N; ++n)
+          dead += extend(n);
       }
+      nDeadSteps += dead;
 
       bool last = (step + 1 == nSteps);
       double ess = Normalise(L, p);
@@ -194,7 +218,7 @@ private:
   std::vector<Particle> parts, next;
   std::vector<double> L, p, cum;
   std::vector<uint> anc;
-  uint chosen = 0, nResample = 0, nDeadSteps = 0;
+  uint chosen = 0, nResample = 0, nDeadSteps = 0, threads = 1;
 };
 
 } // namespace cbmc

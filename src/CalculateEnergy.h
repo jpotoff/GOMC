@@ -136,7 +136,7 @@ public:
   void BeginLocalCandidates(const XYZ &center, XYZArray const *pos,
                             const uint nArrays, const uint n,
                             const uint box) const;
-  void EndLocalCandidates() const { localActive = false; }
+  void EndLocalCandidates() const { Local().localActive = false; }
   //! Smallest number of trial positions (arrays x trials) for which
   //! BeginLocalCandidates builds a list; returns the previous value.
   uint SetLocalMinTrials(uint n) const {
@@ -144,6 +144,10 @@ public:
     localMinTrials = n;
     return old;
   }
+  //! Build the shared caches ParticleInter reads for `box` (the packed box),
+  //! so threads growing in parallel only read them. Call serially before a
+  //! parallel growth in that box.
+  void PrepareParallelParticleInter(const uint box) const;
 
   //! Calculates change in the ENergyTC from adding numChange atoms of a kind
   //! @param box Index of box under consideration
@@ -456,18 +460,24 @@ private:
   mutable unsigned boxPackVersion = 0;
   mutable int boxPackCount = 0;
 
-  // Candidate list from BeginLocalCandidates, packed like boxPack*.
-  mutable std::vector<double> localX, localY, localZ, localCharge;
-  mutable std::vector<int> localKind, localMol;
-  mutable bool localActive = false;
-  mutable bool localValid = false; // list arrays hold a complete list
+  // Candidate list from BeginLocalCandidates, packed like boxPack*. One per
+  // OpenMP thread, so SMC particles grown in parallel each keep their own;
+  // Local() picks the calling thread's.
+  struct LocalList {
+    std::vector<double> localX, localY, localZ, localCharge;
+    std::vector<int> localKind, localMol;
+    bool localActive = false;
+    bool localValid = false; // arrays hold a complete list
+    uint localBox = 0;
+    unsigned localVersion = 0;
+    int localCount = 0;
+    XYZ localCenter;
+    double localReachSq = 0.0;
+  };
+  mutable std::vector<LocalList> localLists;
+  LocalList &Local() const;
   static constexpr uint kLocalMinTrialsDefault = 3;
   mutable uint localMinTrials = kLocalMinTrialsDefault;
-  mutable uint localBox = 0;
-  mutable unsigned localVersion = 0;
-  mutable int localCount = 0;
-  mutable XYZ localCenter;
-  mutable double localReachSq = 0.0;
   const MoleculeLookup &molLookup;
   const BoxDimensions &currentAxes;
   const CellList &cellList;
