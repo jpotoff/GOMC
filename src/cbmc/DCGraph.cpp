@@ -488,7 +488,9 @@ private:
     double sum = 0.0;
     for (uint j = 0; j < k; ++j)
       sum += t[j].w;
-    if (!(sum > 0.0))
+    // The reference (old molecule) is placed even with zero weight: the move
+    // takes the old molecule's energy from it (see SMCGrowth).
+    if (!(sum > 0.0) && !reference)
       return 0.0;
     uint pick = 0;
     if (!reference) {

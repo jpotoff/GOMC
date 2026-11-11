@@ -196,7 +196,8 @@ public:
       }
       sum += w[t];
     }
-    if (!(sum > 0.0))
+    // the reference is placed even with zero weight (see SMCGrowth)
+    if (!(sum > 0.0) && !reference)
       return 0.0;
     uint pick = 0;
     if (!reference) {
@@ -394,6 +395,29 @@ TEST(SMCGrowthTest, UnconditionalOldWeightIsDetected) {
   std::cout << "[ SMC     ] broken old weight: max|z| " << r.maxZ << "  TV "
             << r.tv << "\n";
   EXPECT_GT(r.maxZ, 8.0);
+}
+
+TEST(SMCGrowthTest, ZeroWeightOldIsGrownInFull) {
+  // An old configuration with infinite energy (an overlapping start). Its
+  // step weight is the mean over its trial set -- the actual placement plus
+  // k - 1 fresh trials -- so with k = 1 it is 0 and WeighOld must return
+  // Z_hat_old = 0, as single-chain CBMC gives W_old = 0. Either way it must
+  // hand back the whole old configuration: GOMC takes the old molecule's
+  // energy from it, and a partial one left the running energy wrong when
+  // the molecule was removed.
+  Model m = SmallModel();
+  const std::vector<int> actual = {0, 2, 0, 1, 3}; // e1[0][2] = INF at step 1
+  ASSERT_EQ(m.U(actual, 1, actual[1]), INF);
+  std::mt19937_64 gen(5);
+  Uniform uni(gen);
+  for (uint N : {1u, 2u, 16u})
+    for (uint k : {1u, 4u}) {
+      SMC smc(N, 2.0);
+      double lo = smc.WeighOld(ToyParticle(m, uni, k, &actual), uni);
+      if (k == 1)
+        EXPECT_EQ(lo, -INF) << "N=" << N;
+      EXPECT_EQ(smc.Chosen().path, actual) << "N=" << N << " k=" << k;
+    }
 }
 
 // ---------------------------------------------------------------------------

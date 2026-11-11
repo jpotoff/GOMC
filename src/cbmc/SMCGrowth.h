@@ -49,7 +49,9 @@ namespace cbmc {
 // an unconditional run breaks detailed balance.
 //
 // Weights are kept as logs so long chains do not underflow; the returned
-// value is log Z_hat (-infinity if every particle died at some step).
+// value is log Z_hat (-infinity if every particle died at some step, or, for
+// WeighOld, if the old configuration itself has zero weight; Chosen() is then
+// still the fully grown old configuration).
 //
 // Particle interface (copied on resampling, so it must be cheap to copy):
 //   uint NumSteps() const;
@@ -146,18 +148,23 @@ private:
     L.assign(N, 0.0);
     nResample = nDeadSteps = 0;
     double logZ = 0.0;
+    bool refDead = false;
 
     for (uint step = 0; step < nSteps; ++step) {
       // returns 1 if the particle died at this step
       auto extend = [&](uint n) -> uint {
-        if (L[n] == NegInf())
-          return 0; // dead particle: never resampled again until reset
-        double W = parts[n].Extend(step, conditional && n == 0);
+        const bool ref = conditional && n == 0;
+        // A dead particle is never resampled again until reset, so it is not
+        // grown further -- except the reference, which is the old molecule:
+        // the move takes its energy from it, so it is always completed.
+        if (!ref && (refDead || L[n] == NegInf()))
+          return 0;
+        double W = parts[n].Extend(step, ref);
         if (!(W > 0.0)) {
           L[n] = NegInf();
           return 1;
         }
-        L[n] += std::log(W);
+        L[n] += std::log(W); // stays -inf for a dead reference
         return 0;
       };
       uint dead = 0;
@@ -174,12 +181,26 @@ private:
       nDeadSteps += dead;
 
       bool last = (step + 1 == nSteps);
+      // A reference with zero weight (a configuration with infinite energy,
+      // e.g. an overlapping start, whose exp(-beta u) underflows) has zero
+      // target probability. Return Z_hat_old = 0, as single-chain CBMC gives
+      // W_old = 0, so the move removes it; the other particles cannot change
+      // that and stop growing.
+      if (conditional && L[0] == NegInf())
+        refDead = true;
+      if (refDead) {
+        if (last) {
+          chosen = 0;
+          return NegInf();
+        }
+        continue;
+      }
       double ess = Normalise(L, p);
       bool allDead = true;
       for (double l : L)
         allDead = allDead && (l == NegInf());
       if (allDead)
-        return NegInf(); // cannot happen when conditional (particle 0 lives)
+        return NegInf(); // unconditional only (a dead reference ends above)
       if (last || ess < tau * N) {
         logZ += LogMeanExp(L);
         cum.resize(N);
