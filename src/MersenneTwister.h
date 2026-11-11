@@ -139,6 +139,12 @@ public:
 
   // Re-seeding functions with same behavior as initializers
   void seed(const uint32 oneSeed);
+  // A generator seeded with oneSeed without printing it (MTRand(oneSeed)
+  // prints); for generators reseeded per move, such as the SMC workers'
+  struct Quiet {};
+  MTRand(Quiet, const uint32 oneSeed) : seedValue(oneSeed) {
+    seedQuiet(oneSeed);
+  }
   // seed(oneSeed) without printing it; for generators reseeded per move
   void seedQuiet(const uint32 oneSeed) {
     initialize(oneSeed);

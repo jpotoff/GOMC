@@ -229,7 +229,8 @@ void DCGraph::Init(System &sys, const Forcefield &ff, const MoleculeKind &kind,
     for (int t = 1; t < T; ++t) {
       SMCWorker w;
       w.prng = new PRNG(sys.molLookupRef);
-      w.gen = new MTRand(); // seeded quietly from data.prng at every growth
+      // reseeded from data.prng at every growth (seedQuiet)
+      w.gen = new MTRand(MTRand::Quiet(), 1u);
       w.prng->Init(w.gen);
       w.graph = new DCGraph(sys, ff, kind, set, w.prng);
       smcWorkers.push_back(w);
