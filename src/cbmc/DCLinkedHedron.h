@@ -100,6 +100,14 @@ private:
   double bondLengthOld[MAX_BONDS];
   // bondKind between bonded[i] and focus
   uint bondKinds[MAX_BONDS];
+  // length of bonded[i]-focus sampled (FlexibleBond.h)
+  bool flexible[MAX_BONDS];
+  // Bond lengths of one freshly generated trial into len, returning their
+  // bond energy: flexible bonds are drawn, the others are b0 (old = false)
+  // or the old configuration's lengths (old = true)
+  double TrialLengths(bool old, double *len);
+  // bond lengths and bond energy of each LJ trial
+  std::vector<double> trialLen, trialBondE; // [trial * MAX_BONDS + bond]
   // branch geometry, energies and weight of each LJ trial
   std::vector<double> trialTheta, trialPhi; // [trial * MAX_BONDS + bond]
   std::vector<double> trialBend, trialNB13, trialWeight;

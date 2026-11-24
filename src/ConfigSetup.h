@@ -256,6 +256,9 @@ struct CBMC {
   // branch-angle trials per look-ahead step (default 1; 0 = equilibrium
   // angles)
   int lookAheadAng;
+  // FlexibleBonds: CBMC samples the length of every bond that is not fixed
+  // and joins two heavy atoms; bonds to hydrogen stay at b0
+  bool flexibleBonds;
 };
 
 #if ENSEMBLE == GCMC

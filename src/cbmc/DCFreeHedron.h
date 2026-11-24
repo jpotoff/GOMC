@@ -45,6 +45,9 @@ private:
   double bondLengthOld[MAX_BONDS];
   // bondKind between bonded[i] and focus
   uint bondKinds[MAX_BONDS];
+  // lengths sampled (FlexibleBond.h): bonded[i]-focus and prev-focus
+  bool flexible[MAX_BONDS];
+  bool anchorFlexible;
 };
 } // namespace cbmc
 

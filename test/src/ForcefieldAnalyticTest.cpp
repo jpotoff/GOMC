@@ -1159,3 +1159,131 @@ TEST(ForcefieldAnalyticTest, MartiniCoulombVirialIsNegativeDerivative) {
     EXPECT_NEAR(got, want, kFdTol * std::fabs(want) + 1e-10) << "r=" << r;
   }
 }
+
+// ----------------------------------------------------- long-range tails ----
+//
+// The switched tail correction must restore the full Mie potential from
+// rSwitch outward: what the switch removes between rSwitch and rCut, plus the
+// ordinary truncated tail beyond rCut. The reference integrates the actual
+// kernels numerically (full minus switched), so it shares no algebra with the
+// closed form in FF_SWITCH.
+//
+namespace {
+
+// Composite Gauss-Legendre (5 points per panel) of f over [a, b].
+template <class F> double Integrate(F f, double a, double b, int panels) {
+  static const double x[5] = {0.0, -0.5384693101056831, 0.5384693101056831,
+                              -0.9061798459386640, 0.9061798459386640};
+  static const double w[5] = {0.5688888888888889, 0.4786286704993665,
+                              0.4786286704993665, 0.2369268850561891,
+                              0.2369268850561891};
+  const double h = (b - a) / panels;
+  double sum = 0.0;
+  for (int p = 0; p < panels; ++p) {
+    const double mid = a + (p + 0.5) * h;
+    for (int i = 0; i < 5; ++i)
+      sum += w[i] * f(mid + 0.5 * h * x[i]);
+  }
+  return 0.5 * h * sum;
+}
+
+} // namespace
+
+TEST(ForcefieldAnalyticTest, SwitchTailRestoresFullPotential) {
+  // 7 and 9 exercise the logarithmic r^-1 integrals; 12.5 a non-integer n.
+  const double exponents[] = {12.0, 16.0, 7.0, 9.0, 12.5};
+  for (double nVal : exponents) {
+    Forcefield f1, f2;
+    InitForcefield(f1);
+    InitForcefield(f2);
+    FF_VDW_STD full(f1);
+    FF_SWITCH sw(f2);
+    InitOneKind(full, nVal);
+    InitOneKind(sw, nVal);
+
+    const double dE = Integrate(
+        [&](double r) {
+          const double rSq = r * r;
+          return r * r *
+                 (full.CalcEn(rSq, 0, 0, 1.0) - sw.CalcEn(rSq, 0, 0, 1.0));
+        },
+        kRSwitch, kRCut, 400);
+    // GOMC's virial kernels return -(1/r) dU/dr, so r^4 * Vir = -r^3 dU/dr.
+    const double dW = Integrate(
+        [&](double r) {
+          const double rSq = r * r;
+          return rSq * rSq *
+                 (full.CalcVir(rSq, 0, 0, 1.0) - sw.CalcVir(rSq, 0, 0, 1.0));
+        },
+        kRSwitch, kRCut, 400);
+
+    const double wantE = full.EnergyLRC(0, 0) + 2.0 * M_PI * dE;
+    const double wantW = full.VirialLRC(0, 0) + 2.0 * M_PI * dW;
+    // The switch region must matter, or the comparison proves nothing.
+    ASSERT_GT(std::fabs(2.0 * M_PI * dE), 1e-3 * std::fabs(wantE))
+        << "n=" << nVal;
+    EXPECT_NEAR(sw.EnergyLRC(0, 0), wantE, 1e-10 * std::fabs(wantE))
+        << "n=" << nVal;
+    EXPECT_NEAR(sw.VirialLRC(0, 0), wantW, 1e-10 * std::fabs(wantW))
+        << "n=" << nVal;
+    EXPECT_EQ(sw.ImpulsePressureCorrection(0, 0), 0.0);
+  }
+}
+
+//
+// With rSwitch == rCut nothing is switched, so the tail must reduce to the
+// plain truncated one.
+//
+TEST(ForcefieldAnalyticTest, SwitchTailWithNoSwitchRegionIsPlainTail) {
+  Forcefield f1, f2;
+  InitForcefield(f1);
+  InitForcefield(f2);
+  f2.rswitch = kRCut;
+  FF_VDW_STD full(f1);
+  FF_SWITCH sw(f2);
+  InitOneKind(full, 12.0);
+  InitOneKind(sw, 12.0);
+  EXPECT_DOUBLE_EQ(sw.EnergyLRC(0, 0), full.EnergyLRC(0, 0));
+  EXPECT_DOUBLE_EQ(sw.VirialLRC(0, 0), full.VirialLRC(0, 0));
+}
+
+//
+// Cross-check the plain tails themselves against numerical integration to a
+// large radius, so the switched test is not anchored to a wrong base.
+//
+TEST(ForcefieldAnalyticTest, PlainTailMatchesNumericalIntegral) {
+  for (double nVal : {12.0, 16.0}) {
+    Forcefield ff;
+    InitForcefield(ff);
+    FF_VDW_STD p(ff);
+    InitOneKind(p, nVal);
+    // Beyond rCut the kernel returns 0, so integrate the closed form.
+    const double eps = FFTestAccess::EpsilonCn(p, 0);
+    const double sSq = FFTestAccess::SigmaSq(p, 0);
+    auto u = [&](double r) {
+      const double x = sSq / (r * r);
+      return eps * (std::pow(x, 0.5 * nVal) - x * x * x);
+    };
+    auto mrdu = [&](double r) { // -r dU/dr
+      const double x = sSq / (r * r);
+      return eps * (nVal * std::pow(x, 0.5 * nVal) - 6.0 * x * x * x);
+    };
+    // Substitute r = rc / t to integrate to infinity over t in (0, 1].
+    const double E = Integrate(
+        [&](double t) {
+          const double r = kRCut / t;
+          return r * r * u(r) * kRCut / (t * t);
+        },
+        1e-6, 1.0, 2000);
+    const double W = Integrate(
+        [&](double t) {
+          const double r = kRCut / t;
+          return r * r * mrdu(r) * kRCut / (t * t);
+        },
+        1e-6, 1.0, 2000);
+    EXPECT_NEAR(p.EnergyLRC(0, 0), 2.0 * M_PI * E,
+                1e-6 * std::fabs(2.0 * M_PI * E)) << "n=" << nVal;
+    EXPECT_NEAR(p.VirialLRC(0, 0), 2.0 * M_PI * W,
+                1e-6 * std::fabs(2.0 * M_PI * W)) << "n=" << nVal;
+  }
+}

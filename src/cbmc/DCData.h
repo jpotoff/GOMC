@@ -54,6 +54,8 @@ public:
   // torsion samples per look-ahead step, and branch-angle trials per
   // look-ahead step (0 = equilibrium angles)
   const uint lookAhead, lookAheadDih, lookAheadAng;
+  // FlexibleBonds: sample heavy-atom bond lengths (FlexibleBond.h)
+  const bool flexibleBonds;
   uint totalTrials;
 
   // used for both angles and dihedrals
@@ -128,6 +130,7 @@ inline DCData::DCData(System &sys, const Forcefield &forcefield,
                        ? set.config.sys.cbmcTrials.lookAheadDih
                        : set.config.sys.cbmcTrials.bonded.dih),
       lookAheadAng(set.config.sys.cbmcTrials.lookAheadAng),
+      flexibleBonds(set.config.sys.cbmcTrials.flexibleBonds),
       positions(*multiPositions) {
   calcEwald = sys.GetEwald();
   uint maxLJTrials = nLJTrialsFirst;

@@ -6,6 +6,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include "DCOnSphere.h"
 
 #include "DCData.h"
+#include "FlexibleBond.h"
 #include "Forcefield.h"
 #include "MolSetup.h"
 #include "PRNG.h"
@@ -24,6 +25,7 @@ DCOnSphere::DCOnSphere(DCData *data, const mol_setup::MolKind kind, uint atom,
       break;
     }
   }
+  flexible = IsFlexibleBond(data, kind, atom, focus, bondKind);
 
   if (data->nLJTrialsNth < 1) {
     std::cout << "Error: CBMC secondary atom trials must be greater than 0.\n";
@@ -32,7 +34,11 @@ DCOnSphere::DCOnSphere(DCData *data, const mol_setup::MolKind kind, uint atom,
 }
 
 void DCOnSphere::SetBondLengthNew(TrialMol &newMol) {
-  bondLength = data->ff.bonds.Length(bondKind);
+  const FFBonds &bonds = data->ff.bonds;
+  bondLength = flexible ? SampleBondLength(data->prng, bonds.Length(bondKind),
+                                           bonds.Stiffness(bondKind),
+                                           data->ff.beta)
+                        : bonds.Length(bondKind);
 }
 
 void DCOnSphere::SetBondLengthOld(TrialMol &oldMol) {
@@ -62,8 +68,12 @@ void DCOnSphere::BuildOld(TrialMol &oldMol, uint molIndex) {
   SetBondLengthOld(oldMol);
   bondEnergy = BondEnergyOld(oldMol);
 
-  data->prng.FillWithRandomOnSphere(positions, nLJTrials, bondLength,
-                                    oldMol.AtomPosition(focus));
+  // the old trials share the old bond length, as the new trials share the
+  // sampled one (fixed bonds: b0)
+  data->prng.FillWithRandomOnSphere(
+      positions, nLJTrials,
+      flexible ? bondLengthOld : data->ff.bonds.Length(bondKind),
+      oldMol.AtomPosition(focus));
   positions.Set(0, oldMol.AtomPosition(atom));
   data->axes.WrapPBC(positions, oldMol.GetBox());
 

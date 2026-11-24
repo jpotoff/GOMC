@@ -9,6 +9,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 #include <numeric>
 
 #include "DCData.h"
+#include "FlexibleBond.h"
 #include "Forcefield.h"
 #include "MolSetup.h"
 #include "NumLib.h"
@@ -43,6 +44,8 @@ DCLinkedHedron::DCLinkedHedron(DCData *data, const mol_setup::MolKind &kind,
   // Find the atoms bonded to focus, except prev
   for (uint i = 0; i < hed.NumBond(); ++i) {
     bondKinds[i] = onFocus[i].kind;
+    flexible[i] =
+        IsFlexibleBond(data, kind, hed.Focus(), hed.Bonded(i), bondKinds[i]);
   }
 
   std::vector<Bond> onPrev = AtomBonds(kind, hed.Prev());
@@ -104,6 +107,21 @@ void DCLinkedHedron::SetBondLengthNew(TrialMol &newMol) {
   anchorBond = sqrt(newMol.OldDistSq(hed.Focus(), hed.Prev()));
 }
 
+double DCLinkedHedron::TrialLengths(bool old, double *len) {
+  const FFBonds &bonds = data->ff.bonds;
+  double e = 0.0;
+  for (uint i = 0; i < hed.NumBond(); ++i) {
+    uint k = bondKinds[i];
+    if (flexible[i])
+      len[i] = SampleBondLength(data->prng, bonds.Length(k), bonds.Stiffness(k),
+                                data->ff.beta);
+    else
+      len[i] = old ? bondLengthOld[i] : bonds.Length(k);
+    e += bonds.Calc(k, len[i]);
+  }
+  return e;
+}
+
 void DCLinkedHedron::SetBondLengthOld(TrialMol &oldMol) {
   for (uint i = 0; i < hed.NumBond(); ++i) {
     bondLengthOld[i] = sqrt(oldMol.OldDistSq(hed.Focus(), hed.Bonded(i)));
@@ -141,18 +159,25 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
   const XYZ center = newMol.AtomPosition(hed.Focus());
   XYZArray *positions = data->multiPositions;
 
+  if (trialBondE.size() < nLJTrials) {
+    trialBondE.resize(nLJTrials);
+    trialLen.resize(nLJTrials * MAX_BONDS);
+  }
   // counting backward to preserve prototype
   for (uint lj = nLJTrials; lj-- > 0;) {
-    // Each LJ trial gets its own branch geometry, so the bend angles and
-    // hydrogen positions are selected together with the torsion and the
+    // Each LJ trial gets its own bond lengths (flexible bonds) and branch
+    // geometry, so they are selected together with the torsion and the
     // nonbonded energy. The branch's Rosenbluth weight is part of the trial
-    // weight.
+    // weight; the exact bond-length draw adds no weight (FlexibleBond.h).
+    double *len = &trialLen[lj * MAX_BONDS];
+    trialBondE[lj] = TrialLengths(false, len);
+    hed.SetBondNew(len, anchorBond);
     hed.PrepareNew(newMol, molIndex);
     SaveBranch(lj);
     for (uint b = 0; b < hed.NumBond(); ++b) {
       // get position and shift to origin
-      positions[b].Set(
-          0, newMol.RawRectCoords(bondLength[b], hed.Theta(b), hed.Phi(b)));
+      positions[b].Set(0,
+                       newMol.RawRectCoords(len[b], hed.Theta(b), hed.Phi(b)));
     }
     ChooseTorsion(newMol, molIndex, prevPhi, cross, tensor);
     double torSum = std::accumulate(torWeights, torWeights + nDihTrials, 0.0);
@@ -209,6 +234,7 @@ void DCLinkedHedron::BuildNew(TrialMol &newMol, uint molIndex) {
   }
 #endif
   RestoreBranch(winner);
+  bondEnergy = trialBondE[winner];
 #ifdef GOMC_INSTRUMENT
   if (instr::Collector::Get().On(instr::WEIGHTS)) {
     std::vector<instr::PairE> pairs;
@@ -288,11 +314,15 @@ void DCLinkedHedron::BuildOld(TrialMol &oldMol, uint molIndex) {
 
   // counting backward to preserve prototype
   for (uint lj = nLJTrials; lj-- > 1;) {
-    // fresh branch geometry for each trial, as in BuildNew
-    hed.PrepareTrialOld(oldMol, molIndex);
+    // fresh bond lengths and branch geometry for each trial, as in
+    // BuildNew (only the actual trial 0 keeps the old flexible lengths)
+    double len[MAX_BONDS];
+    TrialLengths(true, len);
+    hed.SetBondNew(len, anchorBondOld);
+    hed.PrepareNew(oldMol, molIndex);
     for (uint b = 0; b < hed.NumBond(); ++b) {
-      positions[b].Set(0, oldMol.RawRectCoords(bondLengthOld[b], hed.Theta(b),
-                                               hed.Phi(b)));
+      positions[b].Set(0,
+                       oldMol.RawRectCoords(len[b], hed.Theta(b), hed.Phi(b)));
     }
     ChooseTorsion(oldMol, molIndex, prevPhi, cross, tensor);
     double torSum = std::accumulate(torWeights, torWeights + nDihTrials, 0.0);
@@ -528,20 +558,12 @@ void DCLinkedHedron::GenerateTrials(TrialMol &mol, uint molIndex, uint n,
   double *nonbonded_1_4 = data->nonbonded_1_4;
   XYZArray *positions = data->multiPositions;
 
-  // Bond lengths: the old configuration's actual lengths (cached before any
-  // tentative placement) or the equilibrium lengths, as in BuildOld/BuildNew
-  const double *len = bondLengthOld;
-  double bondE = bondEnergyOld;
-  if (old) {
-    hed.SetBondOld(bondLengthOld, anchorBondOld);
-  } else {
-    SetBondLengthNew(mol);
-    hed.SetBondNew(bondLength, anchorBond);
-    len = bondLength;
-    bondE = 0.0;
-    for (uint i = 0; i < hed.NumBond(); ++i)
-      bondE += ff.bonds.Calc(bondKinds[i], bondLength[i]);
-  }
+  // Bond lengths of each trial as in BuildOld/BuildNew (TrialLengths): fixed
+  // bonds at the old configuration's actual lengths (cached before any
+  // tentative placement) or at b0, flexible bonds drawn per trial. The
+  // anchor prev-focus is built: its current length, which in the recoil
+  // search may come from a tentative placement.
+  const double anchor = sqrt(mol.OldDistSq(hed.Focus(), hed.Prev()));
 
   double prevPhi[MAX_BONDS];
   RotationMatrix cross, tensor;
@@ -550,10 +572,10 @@ void DCLinkedHedron::GenerateTrials(TrialMol &mol, uint molIndex, uint n,
 
   // counting backward so positions[b][0] is free for each trial's base
   for (uint t = n; t-- > 0;) {
-    if (old)
-      hed.PrepareTrialOld(mol, molIndex);
-    else
-      hed.PrepareNew(mol, molIndex);
+    double len[MAX_BONDS];
+    double bondE = TrialLengths(old, len);
+    hed.SetBondNew(len, anchor);
+    hed.PrepareNew(mol, molIndex);
     for (uint b = 0; b < hed.NumBond(); ++b) {
       positions[b].Set(
           0, mol.RawRectCoords(len[b], hed.Theta(b), hed.Phi(b)));

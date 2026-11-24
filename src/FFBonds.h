@@ -25,6 +25,8 @@ public:
   }
 
   double Length(const uint kind) const { return b0[kind]; }
+  double Stiffness(const uint kind) const { return Kb[kind]; }
+  bool Fixed(const uint kind) const { return fixed[kind]; }
 
   void Init(ff_setup::Bond const &bond) {
     count = bond.getKbcnt();

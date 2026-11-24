@@ -34,6 +34,7 @@ private:
   DCData *data;
   uint atom, focus;
   uint bondKind;
+  bool flexible; // length sampled (FlexibleBond.h)
   double bondLength, bondLengthOld;
   double bondEnergy;
 };

@@ -153,6 +153,7 @@ ConfigSetup::ConfigSetup(void) {
   // about 6% swap acceptance against CBMC_Ang 4 but saves about 14% swap
   // time, a net gain of about 10% in accepted swaps per second
   sys.cbmcTrials.lookAheadAng = 1;
+  sys.cbmcTrials.flexibleBonds = false;
 }
 
 int ConfigSetup::stringtoi(const std::string &s) {
@@ -1357,6 +1358,12 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
       sys.cbmcTrials.recoil.enable = checkBool(line[1]);
       printf("%-40s %-s \n", "Info: CBMC recoil growth",
              sys.cbmcTrials.recoil.enable ? "Active" : "Inactive");
+    } else if (CheckString(line[0], "FlexibleBonds")) {
+      sys.cbmcTrials.flexibleBonds = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: Flexible bonds",
+             sys.cbmcTrials.flexibleBonds
+                 ? "Active (heavy-atom bonds, sampled in CBMC)"
+                 : "Inactive (all bonds fixed at b0)");
     } else if (CheckString(line[0], "CBMC_SMC")) {
       sys.cbmcTrials.smc.enable = checkBool(line[1]);
       printf("%-40s %-s \n", "Info: CBMC SMC (population) growth",
@@ -2333,6 +2340,14 @@ void ConfigSetup::verifyInputs(void) {
       std::cout << "ERROR: CBMC_RecoilTrials must be at least 1!\n";
       exit(EXIT_FAILURE);
     }
+  }
+  if (sys.cbmcTrials.flexibleBonds) {
+    printf("%-40s %-s \n", "Info: Flexible bonds sampled for",
+           "bonds between heavy atoms with finite Kb");
+    printf("%-40s %-s \n", "Info: Flexible bonds kept fixed for",
+           "bonds to hydrogen (mass < 3.5 amu), fixed Kb, rings");
+    printf("%-40s %-s \n", "Info: Flexible bonds sampled in",
+           "CBMC swap, intra-swap, regrowth (not translate/rotate)");
   }
   if (sys.cbmcTrials.smc.enable) {
     if (sys.cbmcTrials.smc.particles < 1 || sys.cbmcTrials.smc.trials < 1) {

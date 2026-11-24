@@ -5,6 +5,7 @@ A copy of the MIT License can be found in License.txt with this program or at
 ******************************************************************************/
 #include "DCFreeHedronSeed.h"
 #include "DCData.h"
+#include "FlexibleBond.h"
 #include "Forcefield.h"
 #include "MolSetup.h"
 #include "NumLib.h"
@@ -36,7 +37,11 @@ DCFreeHedronSeed::DCFreeHedronSeed(DCData *data, const mol_setup::MolKind &kind,
   // Find the atoms bonded to focus, except prev
   for (uint i = 0; i < hed.NumBond(); ++i) {
     bondKinds[i] = onFocus[i].kind;
+    flexible[i] =
+        IsFlexibleBond(data, kind, hed.Focus(), hed.Bonded(i), bondKinds[i]);
   }
+  anchorFlexible =
+      IsFlexibleBond(data, kind, hed.Focus(), hed.Prev(), anchorKind);
 
   if (data->nLJTrialsNth < 1) {
     std::cout << "Error: CBMC secondary atom trials must be greater than 0.\n";
@@ -68,11 +73,22 @@ void DCFreeHedronSeed::PrepareOld(TrialMol &oldMol, uint molIndex) {
   bondEnergy += data->ff.bonds.Calc(anchorKind, anchorBondOld);
 }
 
+// Bond lengths for this step: flexible bonds are drawn once, before the
+// branch angles, and every trial of the step shares them; the old
+// configuration's trials share its actual lengths (SetBondLengthOld).
 void DCFreeHedronSeed::SetBondLengthNew(TrialMol &newMol) {
+  const FFBonds &bonds = data->ff.bonds;
+  const double beta = data->ff.beta;
   for (uint i = 0; i < hed.NumBond(); ++i) {
-    bondLength[i] = data->ff.bonds.Length(bondKinds[i]);
+    uint k = bondKinds[i];
+    bondLength[i] = flexible[i] ? SampleBondLength(data->prng, bonds.Length(k),
+                                                   bonds.Stiffness(k), beta)
+                                : bonds.Length(k);
   }
-  anchorBond = data->ff.bonds.Length(anchorKind);
+  anchorBond = anchorFlexible
+                   ? SampleBondLength(data->prng, bonds.Length(anchorKind),
+                                      bonds.Stiffness(anchorKind), beta)
+                   : bonds.Length(anchorKind);
 }
 
 void DCFreeHedronSeed::SetBondLengthOld(TrialMol &oldMol) {
