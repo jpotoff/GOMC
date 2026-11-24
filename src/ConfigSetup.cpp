@@ -2035,11 +2035,14 @@ void ConfigSetup::verifyInputs(void) {
     std::cout << "Warning: Long Range Correction is Inactive for "
               << "Non-truncated potential." << std::endl;
   }
+  // SWITCH supports the correction: it restores the full Mie potential from
+  // rSwitch outward (FF_SWITCH::EnergyLRC). SHIFT and the Martini switch do
+  // not have one.
   if (((sys.ff.VDW_KIND == sys.ff.VDW_SHIFT_KIND) ||
-       (sys.ff.VDW_KIND == sys.ff.VDW_SWITCH_KIND)) &&
+       (sys.ff.VDW_KIND == sys.ff.VDW_SWITCH_KIND && in.ffKind.isMARTINI)) &&
       sys.ff.doTailCorr) {
     std::cout << "ERROR: LJ long Range Correction is not supported for "
-              << "SHIFT or SWITCH potentials." << std::endl;
+              << "SHIFT or MARTINI SWITCH potentials." << std::endl;
     exit(EXIT_FAILURE);
   }
   if (((sys.ff.VDW_KIND == sys.ff.VDW_STD_KIND) ||
