@@ -1451,6 +1451,10 @@ void ConfigSetup::Init(const char *fileName, MultiSim const *const &multisim) {
                out.console.frequency);
       } else
         printf("%-40s %-s \n", "Info: Console output", "Inactive");
+    } else if (CheckString(line[0], "PrintIntraTerms")) {
+      out.printIntraTerms = checkBool(line[1]);
+      printf("%-40s %-s \n", "Info: Initial intra energy breakdown",
+             out.printIntraTerms ? "Active" : "Inactive");
     } else if (CheckString(line[0], "BlockAverageFreq")) {
       out.statistics.settings.block.enable = checkBool(line[1]);
       if (line.size() == 3)

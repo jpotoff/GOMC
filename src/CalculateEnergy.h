@@ -177,6 +177,16 @@ public:
   // used in molecule exchange for calculating bonded and intraNonbonded energy
   Energy MoleculeIntra(cbmc::TrialMol const &mol) const;
 
+  //! Intramolecular energy of a box split into its parts (diagnostic).
+  //! bond+angle+dihedral = Energy::intraBond; the six nonbonded parts sum to
+  //! Energy::intraNonbond. "15" = pairs beyond 1-4 (Nonbond list).
+  struct IntraBreakdown {
+    double bond = 0.0, angle = 0.0, dihedral = 0.0;
+    double lj13 = 0.0, lj14 = 0.0, lj15 = 0.0;
+    double elect13 = 0.0, elect14 = 0.0, elect15 = 0.0;
+  };
+  IntraBreakdown IntraComponents(const uint box) const;
+
   //! Calculates Nonbonded 1_3 intramolecule energy of a full molecule
   // for Martini forcefield
   double IntraEnergy_1_3(const double distSq, const uint atom1,

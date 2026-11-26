@@ -931,6 +931,9 @@ struct Output {
   Statistics statistics;
   EventSettings console, checkpoint;
   InstrumentSettings instrument;
+  // PrintIntraTerms: print the initial intramolecular energy split into
+  // bond/angle/dihedral and 1-3/1-4/1-5+ LJ and Coulomb (ConsoleOutput)
+  bool printIntraTerms = false;
 };
 
 } // namespace config_setup

@@ -37,6 +37,9 @@ void ConsoleOutput::DoOutput(const ulong step) {
       std::cout << std::endl;
     }
 
+    if (enableIntraDetail)
+      PrintIntraBreakdown(step - 1);
+
     if (enableStat) {
       PrintStatisticTitle();
       std::cout << std::endl;
@@ -331,6 +334,35 @@ void ConsoleOutput::PrintEnergyTitle() {
   printElement("SELF", elementWidth);
   printElement("CORR", elementWidth);
   std::cout << std::endl;
+}
+
+// Initial-configuration intramolecular energy split into its parts, for
+// validating force-field implementations. Recomputed from scratch:
+// EBOND+EANGLE+EDIHEDRAL = INTRA(B), and the six LJ/ELECT terms sum to
+// INTRA(NB). 13/14 are the (scaled) 1-3/1-4 pairs, 15+ all pairs beyond 1-4.
+void ConsoleOutput::PrintIntraBreakdown(const ulong step) {
+  const char *names[] = {"EBOND",     "EANGLE",    "EDIHEDRAL",
+                         "E13_LJ",    "E14_LJ",    "E15+_LJ",
+                         "E13_ELECT", "E14_ELECT", "E15+_ELECT"};
+  std::string title = "ITITLE:";
+  size_t loc = title.length();
+  title += "STEP";
+  title.insert(loc, elementWidth - title.length(), ' ');
+  printElement(title, elementWidth);
+  for (const char *n : names)
+    printElement(std::string(n), elementWidth);
+  std::cout << std::endl << std::endl;
+
+  for (uint b = 0; b < BOX_TOTAL; b++) {
+    CalculateEnergy::IntraBreakdown e = var->calc.IntraComponents(b);
+    const double vals[] = {e.bond, e.angle, e.dihedral, e.lj13,   e.lj14,
+                           e.lj15, e.elect13, e.elect14, e.elect15};
+    std::string name = "INTRA_" + std::to_string(b) + ":";
+    printElementStep(name, step + 1, elementWidth);
+    for (double v : vals)
+      printElement(v, elementWidth);
+    std::cout << std::endl << std::endl;
+  }
 }
 
 void ConsoleOutput::PrintStatisticTitle() {

@@ -2871,6 +2871,83 @@ void CalculateEnergy::MoleculeIntra(const uint molIndex, const uint box,
   GOMC_EVENT_STOP(1, GomcProfileEvent::EN_MOL_INTRA);
 }
 
+// Recomputes the intramolecular energy of a box split into stretch, bend,
+// torsion and LJ/Coulomb for 1-3, 1-4 and beyond-1-4 pairs. Diagnostic only
+// (initial-configuration printout). Mirrors MolBond/MolAngle/MolDihedral and
+// MolNonbond/MolNonbond_1_4/MolNonbond_1_3, so the bonded parts sum to
+// intraBond and the nonbonded parts to intraNonbond from SystemTotal().
+CalculateEnergy::IntraBreakdown
+CalculateEnergy::IntraComponents(const uint box) const {
+  IntraBreakdown out;
+  if (box >= BOXES_WITH_U_B)
+    return out;
+
+  std::vector<uint> molID;
+  MoleculeLookup::box_iterator thisMol = molLookup.BoxBegin(box);
+  MoleculeLookup::box_iterator end = molLookup.BoxEnd(box);
+  while (thisMol != end) {
+    molID.push_back(*thisMol);
+    ++thisMol;
+  }
+
+  // LJ and Coulomb of one pair list; NB = true for beyond-1-4 pairs
+  // (full LJ and unscaled Coulomb), false for 1-3/1-4 (scaled).
+  auto pairs = [&](Nonbond const &list, MoleculeKind const &molKind,
+                   const uint molIndex, const bool NB, double &lj,
+                   double &elect) {
+    double distSq;
+    for (uint i = 0; i < list.count; ++i) {
+      uint a1 = list.part1[i], a2 = list.part2[i];
+      uint p1 = mols.start[molIndex] + a1;
+      uint p2 = mols.start[molIndex] + a2;
+      if (!currentAxes.InRcut(distSq, currentCoords, p1, p2, box))
+        continue;
+      if (NB)
+        lj += forcefield.particles->CalcEn(distSq, molKind.AtomKind(a1),
+                                           molKind.AtomKind(a2), 1.0);
+      else
+        forcefield.particles->CalcAdd_1_4(lj, distSq, molKind.AtomKind(a1),
+                                          molKind.AtomKind(a2));
+      if (electrostatic) {
+        double qi_qj_fact =
+            num::qqFact * molKind.AtomCharge(a1) * molKind.AtomCharge(a2);
+        if (qi_qj_fact != 0.0)
+          forcefield.particles->CalcCoulombAdd_1_4(elect, distSq, qi_qj_fact,
+                                                   NB);
+      }
+    }
+  };
+
+  double bond = 0.0, angle = 0.0, dih = 0.0;
+  double lj13 = 0.0, lj14 = 0.0, lj15 = 0.0;
+  double el13 = 0.0, el14 = 0.0, el15 = 0.0;
+#ifdef _OPENMP
+#pragma omp parallel for default(none) shared(box, molID, pairs)              \
+    reduction(+ : bond, angle, dih, lj13, lj14, lj15, el13, el14, el15)
+#endif
+  for (int i = 0; i < (int)molID.size(); i++) {
+    MoleculeKind &molKind = mols.kinds[mols.kIndex[molID[i]]];
+    XYZArray bondVec(molKind.bondList.count * 2);
+    BondVectors(bondVec, molKind, molID[i], box);
+    MolBond(bond, molKind, bondVec, molID[i], box);
+    MolAngle(angle, molKind, bondVec, box);
+    MolDihedral(dih, molKind, bondVec, box);
+    pairs(molKind.nonBonded_1_3, molKind, molID[i], false, lj13, el13);
+    pairs(molKind.nonBonded_1_4, molKind, molID[i], false, lj14, el14);
+    pairs(molKind.nonBonded, molKind, molID[i], true, lj15, el15);
+  }
+  out.bond = bond;
+  out.angle = angle;
+  out.dihedral = dih;
+  out.lj13 = lj13;
+  out.lj14 = lj14;
+  out.lj15 = lj15;
+  out.elect13 = el13;
+  out.elect14 = el14;
+  out.elect15 = el15;
+  return out;
+}
+
 // used in molecule exchange for calculating bonded and intraNonbonded energy
 Energy CalculateEnergy::MoleculeIntra(cbmc::TrialMol const &mol) const {
   GOMC_EVENT_START(1, GomcProfileEvent::EN_MOL_INTRA);

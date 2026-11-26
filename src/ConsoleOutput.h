@@ -56,6 +56,7 @@ public:
         enableSurfTension) {
       enableStat = true;
     }
+    enableIntraDetail = output.printIntraTerms;
     WriteConsoleHeaders = true;
     DoOutput(0);
   }
@@ -67,12 +68,14 @@ private:
   bool enableEnergy, enablePressure, enableDens, enableVolume, enableMol;
   bool enableSurfTension, enableStat;
   bool WriteConsoleHeaders;
+  bool enableIntraDetail = false;
   void PrintMove(const uint box, const ulong step) const;
   void PrintMoveStat(const uint box, const ulong step) const;
   void PrintStatistic(const uint box, const ulong step) const;
   void PrintPressureTensor(const uint box, const ulong step) const;
   void PrintEnergy(const uint box, Energy const &en, const ulong step) const;
   void PrintEnergyTitle();
+  void PrintIntraBreakdown(const ulong step);
   void PrintStatisticTitle();
   void PrintMoveTitle();
   void printElement(const double t, const int width, uint precision = 8) const;
